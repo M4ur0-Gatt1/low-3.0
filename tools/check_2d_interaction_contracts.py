@@ -1405,4 +1405,16 @@ require("api.preview_html(DZ.path || null" in APP
         "«ver en el navegador» volvio a mandar una ruta: si es la del .low, el puente "
         "le escribe el HTML del lienzo encima y se pierde el documento")
 
+# -- El esqueleto y la clave no comparten icono ------------------------
+# Reportado en v3.0.0: en la línea de tiempo «dos botones exactamente iguales,
+# el esqueleto cut-out y el fotograma clave, son ambos una llave». El esqueleto
+# es la calavera; la llave queda sólo para las claves.
+def _icono(boton_id):
+    m = re.search(r'id="' + boton_id + r'"[^>]*>\s*<svg class="ico"><use href="#([a-z0-9-]+)"', INDEX)
+    return m.group(1) if m else ""
+require(_icono("tlRigOpen") == "i-skull" and _icono("dzRigBtn") == "i-skull"
+        and _icono("tlKey") == "i-key" and 'id="i-skull"' in INDEX,
+        "el esqueleto y el fotograma clave vuelven a compartir icono: " +
+        str({"tlRigOpen": _icono("tlRigOpen"), "dzRigBtn": _icono("dzRigBtn"), "tlKey": _icono("tlKey")}))
+
 print("CONTRATOS 2D OK: Escape, rueda, modos, rig, vectores, tableta, espejo, lipsync, equipo, arcos, punteria, pincel, nodos, version, composicion, prueba maestra, X-sheet, primera pantalla, UI flotante, exportacion y documento nuevo")
