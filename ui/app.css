@@ -3644,13 +3644,19 @@ footer #ver { color: var(--mut); border-color: transparent; background: var(--pa
 .dz-text-editor { position:fixed; z-index:10030; width:320px; padding:12px; border:1px solid #777; border-radius:8px; background:var(--panel,#292b30); box-shadow:0 8px 30px #0005; }
 .dz-text-editor textarea { display:block; box-sizing:border-box; width:100%; height:110px; margin-bottom:10px; resize:vertical; font-size:18px; }
 .dz-text-editor button { margin-right:8px; padding:6px 14px; }
-.dz-tool-tooltip { position:fixed; z-index:10040; pointer-events:none; max-width:210px;
-  padding:5px 8px; border:1px solid #777; border-radius:5px; background:#25282e; color:#fff;
-  font:11.5px/1.3 sans-serif; box-shadow:0 4px 18px #0005; }
+/* Lo más sutil posible (v3.0.1): una etiqueta chica, sin borde marcado, que
+   entra suave. Es el ÚNICO cartel: el nativo del sistema ya no sale encima. */
+.dz-tool-tooltip { position:fixed; z-index:10040; pointer-events:none; max-width:220px;
+  padding:3px 7px; border:1px solid rgba(255,255,255,.07); border-radius:4px;
+  background:rgba(22,23,27,.92); color:rgba(255,255,255,.88);
+  font:500 11px/1.3 Figtree, sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.28);
+  animation:dzTthIn .12s ease-out; }
+@keyframes dzTthIn { from { opacity:0; transform:translateY(2px); } to { opacity:1; transform:none; } }
+:root[data-theme="light"] .dz-tool-tooltip { background:rgba(40,40,44,.9); }
 /* El nombre y el atajo primero; el detalle, chico y recortado a dos renglones.
    Sin esto un `title` de 179 caracteres ocupaba seis renglones al lado del cursor. */
 .dz-tool-tooltip .dz-tth-t { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-  overflow:hidden; font-weight:600; font-style:normal; }
+  overflow:hidden; font-weight:500; font-style:normal; }
 .dz-tool-tooltip .dz-tth-d { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
   overflow:hidden; margin-top:2px; font-size:10.5px; font-style:normal; opacity:.72; }
 

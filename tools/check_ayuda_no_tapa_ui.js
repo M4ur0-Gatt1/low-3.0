@@ -93,7 +93,7 @@ async function main() {
       return { x: r.left + r.width/2, y: r.top + r.height/2 }; })()`);
     if (!caja) continue;
     await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: Math.round(caja.x), y: Math.round(caja.y) });
-    await w(420);                                    // el globo tarda 180 ms
+    await w(650);                                    // el globo tarda 320 ms
     const m = await ev(`(()=>{
       const g = document.querySelector('.dz-tool-tooltip');
       const b = document.querySelector('[data-probando]');

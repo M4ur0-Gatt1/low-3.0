@@ -10,14 +10,28 @@
      Se saca el `title` mientras el globo esta a la vista y se DEVUELVE al
      ocultarlo. No se borra para siempre porque el `title` es lo que leen los
      lectores de pantalla y de donde sale el texto del propio globo. */
+  /* SEGUIA SALIENDO DOBLE en la línea de tiempo (reportado en v3.0.0: «están
+     duplicados los tooltips del sistema»). Dos agujeros:
+     1. se sacaba el `title` del BOTÓN, pero la FILA que lo contiene también
+        tiene uno (el nombre de la capa): el navegador mostraba ese;
+     2. la línea de tiempo se REPINTA mientras el cursor está quieto y el botón
+        nuevo nace con su `title`.
+     Ahora se saca de toda la CADENA de contenedores bajo el cursor, y si algo
+     se repinta debajo se vuelve a sacar. Todo se devuelve al irse. */
+  let quitados=[];
   const guardarTitulo=(el)=>{
-    if(!el||el.dataset.tituloAyuda!=null)return;
-    const t=el.getAttribute('title');if(t==null)return;
-    el.dataset.tituloAyuda=t;el.removeAttribute('title');
+    for(let n=el;n&&n.nodeType===1;n=n.parentElement){
+      if(n.dataset.tituloAyuda!=null)continue;
+      const t=n.getAttribute('title');if(t==null)continue;
+      n.dataset.tituloAyuda=t;n.removeAttribute('title');quitados.push(n);
+    }
   };
-  const devolverTitulo=(el)=>{
-    if(!el||el.dataset.tituloAyuda==null)return;
-    el.setAttribute('title',el.dataset.tituloAyuda);delete el.dataset.tituloAyuda;
+  const devolverTitulo=()=>{
+    for(const n of quitados){
+      if(n.dataset.tituloAyuda==null)continue;
+      n.setAttribute('title',n.dataset.tituloAyuda);delete n.dataset.tituloAyuda;
+    }
+    quitados=[];
   };
   const textoDe=(el)=>(el?.dataset.tituloAyuda??el?.getAttribute('title'))||'';
 
@@ -37,10 +51,10 @@
   function armar(globo,texto){
     const m=CORTE.exec(texto);
     const titulo=document.createElement('b');titulo.className='dz-tth-t';
+    // LO MÁS SUTIL POSIBLE (pedido en v3.0.0): sólo el nombre y el atajo. El
+    // detalle sigue en el `title` —lo leen los lectores de pantalla— y en la ayuda.
     titulo.textContent=m?m[1]:texto;
     globo.appendChild(titulo);
-    if(m&&m[2]){const detalle=document.createElement('i');detalle.className='dz-tth-d';
-      detalle.textContent=m[2];globo.appendChild(detalle);}
   }
   /* DONDE PONER EL GLOBO. Antes se ponia SIEMPRE a la derecha y, si no
      entraba, se lo empujaba adentro de la ventana con un `min`. Para los
@@ -77,7 +91,7 @@
     globo.style.left=dentro(fin.x,HUECO,Math.max(HUECO,innerWidth-w-HUECO))+'px';
     globo.style.top=dentro(fin.y,HUECO,Math.max(HUECO,innerHeight-h-HUECO))+'px';
   }
-  const hide=()=>{clearTimeout(timer);bubble?.remove();bubble=null;devolverTitulo(current);current=null;};
+  const hide=()=>{clearTimeout(timer);bubble?.remove();bubble=null;devolverTitulo();current=null;};
   const show=(target)=>{
     if(current===target)return;hide();if(!target)return;current=target;
     // se saca YA, no dentro del temporizador: el nativo aparece antes
@@ -87,14 +101,30 @@
       bubble=document.createElement('div');bubble.className='dz-tool-tooltip';bubble.setAttribute('role','tooltip');armar(bubble,text);document.body.appendChild(bubble);
       const rect=target.getBoundingClientRect(), b=bubble.getBoundingClientRect();
       ubicar(bubble,rect,b);
-    },180);
+    },320);
   };
+  /* Si lo que está bajo el cursor se REPINTA (la línea de tiempo lo hace
+     seguido), el elemento nuevo trae su `title` y el nativo volvería a salir:
+     se saca otra vez, y si el botón del globo desapareció, el globo lo sigue. */
+  let ultimo=null,pendiente=false;
+  document.addEventListener('pointermove',e=>{ultimo={x:e.clientX,y:e.clientY};},{passive:true});
+  new MutationObserver(()=>{
+    if(!current||pendiente)return;pendiente=true;
+    queueMicrotask(()=>{
+      pendiente=false;if(!current||!ultimo)return;
+      const bajo=document.elementFromPoint(ultimo.x,ultimo.y);
+      if(!current.isConnected){const nuevo=bajo&&pick({target:bajo});hide();if(nuevo)show(nuevo);return;}
+      if(bajo)guardarTitulo(bajo);
+    });
+  }).observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['title']});
   // El cajon de herramientas secundarias (`#dzToolsDrawer`) se cuelga del BODY,
   // no de `#designView`: sin nombrarlo aca, las unicas herramientas sin ayuda
   // eran justo las que nadie conoce de memoria —bomba, plancha, pinza, iman,
   // inflador, pivote, espejo—. Medido: el globo salia en la barra y no salia
   // en el cajon.
-  const pick=e=>e.target.closest?.('#designView button[title],#designView [data-tool][title],#dzToolsDrawer button[title]');
+  // también los que ya tienen el title guardado: el mismo botón, repintado o no
+  const pick=e=>e.target.closest?.('#designView button[title],#designView [data-tool][title],#dzToolsDrawer button[title],'+
+    '#designView button[data-titulo-ayuda],#designView [data-tool][data-titulo-ayuda],#dzToolsDrawer button[data-titulo-ayuda]');
   document.addEventListener('pointerover',e=>show(pick(e)));
   document.addEventListener('focusin',e=>show(pick(e)));
   document.addEventListener('pointerdown',hide,true);

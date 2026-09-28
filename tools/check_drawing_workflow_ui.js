@@ -117,7 +117,7 @@ const url=process.argv[3]||'http://127.0.0.1:8791/ui/index.html?mock=1';
  const before=await value('DZ.doc.drawing.content');await click(await screen(350,250));for(let i=0;i<100;i++){if(!await value('!!DZ.coloringBusy'))break;await wait(100);}
  if(await value('DZ.doc.drawing.content')!==before)throw Error('Balde llena exterior de la hoja');
  console.log('Balde: borde recto y exterior sin relleno OK');
- await abrirCajon('button[data-tool="handler"]');await send('Input.dispatchMouseEvent',{type:'mouseMoved',...await point('button[data-tool="handler"]')});await wait(250);
+ await abrirCajon('button[data-tool="handler"]');await send('Input.dispatchMouseEvent',{type:'mouseMoved',...await point('button[data-tool="handler"]')});await wait(500);
  if(!await value('!!document.querySelector(".dz-tool-tooltip")'))throw Error('Falta ayuda visible');
  console.log('Ayuda al pasar el puntero OK');
  if(process.env.LOW_DRAWING_SCREENSHOT){const shot=await send('Page.captureScreenshot',{format:'png'});require('fs').writeFileSync(process.env.LOW_DRAWING_SCREENSHOT,Buffer.from(shot.data,'base64'));}

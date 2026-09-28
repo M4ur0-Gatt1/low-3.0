@@ -136,6 +136,7 @@ jobs:
           node tools/check_rig_herramienta_ui.js
           node tools/check_ejemplo_no_borra_ui.js
           node tools/check_ayuda_no_tapa_ui.js
+          node tools/check_un_solo_cartel_ui.js
           node tools/check_marco_seleccion_ui.js
           node tools/check_hidden_esconde_ui.js
           node tools/check_rig_vinculos_ui.js
