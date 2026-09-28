@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LOW - Diagnóstico Tableta</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#1a1a2e; color:#eee; font:13px/1.5 monospace; height:100vh; display:flex; }
+#log { width:400px; padding:12px; overflow-y:auto; background:#16213e; border-right:2px solid #0f3460; max-height:100vh; }
+#log h2 { color:#e94560; margin-bottom:8px; font-size:14px; }
+#log .bar { display:flex; gap:6px; margin-bottom:10px; }
+#log button { background:#e94560; color:#fff; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font:inherit; font-size:12px; }
+#log button:disabled { opacity:0.4; cursor:default; }
+#log .saved { color:#4ecca3; font-size:11px; display:none; }
+#line { flex:1; background:#0a0a15; position:relative; overflow:hidden; }
+canvas { position:absolute; top:0; left:0; }
+.entry { border-bottom:1px solid #1a1a3e; padding:4px 0; font-size:11px; }
+.entry .type { display:inline-block; min-width:80px; font-weight:bold; }
+.entry .type.down { color:#4ecca3; }
+.entry .type.move { color:#3498db; }
+.entry .type.up   { color:#e74c3c; }
+.entry .type.raw  { color:#f39c12; }
+.entry .type.hover { color:#7f8c8d; }
+.stats { background:#0f3460; padding:8px; border-radius:6px; margin:8px 0; }
+.stats span { display:block; }
+.val { color:#e94560; }
+</style>
+</head>
+<body>
+<div id="log">
+  <h2> LOW Tablet Diagnostic</h2>
+  <div class="bar">
+    <button id="btnSave" onclick="saveLog()"> Guardar log YA</button>
+    <span class="saved" id="savedMsg"> Guardado</span>
+  </div>
+  <div class="stats">
+    <span>Eventos: <b class="val" id="cnt">0</b></span>
+    <span>↓ down: <b class="val" id="cntD">0</b> |  move: <b class="val" id="cntM">0</b> | ↑ up: <b class="val" id="cntU">0</b></span>
+    <span> raw: <b class="val" id="cntR">0</b> | 🖱 hover: <b class="val" id="cntH">0</b></span>
+    <span>Última presión: <b class="val" id="lastPr">-</b></span>
+    <span>Último buttons: <b class="val" id="lastBtns">-</b></span>
+    <span>Último tipo: <b class="val" id="lastType">-</b></span>
+    <span>Auto-guardado: <b class="val" id="autoStatus">c/50 eventos</b></span>
+  </div>
+  <div id="entries"></div>
+</div>
+<div id="line"><canvas id="cvs"></canvas></div>
+
+<script>
+const log = document.getElementById('entries');
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+let cnt=0,cntD=0,cntM=0,cntU=0,cntR=0,cntH=0;
+let drawing = false;
+let pts = [];
+let allEvents = []; // buffer completo de eventos para guardar a disco
+
+function resize() {
+  cvs.width = cvs.parentElement.clientWidth;
+  cvs.height = cvs.parentElement.clientHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function ts() {
+  const d = new Date();
+  return d.toISOString().split('T')[1].slice(0,12);
+}
+
+function addEntry(type, e) {
+  cnt++;
+  const cls = {pointerdown:'down',pointermove:'move',pointerup:'up',pointerrawupdate:'raw'}[type]||'hover';
+  if (cls==='down') cntD++; else if (cls==='move') cntM++; else if (cls==='up') cntU++; else if (cls==='raw') cntR++; else cntH++;
+  
+  document.getElementById('cnt').textContent=cnt;
+  document.getElementById('cntD').textContent=cntD;
+  document.getElementById('cntM').textContent=cntM;
+  document.getElementById('cntU').textContent=cntU;
+  document.getElementById('cntR').textContent=cntR;
+  document.getElementById('cntH').textContent=cntH;
+  document.getElementById('lastPr').textContent=e.pressure?.toFixed(4)??'null';
+  document.getElementById('lastBtns').textContent=e.buttons??'null';
+  document.getElementById('lastType').textContent=e.pointerType??'null';
+
+  const line = `${ts()} ${type} ptr:${e.pointerId??'?'} ${e.pointerType??'?'} btn:${e.button??'?'} btns:${e.buttons??'?'} pr:${(e.pressure??-1).toFixed(4)} tw:${(e.tiltX??-1).toFixed(2)}/${(e.tiltY??-1).toFixed(2)} x:${e.clientX?.toFixed(0)??'?'} y:${e.clientY?.toFixed(0)??'?'}`;
+  allEvents.push(line);
+
+  const div = document.createElement('div');
+  div.className = 'entry';
+  div.innerHTML = `<span class="type ${cls}">${type}</span> `
+    +`ptr:${e.pointerId??'?'} ${e.pointerType??'?'} `
+    +`btn:${e.button??'?'} btns:${e.buttons??'?'} `
+    +`pr:${(e.pressure??-1).toFixed(4)} `
+    +`tw:${(e.tiltX??-1).toFixed(2)}/${(e.tiltY??-1).toFixed(2)} `
+    +`x:${e.clientX?.toFixed(0)??'?'} y:${e.clientY?.toFixed(0)??'?'}`;
+  log.insertBefore(div, log.firstChild);
+  if (log.children.length > 200) log.lastChild.remove();
+
+  // Auto-guardar cada 50 eventos
+  if (allEvents.length % 50 === 0) saveLog(true);
+}
+
+function saveLog(auto) {
+  const text = allEvents.join('\n');
+  const btn = document.getElementById('btnSave');
+  const msg = document.getElementById('savedMsg');
+  
+  // Intentar pywebview API
+  if (typeof window.pywebview !== 'undefined' && window.pywebview.api && window.pywebview.api.save_tablet_log) {
+    window.pywebview.api.save_tablet_log(text).then(r => {
+      console.log('[LOW Diag] Log guardado:', r);
+      msg.style.display = 'inline';
+      setTimeout(() => msg.style.display = 'none', 2000);
+    }).catch(err => {
+      console.warn('[LOW Diag] pywebview.api falló:', err);
+      fallbackSave(text);
+    });
+  } else {
+    fallbackSave(text);
+  }
+}
+
+function fallbackSave(text) {
+  // Fallback: descargar como archivo .txt
+  const blob = new Blob([text], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'low-tablet-diag-log.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+  const msg = document.getElementById('savedMsg');
+  msg.textContent = '⬇ Descargado';
+  msg.style.display = 'inline';
+  setTimeout(() => msg.style.display = 'none', 2000);
+  console.log('[LOW Diag] Log descargado como archivo.');
+}
+
+// Guardar al cerrar
+window.addEventListener('beforeunload', () => saveLog(true));
+
+['pointerdown','pointermove','pointerup','pointerrawupdate','pointerenter','pointerleave','pointercancel','lostpointercapture','gotpointercapture'].forEach(t => {
+  cvs.addEventListener(t, (e) => {
+    e.preventDefault();
+    addEntry(t, e);
+    
+    if (t === 'pointerdown' && e.pointerType === 'pen') {
+      drawing = true;
+      pts = [{x:e.clientX, y:e.clientY, pr:e.pressure}];
+      ctx.clearRect(0,0,cvs.width,cvs.height);
+    }
+    if (t === 'pointermove' && drawing) {
+      pts.push({x:e.clientX, y:e.clientY, pr:e.pressure});
+      ctx.clearRect(0,0,cvs.width,cvs.height);
+      if (pts.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i=1; i<pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      ctx.strokeStyle = '#e94560';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+    if ((t === 'pointerup' || t === 'pointercancel') && drawing) {
+      drawing = false;
+      addEntry('TRAZO_FIN ('+pts.length+' pts)', e);
+      // Guardar automáticamente al terminar cada trazo
+      saveLog(true);
+    }
+  });
+});
+
+// También interceptar en window para ver eventos que no llegan al canvas
+['pointerdown','pointerup','pointercancel','lostpointercapture'].forEach(t => {
+  window.addEventListener(t, (e) => {
+    if (e.target !== cvs) {
+      const line = `${ts()}  ${t} EN WINDOW (NO canvas) target:${e.target?.tagName||'?'} ptrType:${e.pointerType}`;
+      allEvents.push(line);
+      const div = document.createElement('div');
+      div.className = 'entry';
+      div.style.color = '#ff6b6b';
+      div.innerHTML = ` <b>${t}</b> EN WINDOW (NO canvas) target:${e.target?.tagName||'?'} ptrType:${e.pointerType}`;
+      log.insertBefore(div, log.firstChild);
+    }
+  }, true);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' || e.key === 'c') {
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    pts = [];
+    drawing = false;
+    const div = document.createElement('div');
+    div.className = 'entry';
+    div.innerHTML = '🧹 Canvas limpiado';
+    log.insertBefore(div, log.firstChild);
+  }
+  if (e.key === 's' && e.ctrlKey) {
+    e.preventDefault();
+    saveLog(false);
+  }
+});
+
+// Info inicial
+console.log('[LOW Diag] Listo. Dibujá en el canvas para diagnosticar tu tableta.');
+console.log('[LOW Diag] pointerType esperado: "pen" (no "mouse" ni "touch")');
+console.log('[LOW Diag] Si no ves eventos, el navegador no reconoce tu tableta.');
+console.log('[LOW Diag] El log se guarda automáticamente cada 50 eventos y al terminar cada trazo.');
+console.log('[LOW Diag] También podés guardar con Ctrl+S o el botón .');
+console.log('[LOW Diag] Archivo: diag-log.txt en el directorio de datos de LOW.');
+</script>
+</body>
+</html>

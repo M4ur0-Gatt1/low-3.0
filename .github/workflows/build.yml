@@ -1,0 +1,335 @@
+name: build
+
+# Al pushear un tag vX.Y.Z compila LOW para Windows, macOS y Linux
+# y sube los artefactos al release de GitHub.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag existente que se debe compilar y publicar (vX.Y.Z)"
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+permissions:
+  contents: write
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Dependencias Python para pruebas del puente
+        run: pip install -r requirements.txt
+      - name: Pruebas del modelo 2D
+        run: |
+          node tools/run_2d_model_tests.js
+          node tools/run_safe_mode_tests.js
+      - name: Modelos de composición, colaboración y storyboard
+        run: |
+          node tools/run_multiplane_tests.js
+          node tools/run_drawing_collaboration_tests.js
+          node tools/run_storyboard_tests.js
+          node tools/run_rig_mesh_tests.js
+          node tools/run_rig_schematic_tests.js
+          node tools/run_smart_bones_tests.js
+          node tools/run_view_sets_tests.js
+          node tools/run_control_sets_tests.js
+          node tools/run_premiere_xml_tests.js
+          node tools/run_lipsync_tests.js
+          node tools/run_arcs_tests.js
+          node tools/run_collab_transport_tests.js
+      - name: Puentes de guardado e importación
+        run: |
+          python tools/check_provider_contracts.py
+          python tools/check_multiplane_backend.py
+          python tools/check_asset_import_backend.py
+          python tools/check_storyboarder_import_backend.py
+          python tools/check_relay_server.py
+          python tools/check_app_js_budget.py
+          python tools/check_safe_mode_backend.py
+          python tools/check_papelera_backend.py
+          python tools/check_export_anim_backend.py
+          python tools/check_escena_nueva_backend.py
+          python tools/check_export_premiere_backend.py
+          python tools/check_diag_log_backend.py
+          python tools/check_perfil_instancias_backend.py
+      - name: Contratos críticos de interacción 2D
+        run: python tools/check_2d_interaction_contracts.py
+      - name: Recorridos reales — dibujo, rigging, composición y storyboard
+        run: |
+          python -m http.server 8791 --bind 127.0.0.1 >/tmp/low-http.log 2>&1 &
+          CHROME="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium)"
+          test -n "$CHROME"
+          # El navegador a veces no levanta en el runner y la puerta moría muda:
+          # veinte segundos de espera y un log con ruido de dbus, sin decir que
+          # el que no arrancó fue Chromium. Se reintenta con perfil limpio y se
+          # deja dicho qué pasó, para no confundir un runner flojo con una
+          # regresión del producto.
+          "$CHROME" --version || true
+          arrancado=""
+          for intento in 1 2 3; do
+            rm -rf /tmp/low-e2e
+            "$CHROME" --headless=new --disable-gpu --enable-unsafe-swiftshader --no-sandbox --window-size=1366,768 \
+              --remote-debugging-port=9223 --user-data-dir=/tmp/low-e2e about:blank \
+              >>/tmp/low-chrome.log 2>&1 &
+            for attempt in $(seq 1 20); do
+              curl --silent --fail http://127.0.0.1:9223/json >/dev/null && { arrancado="si"; break; }
+              sleep 1
+            done
+            [ -n "$arrancado" ] && break
+            echo "Chromium no respondió en :9223 (intento $intento de 3); reintento con perfil limpio"
+          done
+          if [ -z "$arrancado" ]; then
+            echo "::error::Chromium no arrancó en el runner: los recorridos E2E no llegaron a ejecutarse"
+            cat /tmp/low-chrome.log
+            exit 1
+          fi
+          node tools/check_provider_workbench_ui.js
+          node tools/check_rig_skeleton_ui.js
+          node tools/check_rig_ik_ui.js
+          node tools/check_coloring_ui.js
+          node tools/check_color_studio_ui.js
+          node tools/check_workspace_ui.js
+          node tools/check_multiplane_ui.js
+          node tools/check_composition_ui.js
+          node tools/check_brush_vector_import_ui.js
+          node tools/check_storyboard_ui.js
+          node tools/check_storyboard_workflow_ui.js
+          node tools/check_storyboarder_import_ui.js
+          node tools/check_document_tabs_ui.js
+          node tools/check_papelera_ui.js
+          node tools/check_save_recovery_ui.js
+          node tools/check_document_recovery_tabs_ui.js
+          node tools/check_function_editor_ui.js
+          node tools/check_rig_weights_ui.js
+          node tools/check_rig_control_ui.js
+          node tools/check_giro_vistas_ui.js
+          node tools/check_conjuntos_ui.js
+          node tools/check_smart_bones_ui.js
+          node tools/check_lipsync_ui.js
+          node tools/check_colab_ui.js
+          node tools/check_copy_paste_ui.js
+          node tools/check_arcs_ui.js
+          node tools/check_shape_tool_ui.js
+          node tools/check_warp_cage_ui.js
+          node tools/check_hit_test_ui.js
+          node tools/check_brush_params_ui.js
+          node tools/check_vector_nodes_ui.js
+          node tools/check_version_onion_ui.js
+          node tools/check_composition_z_ui.js
+          node tools/check_prueba15_ui.js
+          node tools/check_pantalla_inicial_ui.js
+          node tools/check_arranque_sin_vendor_ui.js
+          node tools/check_rig_herramienta_ui.js
+          node tools/check_ejemplo_no_borra_ui.js
+          node tools/check_ayuda_no_tapa_ui.js
+          node tools/check_marco_seleccion_ui.js
+          node tools/check_hidden_esconde_ui.js
+          node tools/check_rig_vinculos_ui.js
+          node tools/check_cortar_no_dibuja_ui.js
+          node tools/check_tl_pestania_ui.js
+          node tools/check_nueva_capa_ui.js
+          node tools/check_cambiar_capa_ui.js
+          node tools/check_paneles_plegables_ui.js
+          node tools/check_sostener_personaje_ui.js
+          node tools/check_primera_pose_ui.js
+          node tools/check_cebolla_poses_ui.js
+          node tools/check_arranque_recorrido_ui.js
+          node tools/check_xsheet_columnas_ui.js
+          node tools/check_capas_harmony_ui.js
+          node tools/check_rescate_tope_ui.js
+          node tools/check_flexible_limb_ui.js
+          node tools/check_3d_studio_ui.js
+          node tools/check_3d_superficie_curva_ui.js
+          node tools/check_safe_mode_ui.js
+          node tools/check_drawing_workflow_ui.js
+          node tools/check_camara_encuadre_ui.js
+          node tools/check_encuadre_alineado_ui.js
+          node tools/check_export_anim_ui.js
+          node tools/check_escena_nueva_ui.js
+          node tools/check_menu_contextual_ui.js
+          node tools/check_export_premiere_ui.js
+          node tools/check_escala_contorno_ui.js
+          node tools/check_herramientas_vector_ui.js
+          node tools/check_inspector_corners_ui.js
+          node tools/check_taller_vector_ui.js
+          node tools/check_rig_flujo_ui.js
+          node tools/check_riel_herramientas_ui.js
+          node tools/check_espacio_animacion_ui.js
+          node tools/check_export_documento_nuevo_ui.js
+          node tools/check_titiritero_documento_ui.js
+          node tools/check_perf_budgets.js
+      - name: Validar sintaxis Python
+        run: python -m compileall -q main.py animation_engine providers social tools server
+
+  release:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - name: Crear release (si no existe)
+        run: gh release create "$RELEASE_TAG" --title "LOW $RELEASE_TAG" --generate-notes || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  windows:
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Dependencias
+        run: pip install -r requirements.txt pyinstaller
+      - name: Versionar desde el tag
+        shell: bash
+        run: bash .github/set_version.sh
+        env:
+          LOW_RELEASE_TAG: ${{ env.RELEASE_TAG }}
+      - name: Compilar exe
+        run: pyinstaller LOW.spec --noconfirm
+      - name: Humo sobre el ejecutable empaquetado (§9·4)
+        shell: bash
+        run: |
+          # Lo que rompe un empaquetado no es la logica: es un archivo de datos
+          # que no entro al bundle o una ruta que funciona desde el repo y no
+          # desde el exe. Las pruebas del repo no ven nada de eso.
+          ./dist/LOW.exe --smoke
+      - name: Firmar el ejecutable (si hay certificado)
+        shell: pwsh
+        env:
+          LOW_PFX_BASE64: ${{ secrets.LOW_PFX_BASE64 }}
+          LOW_PFX_PASSWORD: ${{ secrets.LOW_PFX_PASSWORD }}
+        run: |
+          # LA FIRMA NECESITA UN CERTIFICADO DE VERDAD. Windows saca el aviso de
+          # SmartScreen SOLO con un certificado de firma de codigo emitido por
+          # una autoridad reconocida. Uno autofirmado NO sirve para eso: lo
+          # unico que logra es que el aviso diga otra cosa. Mientras no haya
+          # secreto cargado esto se saltea y el release sale sin firma, en vez
+          # de fallar y dejar sin instaladores. Ver docs/LOW_FIRMA_DIGITAL.md
+          if (-not $env:LOW_PFX_BASE64) {
+            Write-Host "::notice::Sin certificado (secreto LOW_PFX_BASE64): el exe sale SIN FIRMAR y Windows va a avisar al instalarlo."
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP "low.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:LOW_PFX_BASE64))
+          $kits = Join-Path ${env:ProgramFiles(x86)} "Windows Kits"
+          $signtool = Get-ChildItem $kits -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { Write-Host "::error::no encontre signtool.exe en el runner"; exit 1 }
+          # /fd sha256 y SELLADO DE TIEMPO: sin el sello, la firma deja de valer
+          # el dia que vence el certificado y los instaladores ya publicados
+          # empiezan a dar aviso de la nada.
+          & $signtool sign /f $pfx /p $env:LOW_PFX_PASSWORD /fd sha256 `
+            /tr http://timestamp.digicert.com /td sha256 `
+            /d "LOW" /du "https://github.com/M4ur0-Gatt1/low-3.0" (Join-Path "dist" "LOW.exe")
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $signtool verify /pa /v (Join-Path "dist" "LOW.exe")
+      - name: Instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $ver = "$env:RELEASE_TAG" -replace '^v',''
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" low_installer.iss
+      - name: Firmar el instalador (si hay certificado)
+        shell: pwsh
+        env:
+          LOW_PFX_BASE64: ${{ secrets.LOW_PFX_BASE64 }}
+          LOW_PFX_PASSWORD: ${{ secrets.LOW_PFX_PASSWORD }}
+        run: |
+          # El instalador se firma DESPUES de compilarlo. Firmar solo el exe deja
+          # el aviso igual: lo primero que el usuario ejecuta es el setup, y es
+          # eso lo que Windows mira.
+          if (-not $env:LOW_PFX_BASE64) { Write-Host "::notice::instalador SIN FIRMAR"; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "low.pfx"
+          $kits = Join-Path ${env:ProgramFiles(x86)} "Windows Kits"
+          $signtool = Get-ChildItem $kits -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { Write-Host "::error::no encontre signtool.exe en el runner"; exit 1 }
+          Get-ChildItem (Join-Path "Output" "*.exe") | ForEach-Object {
+            & $signtool sign /f $pfx /p $env:LOW_PFX_PASSWORD /fd sha256 `
+              /tr http://timestamp.digicert.com /td sha256 /d "LOW" $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+      - name: Subir al release
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" Output/*.exe dist/LOW.exe --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  macos:
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Dependencias
+        run: pip install -r requirements.txt pyinstaller
+      - name: Versionar desde el tag
+        run: bash .github/set_version.sh
+        env:
+          LOW_RELEASE_TAG: ${{ env.RELEASE_TAG }}
+      - name: Compilar
+        run: pyinstaller LOW.spec --noconfirm
+      - name: Humo sobre el ejecutable empaquetado (§9·4)
+        run: ./dist/LOW --smoke
+      - name: Empaquetar
+        run: cd dist && zip -r LOW-macos.zip LOW*
+      - name: Subir al release
+        run: gh release upload "$RELEASE_TAG" dist/LOW-macos.zip --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  linux:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Dependencias
+        run: |
+          pip install -r requirements.txt pyinstaller
+          pip install "pywebview[qt]"
+      - name: Versionar desde el tag
+        run: bash .github/set_version.sh
+        env:
+          LOW_RELEASE_TAG: ${{ env.RELEASE_TAG }}
+      - name: Compilar
+        run: pyinstaller LOW.spec --noconfirm
+      - name: Humo sobre el ejecutable empaquetado (§9·4)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1 >/dev/null
+          xvfb-run -a ./dist/LOW --smoke
+      - name: Subir al release
+        run: |
+          mv dist/LOW dist/LOW-linux
+          gh release upload "$RELEASE_TAG" dist/LOW-linux --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,104 @@
+{
+  "name": "low2-hybrid",
+  "version": "4.50.0",
+  "description": "LOW - estudio creativo generalista y modular para dibujo, animación, composición y entornos 3D",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "build:native": "cmake -B build/native -S native && cmake --build build/native --config Release",
+    "build:app": "tsc && npm run build:renderer",
+    "build:renderer": "vite build",
+    "build": "npm run build:native && npm run build:app",
+    "dev": "concurrently \"npm run dev:native\" \"npm run dev:app\"",
+    "dev:native": "cmake --build build/native --config Debug --target watch",
+    "dev:app": "vite",
+    "test": "npm run test:guide-plane",
+    "test:guide-plane": "esbuild test/guide-plane.test.ts --bundle --platform=node --format=cjs --outfile=dist/test/guide-plane.cjs --log-level=error && node dist/test/guide-plane.cjs",
+    "test:native": "ctest --test-dir build/native",
+    "package": "electron-builder",
+    "installer": "node scripts/create-installer.js",
+    "dist:win": "vite build && electron-builder --win portable --publish never"
+  },
+  "keywords": [
+    "3d",
+    "drawing",
+    "cad",
+    "illustration",
+    "design",
+    "native",
+    "performance"
+  ],
+  "author": "Mauro Gatti y Tropa Circa",
+  "copyright": "Copyright © 2026 Mauro Gatti y Tropa Circa",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.5",
+    "codemirror": "^5.65.16",
+    "electron-store": "^8.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "simple-git": "^3.22.0",
+    "ssh2": "^1.15.0",
+    "three": "^0.160.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.3.7",
+    "@types/three": "^0.160.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^28.1.4",
+    "electron-builder": "^24.9.1",
+    "esbuild": "^0.21.5",
+    "jest": "^29.7.0",
+    "node-addon-api": "^7.1.0",
+    "node-gyp": "^10.0.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "nativeAddon": {
+    "name": "low-native-bridge",
+    "sources": [
+      "native/bridge/*.cpp",
+      "native/core/*.cpp"
+    ],
+    "include_dirs": [
+      "native/include",
+      "native/core/include"
+    ],
+    "libraries": [
+      "opengl32",
+      "glu32"
+    ]
+  },
+  "build": {
+    "appId": "com.low.app3d",
+    "productName": "LOW 3D",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/renderer/**/*"
+    ],
+    "win": {
+      "publisherName": "Mauro Gatti y Tropa Circa",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "LOW-3D-${version}.${ext}"
+    }
+  }
+}

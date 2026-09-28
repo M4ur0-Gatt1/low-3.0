@@ -1,0 +1,473 @@
+/* Capa visual LOW Studio. Sólo refina controles existentes y puede retirarse sin migrar datos. */
+:root {
+  --low-focus: color-mix(in srgb, var(--accent, #f0450e) 78%, white);
+  --low-control-radius: 7px;
+  --low-panel-shadow: 0 18px 44px rgba(0, 0, 0, .22), 0 2px 8px rgba(0, 0, 0, .16);
+  --low-fast: 120ms cubic-bezier(.2, .7, .2, 1);
+}
+
+/* Gramática visual única del estudio: los módulos comparten superficie,
+   jerarquía, radios, controles y acento. Los alias mantienen compatibles los
+   componentes históricos mientras migran al vocabulario canónico. */
+#designView {
+  --accent: var(--red, #f0450e); --accent-hover: var(--redh, #ff5a22);
+  --surface-canvas: #a9aaa7; --surface-base: var(--bg, #0b0b0c);
+  --surface-panel: var(--panel, #131315); --surface-raised: var(--panel2, #19191c);
+  --surface-hover: color-mix(in srgb, var(--txt, #fff) 7%, var(--panel2, #19191c));
+  --fg: var(--txt, #f4f4f2); --fg2: var(--mut, #98988f);
+  --border-subtle: var(--line2, rgba(255,255,255,.05));
+  --border-default: var(--line, rgba(255,255,255,.08));
+  --control-height: 30px; --panel-radius: var(--r-md, 10px);
+}
+#designView .dz-inspector, #designView .dz-tools, #designView .dz-code,
+#designView .dz-animation-dock { background: var(--surface-panel); border-color: var(--border-default); }
+#designView input:not([type="range"]):not([type="color"]), #designView select,
+#designView textarea { border-color: var(--border-default); border-radius: var(--low-control-radius); background: var(--surface-raised); color: var(--fg); }
+#designView .dz-hint { color: var(--fg2); }
+
+/* Jerarquía de aplicación tipo Photoshop:
+   menú → comandos globales → opciones de herramienta → documentos → área de trabajo. */
+#designView #dzTitle { display: none !important; }
+#designView .art-menubar { flex: none; border-bottom-color: var(--border-default); }
+#designView .art-bar { flex: none; min-height: 38px; padding-block: 4px; background: var(--surface-panel); }
+#designView .dz-toolopts { flex: none; min-height: 34px; background: var(--surface-base); }
+.dz-document-tabs { flex: none; display: flex; align-items: end; min-height: 32px; padding: 4px 8px 0 44px; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--border-default); background: color-mix(in srgb,var(--surface-base) 86%,black); scrollbar-width: thin; }
+.dz-document-tabs[hidden] { display: none !important; }
+.dz-document-tab { position: relative; flex: 0 1 230px; min-width: 112px; max-width: 230px; height: 28px; display: grid; grid-template-columns: 9px minmax(0,1fr) 20px; align-items: center; gap: 6px; padding: 0 5px 0 11px; border: 1px solid transparent; border-bottom: 0; border-radius: 7px 7px 0 0; background: transparent; color: var(--fg2); font-size: 10.5px; text-align: left; }
+.dz-document-tab:hover { background: var(--surface-hover); color: var(--fg); }
+/* La solapa activa se reconoce por su superficie y su borde, como en cualquier
+   editor: la barra de acento cruzándola de lado a lado era lo primero que veía
+   el ojo cada vez que se miraba el dibujo. El acento queda para el punto de
+   «sin guardar», que sí es información que hay que ver. */
+.dz-document-tab.active { z-index: 1; border-color: var(--border-default); background: var(--surface-raised); color: var(--fg); box-shadow: inset 0 1px rgba(255,255,255,.06); }
+.dz-document-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dz-document-dirty { color: var(--accent); font-size: 8px; }
+.dz-document-close { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; color: var(--fg2); font-size: 15px; line-height: 1; }
+.dz-document-close:hover { background: color-mix(in srgb,var(--fg) 11%,transparent); color: var(--fg); }
+
+/* En Color los controles antiguos quedan reemplazados por Color Studio. Incluso
+   durante un cambio de workspace no deben reservar altura como filas vacías. */
+#designView.color-workspace .dz-style > .dz-style-row,
+#designView .dz-inspector.color-studio-open .dz-style > .dz-style-row {
+  display: none !important; min-height: 0 !important; height: 0 !important;
+  margin: 0 !important; padding: 0 !important; border: 0 !important;
+}
+
+/* Color Studio — reemplaza el listado mínimo por un editor de producción. */
+#designView .dz-inspector.color-studio-open { width: 332px; min-width: 292px; padding: 0; overflow: hidden; }
+.dz-inspector.color-studio-open > #dzBrushStudio,
+.dz-inspector.color-studio-open > #dzLayers,
+.dz-inspector.color-studio-open > #dzLayerTools { display: none !important; }
+.dz-inspector.color-studio-open > #dzStyle { height: 100%; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.dz-inspector.color-studio-open .dz-style > .dz-style-row { display: none; }
+.dz-inspector.color-studio-open .dz-palette { flex: 1; min-height: 0; padding: 0; }
+.color-studio { height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto auto auto minmax(132px,1fr) auto; overflow: hidden; background: var(--surface-panel); color: var(--fg); }
+.color-studio .pal2-head { display: flex; align-items: flex-start; gap: 10px; padding: 14px 12px 11px; border-bottom: 1px solid var(--border-default); text-transform: none; letter-spacing: 0; }
+.pal2-title { min-width: 0; flex: 1; display: grid; gap: 3px; }.pal2-title b { font-size: 13px; line-height: 1.2; color: var(--fg); }.pal2-title small { color: var(--fg2); font-size: 9px; font-weight: 400; }
+.pal2-actions { display: flex; gap: 5px; }.color-studio .pal2-btn { min-height: 27px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: 6px; background: transparent; color: var(--fg2); font-size: 9px; text-transform: none; letter-spacing: 0; }
+.color-studio .pal2-btn:hover { border-color: var(--fg2); color: var(--fg); }.color-studio .pal2-btn.primary { border-color: color-mix(in srgb,var(--accent) 58%,transparent); background: color-mix(in srgb,var(--accent) 15%,transparent); color: var(--fg); }
+.pal2-filebar { display: grid; grid-template-columns: 1fr auto; gap: 5px; padding: 8px 12px 0; }.pal2-filebar button { min-height: 25px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: 6px; background: transparent; color: var(--fg2); font-size: 8.5px; }.pal2-filebar button:hover { border-color: var(--fg2); color: var(--fg); }
+.pal2-targets { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin: 9px 12px 0; padding: 3px; border-radius: 8px; background: var(--surface-raised); }
+.pal2-targets button { min-height: 27px; border: 0; border-radius: 6px; background: transparent; color: var(--fg2); font-size: 10px; }.pal2-targets button.active { background: var(--surface-hover); box-shadow: inset 0 0 0 1px var(--border-default); color: var(--fg); }
+.pal2-editor { padding: 10px 12px 12px; border-bottom: 1px solid var(--border-default); }
+.pal2-spectrum { --hue: red; position: relative; height: 104px; overflow: hidden; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; cursor: crosshair; touch-action: none; background: linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,var(--hue)); box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.pal2-cursor { position: absolute; width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; transform: translate(-50%,-50%); box-shadow: 0 0 0 1px #000,0 2px 5px #0008; pointer-events: none; }
+.pal2-hue { width: 100%; height: 14px; margin: 7px 0 5px; appearance: none; border-radius: 99px; background: linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00); }
+.pal2-hue::-webkit-slider-thumb { appearance: none; width: 10px; height: 18px; border: 2px solid #fff; border-radius: 4px; background: transparent; box-shadow: 0 0 0 1px #000; }
+.pal2-readout { display: grid; grid-template-columns: 24px minmax(0,1fr) auto; gap: 7px; align-items: center; margin-top: 4px; }.pal2-preview { width: 24px; height: 24px; border: 1px solid rgba(255,255,255,.2); border-radius: 6px; }.pal2-hex { width: 100%; height: 27px; padding: 0 8px; font: 600 10px 'JetBrains Mono',monospace !important; text-transform: uppercase; }.pal2-gamut { color: var(--fg2); font: 8px 'JetBrains Mono',monospace; }
+.pal2-channels { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px 7px; margin-top: 8px; }.pal2-channels label { display: grid; grid-template-columns: 12px 1fr; align-items: center; gap: 3px; color: var(--fg2); font: 9px 'JetBrains Mono',monospace; }.pal2-channels input { width: 100%; min-width: 0; height: 25px; padding: 0 5px; font: 9px 'JetBrains Mono',monospace !important; }
+.pal2-opacity { display: grid; grid-template-columns: 58px 1fr 34px; align-items: center; gap: 7px; margin-top: 8px; color: var(--fg2); font-size: 9px; }.pal2-opacity input { width: 100%; accent-color: var(--accent); }.pal2-opacity output { color: var(--fg); font: 9px 'JetBrains Mono',monospace; text-align: right; }
+.pal2-harmonies { margin-top: 9px; }.pal2-section-label { color: var(--fg2); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }.pal2-harmony-row { display: grid; grid-template-columns: repeat(6,1fr); gap: 5px; margin-top: 5px; }.pal2-harmony-row button { height: 22px; min-width: 0; padding: 0; border: 1px solid rgba(255,255,255,.18); border-radius: 5px; }.pal2-harmony-row button:hover { transform: translateY(-1px); box-shadow: 0 3px 9px #0007; }
+.pal2-recent { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 7px; margin-top: 8px; }.pal2-recent-row { display: grid; grid-template-columns: repeat(8,1fr); gap: 4px; }.pal2-recent-row button { height: 17px; min-width: 0; padding: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 4px; }
+.pal2-library { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }.pal2-library-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }.pal2-library-head small { color: var(--fg2); font-size: 8px; }.color-studio .pal2-grid { min-height: 0; max-height: none; flex: 1; gap: 2px; overflow: auto; padding: 0 7px 8px; }
+.pal2-filterbar { flex: none; display: grid; grid-template-columns: minmax(0,1fr) 104px; gap: 5px; margin: 0 9px 6px; }.pal2-search,.pal2-group-filter { width: 100%; min-width: 0; height: 27px; padding: 0 7px; font-size: 9px !important; }.pal2-group-filter { color: var(--fg2) !important; }
+.color-studio .pal2-item { width: 100%; min-height: 42px; display: grid; grid-template-columns: 29px minmax(0,1fr) 24px; gap: 9px; align-items: center; padding: 5px 7px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--fg); text-align: left; }
+.color-studio .pal2-item:hover { background: var(--surface-hover); }.color-studio .pal2-item.actual { border-color: color-mix(in srgb,var(--accent) 58%,transparent); background: color-mix(in srgb,var(--accent) 10%,var(--surface-panel)); box-shadow: inset 2px 0 var(--accent); }.color-studio .pal2-item.sinuso { opacity: .68; }
+.color-studio .pal2-sw { width: 29px; height: 29px; border-radius: 7px; border: 1px solid rgba(255,255,255,.16); }.pal2-item-copy { min-width: 0; display: grid; gap: 3px; }.pal2-item-copy b { overflow: hidden; color: var(--fg); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }.pal2-item-copy small { color: var(--fg2); font: 8px 'JetBrains Mono',monospace; }.color-studio .pal2-use { color: var(--fg2); font: 9px 'JetBrains Mono',monospace; text-align: center; }
+.color-studio .pal2-orphans { margin: 0 9px 7px; padding: 7px 8px; border-color: color-mix(in srgb,var(--orange) 45%,transparent); background: color-mix(in srgb,var(--orange) 10%,transparent); font-size: 9px; }.color-studio .pal2-foot { min-height: 30px; padding: 8px 12px; border-top: 1px solid var(--border-default); color: var(--fg2); font-size: 9px; }
+.color-studio.bloqueada .pal2-editor { opacity: .7; }
+
+@media (max-height: 760px) {
+  .pal2-spectrum { height: 78px; }.pal2-channels { margin-top: 6px; }.pal2-harmonies { margin-top: 6px; }
+  .pal2-recent { display: none; }
+  .color-studio .pal2-item { min-height: 36px; }.color-studio .pal2-sw { width: 24px; height: 24px; }
+}
+
+#designView button, #designView input, #designView select, #designView textarea { font: inherit; }
+#designView button, #designView [role="button"] { -webkit-tap-highlight-color: transparent; }
+#designView button:focus-visible, #designView [role="button"]:focus-visible,
+#designView input:focus-visible, #designView select:focus-visible, #designView textarea:focus-visible {
+  outline: 2px solid var(--low-focus); outline-offset: 2px;
+}
+#designView button:not(:disabled) { transition: color var(--low-fast), background var(--low-fast), border-color var(--low-fast), transform var(--low-fast); }
+#designView button:not(:disabled):active { transform: translateY(1px); }
+#designView .dz-toolbtn.active, #designView .on[role="button"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #f0450e) 64%, transparent); }
+#designView .dz-panel, #designView .dz-floating, #designView .dz-dd { box-shadow: var(--low-panel-shadow); }
+#designView .dz-statusbar { font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+#dzCanvas { background-color: #a9aaa7; }
+.dz-zcontrols { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-top: 1px solid var(--line); }
+.dz-zcontrols label { display: inline-flex; align-items: center; gap: 7px; color: var(--mut); font-size: 10.5px; }
+.dz-zcontrols input[type="number"] { width: 74px; height: 25px; padding: 0 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); color: var(--txt); font: 600 11px 'JetBrains Mono', monospace; }
+.dz-zcontrols input[type="checkbox"] { accent-color: var(--accent, #f0450e); }
+.cmp3 { position: absolute; inset: 0; z-index: 12; display: grid; grid-template-columns: 164px minmax(320px,1fr) 196px; grid-template-rows: 42px minmax(0,1fr); overflow: hidden; background: var(--surface-raised); color: var(--fg); font-family: Figtree, system-ui, sans-serif; }
+.cmp3[hidden] { display: none; }
+.cmp3-stage { position: relative; grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; overflow: hidden; perspective: 1400px; cursor: grab; touch-action: none; background: radial-gradient(circle at 48% 38%, #34373b 0, #24262a 48%, #191b1e 100%); }
+.cmp3-world { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; }
+.cmp3-grid { position: absolute; left: -1000px; top: -700px; width: 2000px; height: 1400px; transform: rotateX(90deg) translateZ(-300px); background-image: linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px); background-size: 50px 50px; border: 1px solid rgba(255,255,255,.08); }
+.cmp3.no-grid .cmp3-grid { display: none; }
+.cmp3-cards { transform-style: preserve-3d; }
+.cmp3-card { position: absolute; left: -320px; top: -180px; width: 640px; height: 360px; transform-style: preserve-3d; cursor: pointer; }
+.cmp3-surface { width: 100%; height: 100%; overflow: hidden; background: rgba(255,255,255,.025); outline: 1px solid rgba(255,255,255,.15); box-shadow: 0 12px 38px rgba(0,0,0,.22); }
+.cmp3-surface > svg { width: 100%; height: 100%; display: block; background: transparent !important; box-shadow: none !important; }
+.cmp3-card.selected .cmp3-surface { outline: 2px solid var(--accent); box-shadow: 0 0 0 5px var(--redsoft, rgba(240,69,14,.14)); }
+.cmp3-card > span { position: absolute; left: 0; top: -25px; padding: 3px 8px; border-radius: 5px; background: rgba(20,22,24,.9); color: #c7c9c7; font: 600 10px 'JetBrains Mono',monospace; white-space: nowrap; }
+.cmp3-gizmo { position:absolute; left:50%; top:50%; display:flex; gap:5px; transform:translate(-50%,-50%); filter:drop-shadow(0 2px 4px #0008); }
+.cmp3-gizmo button { width:30px; height:30px; padding:0; border:1px solid #ffffff45; border-radius:50%; color:#fff; font:700 9px 'JetBrains Mono',monospace; cursor:move; }
+.cmp3-gizmo [data-axis="xy"] { background:#3c9b64; }.cmp3-gizmo [data-axis="z"] { background:#397fb5; }
+.cmp3-gizmo [data-axis="r"] { background:#a05b36; }.cmp3-gizmo [data-axis="s"] { background:#7655a8; }
+.cmp3-toolbar { position: relative; z-index: 3; grid-column: 1 / 4; grid-row: 1; display: flex; gap: 4px; align-items: center; min-width: 0; padding: 6px 8px; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--border-default); background: var(--surface-panel); box-shadow: 0 5px 18px rgba(0,0,0,.18); scrollbar-width: thin; }
+.cmp3-toolbar i { width: 1px; height: 18px; background: rgba(255,255,255,.12); }
+.cmp3-toolbar button { flex: none; min-height: 27px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #aeb1b1; font-size: 10.5px; }
+.cmp3-toolbar button:hover,.cmp3-toolbar button.active { color: var(--fg); background: var(--surface-hover); }
+.cmp3-toolbar .cmp3-mode { min-width:58px; padding:0 5px; color:var(--cyan); font:600 9px 'JetBrains Mono',monospace; text-align:center; }
+.cmp3:focus { outline:none; }.cmp3:focus-visible { box-shadow:inset 0 0 0 2px #45a7de; }
+.cmp3-outliner,.cmp3-inspector { position: relative; min-width: 0; min-height: 0; overflow: auto; background: var(--surface-panel); border-color: var(--border-default); border-style: solid; }
+.cmp3-outliner { grid-column: 1; grid-row: 2; border-width: 0 1px 0 0; }.cmp3-inspector { grid-column: 3; grid-row: 2; border-width: 0 0 0 1px; padding: 0 10px 12px; }
+.cmp3-outliner header,.cmp3-inspector header { padding: 14px 12px 9px; color: #888d90; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.cmp3-list button { width: 100%; display: grid; grid-template-columns: 8px 1fr auto; gap: 7px; align-items: center; min-height: 31px; padding: 0 10px; border: 0; border-radius: 0; background: transparent; color: #b9bcbb; text-align: left; }
+.cmp3-list button.active { background: var(--redsoft, rgba(240,69,14,.14)); color: var(--fg); }.cmp3-list button i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }.cmp3-list small { color: var(--fg2); font: 9px 'JetBrains Mono',monospace; }
+.cmp3-inspector label { display: grid; grid-template-columns: 58px 1fr; align-items: center; margin: 6px 0; color: var(--fg2); font-size: 10px; }.cmp3-inspector input { width: 100%; height: var(--control-height); border: 1px solid var(--border-default); border-radius: var(--low-control-radius); background: var(--surface-raised); color: var(--fg); padding: 0 7px; font: 11px 'JetBrains Mono',monospace; }.cmp3-inspector.disabled { opacity: .45; pointer-events: none; }
+/* CONTROLES DESLIZANTES: finos, planos, sin relleno de color — el tipo de
+   control que uno espera en una mesa de trabajo, no el widget redondo y grueso
+   que pone el navegador por omisión. La posición del pulgar dice el valor; el
+   color queda reservado para lo que de verdad está activo. */
+#designView input[type=range], .dz-panel-floating input[type=range],
+.cmp3 input[type=range], .fn2 input[type=range] {
+  -webkit-appearance:none; appearance:none; accent-color:auto;
+  height:14px; background:transparent; cursor:pointer; }
+#designView input[type=range]::-webkit-slider-runnable-track,
+.dz-panel-floating input[type=range]::-webkit-slider-runnable-track,
+.cmp3 input[type=range]::-webkit-slider-runnable-track,
+.fn2 input[type=range]::-webkit-slider-runnable-track {
+  height:3px; border-radius:2px; background:var(--line2, rgba(255,255,255,.16)); }
+#designView input[type=range]::-webkit-slider-thumb,
+.dz-panel-floating input[type=range]::-webkit-slider-thumb,
+.cmp3 input[type=range]::-webkit-slider-thumb,
+.fn2 input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none; width:11px; height:11px; margin-top:-4px;
+  border:0; border-radius:50%; background:var(--fg2, #9aa2a9);
+  box-shadow:0 1px 2px rgba(0,0,0,.45); transition:background .12s, transform .12s; }
+#designView input[type=range]:hover::-webkit-slider-thumb,
+.dz-panel-floating input[type=range]:hover::-webkit-slider-thumb,
+.cmp3 input[type=range]:hover::-webkit-slider-thumb,
+.fn2 input[type=range]:hover::-webkit-slider-thumb { background:var(--fg, #e6e8ea); }
+#designView input[type=range]:active::-webkit-slider-thumb,
+.dz-panel-floating input[type=range]:active::-webkit-slider-thumb,
+.cmp3 input[type=range]:active::-webkit-slider-thumb,
+.fn2 input[type=range]:active::-webkit-slider-thumb {
+  background:var(--accent); transform:scale(1.15); }
+#designView input[type=range]:focus-visible, .dz-panel-floating input[type=range]:focus-visible {
+  outline:none; }
+#designView input[type=range]:focus-visible::-webkit-slider-thumb,
+.dz-panel-floating input[type=range]:focus-visible::-webkit-slider-thumb {
+  box-shadow:0 0 0 3px var(--redsoft, rgba(240,69,14,.2)); }
+/* Los verticales conservan su orientación, y necesitan una altura EXPLÍCITA
+   que gane: la regla de arriba les pone height:14px a todos los deslizadores
+   de #designView, y con un selector de id, así que la altura de app.css no
+   alcanza. Antes esto se resolvía con height:auto, que escapaba del 14 px pero
+   dejaba el control en 129 px dentro de una fila de grilla de 96: el fader se
+   desbordaba sobre su etiqueta y su porcentaje, y el nudo que se veía no caía
+   donde estaba la barra. Ahora se declara la altura que la grilla reserva. */
+#designView .onion2-channel input[type=range] { height:94px; }
+#designView .dz-procreate-sliders input[type=range] { height:auto; }
+
+/* Function Editor: canales a la izquierda, curvas al centro ──────────────── */
+.fn2 { display:grid; grid-template-columns:174px minmax(240px,1fr); grid-template-rows:36px minmax(0,1fr);
+  min-height:150px; overflow:hidden; background:var(--surface-panel); color:var(--fg);
+  border-top:1px solid var(--border-default); }
+.fn2[hidden] { display:none; }
+.fn2-bar { grid-column:1/3; grid-row:1; display:flex; gap:4px; align-items:center; min-width:0;
+  padding:5px 8px; overflow-x:auto; border-bottom:1px solid var(--border-default);
+  background:var(--surface-panel); scrollbar-width:thin; }
+.fn2-bar i { flex:none; width:1px; height:16px; background:rgba(255,255,255,.12); }
+.fn2-bar button { flex:none; min-height:24px; padding:0 8px; border:0; border-radius:6px;
+  background:transparent; color:#aeb1b1; font-size:10.5px; }
+.fn2-bar button:hover:not(:disabled) { color:var(--fg); background:var(--surface-hover); }
+.fn2-bar button:disabled { opacity:.38; }
+.fn2-bar button.danger:hover:not(:disabled) { color:#ff8a70; }
+.fn2-bar .fn2-tan { flex:none; color:var(--fg2); font-size:9.5px; text-transform:uppercase; letter-spacing:.07em; }
+.fn2-bar label { flex:none; display:flex; gap:5px; align-items:center; color:var(--fg2); font-size:10px; }
+.fn2-bar input { width:58px; height:22px; padding:0 5px; border:1px solid var(--border-default);
+  border-radius:var(--low-control-radius); background:var(--surface-raised); color:var(--fg);
+  font:10.5px 'JetBrains Mono',monospace; }
+.fn2-canales { grid-column:1; grid-row:2; min-width:0; overflow:auto;
+  border-right:1px solid var(--border-default); }
+.fn2-canales header { padding:10px 12px 6px; color:#888d90; font-size:9.5px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase; }
+.fn2-lista button { width:100%; display:grid; grid-template-columns:8px 1fr auto; gap:7px;
+  align-items:center; min-height:26px; padding:0 10px; border:0; background:transparent;
+  color:var(--fg2); text-align:left; font-size:10.5px; opacity:.5; }
+.fn2-lista button.active { color:var(--fg); opacity:1; }
+.fn2-lista button:hover { background:var(--surface-hover); }
+.fn2-lista button i { width:7px; height:7px; border-radius:50%; }
+.fn2-lista button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fn2-lista small { color:var(--fg2); font:9px 'JetBrains Mono',monospace; }
+.fn2-lienzo { position:relative; grid-column:2; grid-row:2; min-width:0; min-height:0; }
+.fn2-svg { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+.fn2-grid { stroke:rgba(255,255,255,.07); stroke-width:1; }
+.fn2-eje { fill:var(--fg2); font:9px 'JetBrains Mono',monospace; text-anchor:middle; }
+.fn2-eje-y { text-anchor:end; }
+.fn2-curva { fill:none; stroke-width:1.6; }
+.fn2-clave { stroke:#14161a; stroke-width:1.5; cursor:grab; }
+.fn2-clave.sel { stroke:#fff; stroke-width:2; }
+.fn2-manija { fill:#14161a; stroke:var(--cyan); stroke-width:1.6; cursor:grab; }
+.fn2-manija-linea { stroke:var(--cyan); stroke-width:1; stroke-dasharray:3 3; opacity:.8; }
+.fn2-cabeza { stroke:var(--redh); stroke-width:1.4; }
+.fn2-vacio { position:absolute; inset:0; display:grid; place-items:center; padding:0 12%;
+  text-align:center; pointer-events:none; }
+.fn2-vacio[hidden] { display:none; }
+.fn2-vacio p { margin:0; max-width:46ch; color:var(--fg2); font-size:11px; line-height:1.55; }
+
+/* Diálogo de recuperación: comparar dos versiones dibujadas ───────────────── */
+.dz-rc-sizes { margin:6px 0 0; color:var(--fg2); font:10.5px 'JetBrains Mono',monospace; }
+.dz-rc-compare { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:12px 0 4px; }
+.dz-rc-compare figure { margin:0; display:grid; gap:6px; min-width:0; }
+.dz-rc-compare figcaption { color:var(--fg2); font-size:10.5px; }
+.dz-rc-pane { height:190px; overflow:hidden; display:grid; place-items:center;
+  border:1px solid var(--border-default); border-radius:var(--low-control-radius);
+  background:#fff; background-image:linear-gradient(45deg,#0000000d 25%,transparent 25%,transparent 75%,#0000000d 75%),
+  linear-gradient(45deg,#0000000d 25%,transparent 25%,transparent 75%,#0000000d 75%);
+  background-size:14px 14px; background-position:0 0,7px 7px; }
+.dz-rc-pane > svg { max-width:100%; max-height:100%; width:auto; height:auto; }
+@media (max-width: 620px) { .dz-rc-compare { grid-template-columns:1fr; } .dz-rc-pane { height:150px; } }
+
+/* Estados explícitos de la mesa multiplano y efectos por plano ─────────── */
+/* un selector de clase con display: le gana a [hidden] del navegador; sin
+   esta linea los estados se quedaban pegados en pantalla */
+.cmp3-empty[hidden], .cmp3-flat[hidden] { display:none; }
+.cmp3-empty { position:absolute; inset:0; z-index:2; display:grid; align-content:center; justify-items:center;
+  gap:6px; padding:0 12%; text-align:center; pointer-events:none; }
+.cmp3-empty h3 { margin:0; color:var(--fg); font-size:13px; font-weight:600; }
+.cmp3-empty p { margin:0; max-width:44ch; color:var(--fg2); font-size:11px; line-height:1.55; }
+.cmp3-flat { position:absolute; left:50%; bottom:12px; z-index:3; display:flex; gap:9px; align-items:center;
+  transform:translateX(-50%); padding:6px 8px 6px 12px; border:1px solid var(--border-default);
+  border-radius:999px; background:rgba(20,22,24,.92); box-shadow:0 6px 20px rgba(0,0,0,.34); }
+.cmp3-flat span { color:var(--fg2); font-size:10.5px; white-space:nowrap; }
+.cmp3-flat button { min-height:24px; padding:0 10px; border:0; border-radius:999px;
+  background:var(--cyansoft); color:var(--fg); font-size:10.5px; }
+.cmp3-flat button:hover { background:var(--surface-hover); }
+.cmp3-inspector label.cmp3-fx { grid-template-columns:1fr; gap:3px; margin:8px 0 4px; }
+.cmp3-inspector label.cmp3-fx input[type="range"] { width:100%; height:16px; padding:0; border:0; background:transparent; }
+.cmp3-inspector label.cmp3-fx-flag { grid-template-columns:1fr auto; align-items:center; }
+.cmp3-inspector label.cmp3-fx-flag input { width:14px; height:14px; }
+.cmp3-fx-reset { width:100%; min-height:26px; margin-top:8px; border:1px solid var(--border-default);
+  border-radius:var(--low-control-radius); background:var(--surface-raised); color:var(--fg2); font-size:10.5px; }
+.cmp3-fx-reset:hover { color:var(--fg); background:var(--surface-hover); }
+.cmp3-fx-nota { margin:9px 0 0; color:var(--fg2); font-size:9.5px; line-height:1.5; opacity:.85; }
+.cmp3-axis { position: absolute; z-index:4; right: 206px; bottom: 12px; display: flex; gap: 7px; font: 700 10px 'JetBrains Mono',monospace; }.cmp3-axis b:nth-child(1){color:#e05b61}.cmp3-axis b:nth-child(2){color:#55b86e}.cmp3-axis b:nth-child(3){color:#45a7de}
+
+/* Composición ya trae outliner e inspector propios. Ocultar los equivalentes
+   del editor 2D evita el doble panel que aplastaba y superponía el escenario. */
+#designView.composition-3d .dz-tools,#designView.composition-3d .dz-inspector,#designView.composition-3d .dz-code { display:none !important; }
+#designView.composition-3d .dz-canvas { padding:0; overflow:hidden; }
+
+@media (max-width: 900px) {
+  .cmp3 { grid-template-columns: 138px minmax(280px,1fr) 174px; }
+  .cmp3-toolbar button { padding-inline:6px; }
+  .cmp3-toolbar .cmp3-mode { display:none; }
+  .cmp3-axis { right:184px; }
+}
+
+/* Brush Studio: usa el dock del inspector, nunca tapa el lienzo. */
+#designView .dz-inspector.brush-studio-open { width:340px; padding:0; overflow:hidden; }
+.dz-inspector.brush-studio-open > :not(#dzBrushStudio) { display:none !important; }
+.brush-studio { height:100%; display:grid; grid-template-rows:auto auto auto minmax(120px,1fr) auto; overflow:hidden; background:var(--panel,#181a1d); color:var(--txt,#e7e8e5); }
+.brush-studio[hidden] { display:none; }
+.brush-studio > header { display:flex; align-items:center; justify-content:space-between; padding:14px 14px 10px; border-bottom:1px solid var(--line2,#2b2e32); }
+.brush-studio > header div { display:grid; gap:2px; }.brush-studio > header b { font-size:13px; }.brush-studio > header small { color:var(--mut,#858a8d); font-size:9px; }
+.brush-studio > header button,.bst-title button { border:0; background:transparent; color:var(--mut,#969b9d); }
+.bst-search { display:grid; grid-template-columns:1fr auto; gap:7px; padding:9px 10px; }
+.bst-search input { min-width:0; height:30px; padding:0 10px; border:1px solid var(--line2,#303338); border-radius:7px; background:var(--panel2,#24272b); color:inherit; }
+.bst-search button { border:1px solid var(--line2,#303338); border-radius:7px; background:var(--surface-raised,#292c31); color:inherit; font-size:10px; }
+.brush-studio nav { display:flex; gap:3px; padding:0 10px 8px; }.brush-studio nav button { flex:1; min-height:26px; border:0; border-radius:6px; background:transparent; color:var(--mut,#8e9395); font-size:9px; }
+.brush-studio nav button.active { background:var(--surface-hover,#30343a); color:var(--txt,#fff); }
+.bst-list { min-height:0; overflow:auto; padding:3px 7px 10px; border-bottom:1px solid var(--line2,#2b2e32); }
+.bst-brush { width:100%; display:grid; grid-template-columns:38px 1fr 22px; gap:9px; align-items:center; min-height:48px; margin:2px 0; padding:5px 7px; border:0; border-radius:8px; background:transparent; color:inherit; text-align:left; }
+.bst-brush:hover { background:var(--surface-hover); }.bst-brush.selected { background:var(--redsoft); box-shadow:inset 2px 0 var(--accent); }
+.bst-brush > span:nth-child(2) { display:grid; gap:3px; min-width:0; }.bst-brush b { overflow:hidden; text-overflow:ellipsis; font-size:10.5px; white-space:nowrap; }.bst-brush small { color:var(--mut,#84898b); font-size:8.5px; }
+.bst-brush > i { color:#e6aa43; font-style:normal; text-align:center; }
+.bst-tip { position:relative; width:36px; height:36px; display:grid; place-items:center; overflow:hidden; border-radius:50%; background:#e7e9e6; }.bst-tip::after { content:""; width:28px; height:5px; border-radius:50%; background:#151719; transform:rotate(-18deg); }.bst-tip.raster::after { height:13px; filter:blur(1px); opacity:.8; }.bst-tip img { position:absolute; width:30px; height:30px; object-fit:contain; }.bst-tip:has(img)::after { display:none; }
+.bst-empty { padding:20px; color:var(--mut,#888); text-align:center; font-size:10px; }
+.bst-editor { padding:10px; overflow:auto; background:var(--surface-base); }.bst-editor.disabled { opacity:.5; pointer-events:none; }
+.bst-preview { height:88px; border:1px solid var(--border-default); border-radius:var(--panel-radius); overflow:hidden; background:linear-gradient(135deg,var(--surface-raised),var(--surface-panel)); }.bst-preview svg { width:100%; height:100%; display:block; box-shadow:none !important; background:transparent !important; }
+.bst-title { display:flex; align-items:center; gap:5px; padding:9px 2px 5px; }.bst-title strong { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.5px; }.bst-title button { padding:3px 6px; font-size:9px; }
+.bst-controls { display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; }.bst-controls label { display:grid; gap:3px; }.bst-controls label span { display:flex; justify-content:space-between; color:var(--mut,#929799); font-size:8.5px; }.bst-controls output { color:var(--txt,#ddd); font-family:'JetBrains Mono',monospace; }.bst-controls input { width:100%; accent-color:#45a7de; }
+/* Deslizador que el motor elegido no puede usar: apagado y con el motivo en
+   el titulo, en vez de moverse sin hacer nada. Ver BrushStudio.INERTES. */
+.bst-controls label.inerte { opacity:.42; }
+.bst-controls label.inerte input { cursor:not-allowed; accent-color:var(--mut,#929799); }
+.bst-controls label.inerte output { font-style:normal; }
+
+@media (pointer: coarse) {
+  #designView button, #designView [role="button"] { min-width: 32px; min-height: 32px; }
+  #designView input[type="range"] { min-height: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #designView *, #designView *::before, #designView *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MANEJADORES CON OFICIO — v4.40.0
+
+   Mauro: «la interfaz, las gráficas, o sea las representaciones del software
+   todavía se ve un poco principiante; quiero una estética más profesional en
+   los marcos de las formas, en los manejadores de vectores, en los iconos de
+   las flechas». Referencias: Moho.
+
+   El criterio, mirando Moho y los programas del oficio:
+
+   1. EL MARCO NO COMPITE CON EL DIBUJO. Una línea de 1 px, fría y sobria, en
+      vez de una caja gruesa de color. Lo que tiene que saltar es el trazo del
+      dibujante, no la interfaz.
+   2. LOS TIRADORES SON CHICOS Y CUADRADOS, con relleno claro y borde fino, del
+      tamaño justo para agarrarlos con el mouse (8 px) sin tapar el dibujo. Los
+      de antes eran de 10-12 px con sombra marcada: se veían de juguete.
+   3. LOS NODOS SE DISTINGUEN DE LOS TIRADORES por forma, no sólo por color: el
+      nodo es un rombo (como en Moho y en Illustrator) y el tirador de escala un
+      cuadrado. Así se sabe qué se está por agarrar antes de agarrarlo.
+   4. LA SOMBRA ES UN CONTORNO, no un desenfoque. Un `box-shadow` de 1 px en
+      negro translúcido mantiene el tirador legible sobre un dibujo claro o uno
+      oscuro, sin el aire de botón de juguete.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* el marco de la selección: fino y sobrio */
+#designView .dz-selbox {
+  border: 1px solid rgba(120, 190, 230, .85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
+}
+/* tiradores de escala: cuadrados chicos, claros, de borde fino */
+#designView .dz-sh {
+  width: 8px; height: 8px; border-radius: 1px;
+  background: #f7f9fa; border: 1px solid #3d6b85;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
+}
+#designView .dz-sh:hover { background: var(--cyan); border-color: #f7f9fa; }
+
+/* el tirador principal, mismo idioma que los otros */
+#designView .dz-handle {
+  width: 9px; height: 9px; border-radius: 1px;
+  border: 1px solid #f7f9fa; box-shadow: 0 0 0 1px rgba(0, 0, 0, .4);
+}
+/* la manija de rotación: círculo fino, sin sombra difusa */
+#designView .dz-rotate {
+  width: 15px; height: 15px;
+  background: rgba(24, 26, 28, .92); border: 1px solid rgba(120, 190, 230, .9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
+}
+#designView .dz-rotate::before { font-size: 11px; }
+
+/* nodos del trazado: ROMBO, para no confundirlos con los de escala */
+#designView .dz-node {
+  width: 8px; height: 8px; border-radius: 1px;
+  background: #f7f9fa; border: 1px solid #2b6d8f;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
+}
+#designView .dz-node:hover { background: var(--cyan); border-color: #f7f9fa; }
+
+/* ZONA DE CÁMARA como guía: se lee sin taparte el dibujo. En modo cámara
+   vuelve a ser sólida, porque ahí sí es el objeto que estás manipulando. */
+#designView .dz-cam.guia {
+  /* el CUADRO DE CÁMARA, como en una hoja de layout: línea fina y sobria, y el
+     dibujo de afuera se sigue viendo —ahí se dibuja el sobrante que la cámara
+     puede llegar a tomar en un paneo—. Referencias: hojas de Ghibli y
+     storyboards con cuadro exterior y zona segura adentro. */
+  border: 1px solid rgba(228, 96, 60, .85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .30);
+  cursor: default;
+}
+#designView .dz-cam.guia .dz-cam-tag { opacity: .55; font-size: 9.5px; padding: 2px 5px; }
+#designView .dz-cam.guia .dz-cam-size,
+#designView .dz-cam.guia .dz-cam-rot { display: none; }
+/* LA ZONA SEGURA adentro: lo que entra seguro en cualquier reproductor. Es el
+   segundo rectángulo de las referencias, el de adentro. */
+#designView .dz-cam.guia .dz-cam-safe {
+  inset: 5%; border: 1px dashed rgba(120, 190, 230, .55);
+}
+/* MARCAS DE ESQUINA sobre el cuadro, que es lo que hace que se lea como una
+   hoja de layout y no como un borde de caja. */
+#designView .dz-cam.guia::before,
+#designView .dz-cam.guia::after {
+  content: ""; position: absolute; pointer-events: none;
+  width: 18px; height: 18px; border: 0 solid rgba(228, 96, 60, .95);
+}
+#designView .dz-cam.guia::before {
+  left: -1px; top: -1px; border-left-width: 2px; border-top-width: 2px;
+}
+#designView .dz-cam.guia::after {
+  right: -1px; bottom: -1px; border-right-width: 2px; border-bottom-width: 2px;
+}
+/* y el CENTRO marcado, que es de donde se encuadra */
+#designView .dz-cam.guia .dz-cam-center { opacity: .45; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PROPORCIONES DEL ESTUDIO — v4.40.0
+
+   Mauro: «hay un problema con las proporciones y los tamaños de los botones,
+   muchos están demasiado grandes y poco acordes a todo lo que le pedimos al
+   software que tenga».
+
+   Tiene razón, y el motivo es de origen: los controles heredaron el tamaño del
+   lado programador —un chat, donde un botón de 32 px está bien— y en una mesa
+   de dibujo compiten con el dibujo. En Moho, OpenToonz y Photoshop el icono de
+   herramienta vive entre 14 y 16 px dentro de un botón de 26 a 28: la barra
+   ocupa poco y entran muchas herramientas a la vista, que es lo que hace falta
+   cuando el programa tiene tantas.
+
+   Se toca SÓLO el estudio (`#designView`): el lado de la IA es un chat y ahí
+   el tamaño grande está bien.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+#designView .ibtn { width: 27px; height: 27px; border-radius: 7px; }
+#designView .ibtn .ico { width: 15px; height: 15px; stroke-width: 1.7; }
+
+/* la barra de herramientas: más angosta, y entran más a la vista */
+#designView .dz-tools { width: 38px; min-width: 38px; }
+#designView .dz-tools .ibtn { width: 30px; height: 27px; border-radius: 6px; }
+#designView .dz-tools .hsep { margin: 3px 6px; }
+#designView .dz-tools-grip { font-size: 10px; opacity: .5; }
+/* RIEL DE DOS O TRES COLUMNAS. Con la ventana a media pantalla —y mas todavia
+   con la timeline abierta, que le come la mitad del alto— el riel mandaba las
+   herramientas al cajon «⋯» y quedaban SEIS a la vista: «cuando elijo el panel
+   de animacion no se ven las herramientas». En Photoshop, Moho y OpenToonz el
+   riel se parte en columnas antes de esconder nada; esto hace lo mismo. */
+#designView .dz-tools.dz-cols-2, #designView .dz-tools.dz-cols-3 {
+  flex-flow: row wrap; align-content: flex-start; justify-content: center; }
+#designView .dz-tools.dz-cols-2 { width: 74px; min-width: 74px; }
+#designView .dz-tools.dz-cols-3 { width: 110px; min-width: 110px; }
+/* el asa, los separadores y el «⋯» ocupan la fila entera, no una celda */
+#designView .dz-tools.dz-cols-2 > .dz-tools-grip, #designView .dz-tools.dz-cols-3 > .dz-tools-grip,
+#designView .dz-tools.dz-cols-2 > .hsep, #designView .dz-tools.dz-cols-3 > .hsep,
+#designView .dz-tools.dz-cols-2 > .dz-tools-more, #designView .dz-tools.dz-cols-3 > .dz-tools-more {
+  width: 100%; flex-basis: 100%; }
+
+/* la fila de opciones de la herramienta: aire justo, no de formulario web */
+#designView .dz-optionsbar { min-height: 30px; }
+#designView .dz-toolopts { gap: 8px; font-size: 11.5px; }
+#designView .dz-toolopts input[type="number"],
+#designView .dz-toolopts select { height: 22px; font-size: 11.5px; }
+#designView .dz-toolopts input[type="color"] { width: 24px; height: 20px; }
+#designView .dz-toolopts .dz-to-name { font-size: 11.5px; letter-spacing: .2px; }
+
+/* pestañas de espacios de trabajo y de documentos: del mismo tamaño que el
+   resto, no más altas que la barra que las contiene */
+#designView .dz-ws-tab { padding: 0 9px; font-size: 11.5px; }
+
+/* los tiradores de RADIO DE ESQUINA eran puntos negros gruesos: gritaban más
+   que el dibujo. Mismo idioma que el resto: chicos, claros, borde fino. */
+#designView .dz-corner-widget {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #f7f9fa; border: 1px solid #3d6b85;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
+}
+#designView .dz-corner-widget:hover { background: var(--cyan); border-color: #f7f9fa; }

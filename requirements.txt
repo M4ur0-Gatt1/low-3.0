@@ -1,0 +1,11 @@
+requests>=2.31
+pywebview>=5.0
+pillow>=10.0
+vtracer>=0.6         # raster → SVG editable (vectorizar / "calcar"); offline
+numpy>=1.26          # motor de animación (tools/animation, low_anim)
+jsonschema>=4.21     # módulo social: valida la salida JSON del agente
+cryptography>=42.0   # módulo social: tokens OAuth cifrados (Fernet)
+keyring>=24.0        # módulo social: clave Fernet en el llavero del SO
+# ffmpeg (binario, no pip) habilita export a MP4 y video; opcional
+# Linux necesita ademas un backend web: pip install "pywebview[qt]"
+# Para compilar: pip install pyinstaller

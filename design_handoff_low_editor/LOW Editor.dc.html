@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;height:100%}
+body{
+--bg:#0B0B0C;--panel:#131315;--panel2:#19191C;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.05);
+--txt:#F4F4F2;--mut:#98988F;--faint:#5C5C57;
+--red:#E5322D;--redh:#F0453F;--redsoft:rgba(229,50,45,.13);
+--green:#4E8C5F;--greensoft:rgba(78,140,95,.15);
+--code-kw:#F07E79;--code-str:#93C6A4;--code-com:#63635E;--code-fn:#E3C989;--code-num:#C9A0DC;
+background:var(--bg);color:var(--txt);font-family:'Figtree',system-ui,sans-serif;overflow:hidden;
+}
+body.light{
+--bg:#F5F4F1;--panel:#FFFFFF;--panel2:#EDECE8;--line:rgba(0,0,0,.09);--line2:rgba(0,0,0,.05);
+--txt:#171716;--mut:#6E6E67;--faint:#A5A59D;
+--red:#D22823;--redh:#B91F1B;--redsoft:rgba(210,40,35,.09);
+--green:#3E7A4F;--greensoft:rgba(62,122,79,.12);
+--code-kw:#C03530;--code-str:#2F7A47;--code-com:#9A9A92;--code-fn:#9A6F00;--code-num:#7B3FA0;
+}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+</style>
+</helmet>
+
+<div style="height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--txt);font-size:13px" data-screen-label="Editor principal">
+
+  <!-- ══ Barra superior ══ -->
+  <header style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel)">
+    <div style="display:flex;align-items:center;gap:9px">
+      <div style="width:26px;height:26px;border-radius:8px;background:var(--green);display:flex;align-items:center;justify-content:center;color:#E5322D;font-size:13px;line-height:1">★</div>
+      <span style="font-weight:700;font-size:15px;letter-spacing:-.2px">Fidel</span>
+    </div>
+    <div style="width:1px;height:20px;background:var(--line)"></div>
+    <button style="display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:6px 12px;color:var(--txt);font:500 12.5px 'Figtree',sans-serif;cursor:pointer" style-hover="border-color:var(--mut)">
+      <span style="width:7px;height:7px;border-radius:99px;background:var(--green)"></span>
+      claude-sonnet-4 <span style="color:var(--mut);font-size:10px">▾</span>
+    </button>
+    <button style="display:flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--line);border-radius:9px;padding:6px 12px;color:var(--mut);font:400 12.5px 'Figtree',sans-serif;cursor:pointer;min-width:220px;text-align:left" style-hover="color:var(--txt);border-color:var(--mut)">
+      <span>⌕</span><span style="flex:1">Buscar o dar una orden…</span><span style="font:500 10.5px 'JetBrains Mono',monospace;background:var(--panel2);border-radius:5px;padding:2px 6px">⌘K</span>
+    </button>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Cambiar tema" style="width:32px;height:32px;border-radius:9px;background:transparent;border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:14px" style-hover="color:var(--txt);border-color:var(--mut)">{{ themeIcon }}</button>
+    <button style="width:32px;height:32px;border-radius:9px;background:transparent;border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:13px" style-hover="color:var(--txt);border-color:var(--mut)" title="Configuración de APIs">⚙</button>
+    <button style="display:flex;align-items:center;gap:7px;background:var(--red);border:none;border-radius:9px;padding:7px 16px;color:#fff;font:600 12.5px 'Figtree',sans-serif;cursor:pointer" style-hover="background:var(--redh)">▶ Ejecutar</button>
+  </header>
+
+  <!-- ══ Cuerpo ══ -->
+  <div style="flex:1;display:flex;min-height:0">
+
+    <!-- Barra de actividad -->
+    <nav style="width:46px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0">
+      <button style="width:32px;height:32px;border-radius:9px;background:var(--panel2);border:none;color:var(--txt);cursor:pointer;font-size:14px" title="Explorador">▤</button>
+      <button style="width:32px;height:32px;border-radius:9px;background:transparent;border:none;color:var(--mut);cursor:pointer;font-size:14px" style-hover="color:var(--txt)" title="Buscar">⌕</button>
+      <button style="width:32px;height:32px;border-radius:9px;background:transparent;border:none;color:var(--mut);cursor:pointer;font-size:14px" style-hover="color:var(--txt)" title="Control de versiones">⑂</button>
+      <button style="width:32px;height:32px;border-radius:9px;background:transparent;border:none;color:var(--red);cursor:pointer;font-size:14px" title="Agente">★</button>
+    </nav>
+
+    <!-- Árbol de archivos -->
+    <aside style="width:200px;border-right:1px solid var(--line);background:var(--panel);padding:12px 8px;display:flex;flex-direction:column;gap:1px;overflow-y:auto">
+      <div style="font:600 10.5px 'Figtree',sans-serif;color:var(--faint);letter-spacing:.08em;text-transform:uppercase;padding:0 8px 8px">fidel-core</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:7px;color:var(--mut);font-size:12.5px">▾ src</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 22px;border-radius:7px;color:var(--mut);font-size:12.5px;cursor:pointer" style-hover="background:var(--panel2);color:var(--txt)">main.ts</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 22px;border-radius:7px;color:var(--mut);font-size:12.5px;cursor:pointer" style-hover="background:var(--panel2);color:var(--txt)">agent.ts</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 22px;border-radius:7px;background:var(--panel2);color:var(--txt);font-size:12.5px;cursor:pointer">websocket.ts <span style="width:6px;height:6px;border-radius:99px;background:var(--red);margin-left:auto"></span></div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 22px;border-radius:7px;color:var(--mut);font-size:12.5px">▾ providers</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 36px;border-radius:7px;color:var(--mut);font-size:12.5px;cursor:pointer" style-hover="background:var(--panel2);color:var(--txt)">anthropic.ts</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 36px;border-radius:7px;color:var(--mut);font-size:12.5px;cursor:pointer" style-hover="background:var(--panel2);color:var(--txt)">openai.ts</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px 36px;border-radius:7px;color:var(--mut);font-size:12.5px;cursor:pointer" style-hover="background:var(--panel2);color:var(--txt)">groq.ts</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:7px;color:var(--mut);font-size:12.5px;cursor:pointer" style-hover="background:var(--panel2);color:var(--txt)">package.json</div>
+    </aside>
+
+    <!-- Editor -->
+    <main style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)">
+      <div style="display:flex;gap:4px;padding:8px 10px 0;border-bottom:1px solid var(--line)">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-bottom:none;border-radius:9px 9px 0 0;padding:7px 14px;font-size:12.5px;font-weight:500">websocket.ts <span style="width:6px;height:6px;border-radius:99px;background:var(--red)"></span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:12.5px;color:var(--mut);cursor:pointer" style-hover="color:var(--txt)">agent.ts</div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:16px 0;font:400 12.5px/1.75 'JetBrains Mono',monospace">
+        <div style="display:grid;grid-template-columns:52px 1fr">
+          <div style="text-align:right;padding-right:16px;color:var(--faint);user-select:none">12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br>21<br>22<br>23<br>24</div>
+          <div style="white-space:pre">
+<div><span style="color:var(--code-kw)">export class</span> <span style="color:var(--code-fn)">WsClient</span> {</div>
+<div>  <span style="color:var(--code-kw)">private</span> retries = <span style="color:var(--code-num)">0</span>;</div>
+<div>&nbsp;</div>
+<div>  <span style="color:var(--code-kw)">async</span> <span style="color:var(--code-fn)">connect</span>(url: <span style="color:var(--code-str)">string</span>) {</div>
+<div style="background:var(--greensoft);border-left:2px solid var(--green);margin-left:-2px">    <span style="color:var(--code-com)">// ✎ Fidel: backoff exponencial con jitter</span></div>
+<div style="background:var(--greensoft);border-left:2px solid var(--green);margin-left:-2px">    <span style="color:var(--code-kw)">const</span> delay = <span style="color:var(--code-fn)">Math.min</span>(<span style="color:var(--code-num)">30_000</span>, <span style="color:var(--code-num)">500</span> * <span style="color:var(--code-num)">2</span> ** <span style="color:var(--code-kw)">this</span>.retries);</div>
+<div style="background:var(--greensoft);border-left:2px solid var(--green);margin-left:-2px">    <span style="color:var(--code-kw)">await</span> <span style="color:var(--code-fn)">sleep</span>(delay + <span style="color:var(--code-fn)">Math.random</span>() * <span style="color:var(--code-num)">250</span>);</div>
+<div>    <span style="color:var(--code-kw)">this</span>.ws = <span style="color:var(--code-kw)">new</span> <span style="color:var(--code-fn)">WebSocket</span>(url);</div>
+<div>    <span style="color:var(--code-kw)">this</span>.ws.<span style="color:var(--code-fn)">on</span>(<span style="color:var(--code-str)">'close'</span>, () <span style="color:var(--code-kw)">=&gt;</span> <span style="color:var(--code-kw)">this</span>.<span style="color:var(--code-fn)">reconnect</span>());</div>
+<div>  }</div>
+<div>&nbsp;</div>
+<div>  <span style="color:var(--code-com)">// TODO: exponer métricas de latencia</span></div>
+<div>}</div>
+          </div>
+        </div>
+      </div>
+      <sc-if value="{{ showTerminal }}" hint-placeholder-val="{{ true }}">
+      <div style="border-top:1px solid var(--line);background:var(--panel);padding:8px 14px;font:400 11.5px/1.6 'JetBrains Mono',monospace;color:var(--mut);height:76px;overflow:hidden">
+        <div style="display:flex;gap:14px;margin-bottom:4px"><span style="color:var(--txt);font-family:'Figtree',sans-serif;font-weight:600;font-size:11px">Terminal</span><span style="font-family:'Figtree',sans-serif;font-size:11px;color:var(--faint)">Problemas · Salida</span></div>
+        <div><span style="color:var(--green)">➜</span> npm test websocket</div>
+        <div style="color:var(--green)">✓ 12 pruebas pasaron (1.4s)</div>
+      </div>
+      </sc-if>
+    </main>
+
+    <!-- ══ Panel del agente ══ -->
+    <aside style="width:{{ agentW }};border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)">
+        <span style="font-weight:600;font-size:13px">Agente</span>
+        <span style="font:500 10.5px 'JetBrains Mono',monospace;color:var(--green);background:var(--greensoft);border-radius:99px;padding:2px 8px">activo</span>
+        <div style="flex:1"></div>
+        <button style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px" style-hover="color:var(--txt)" title="Historial">⟲</button>
+        <button style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px" style-hover="color:var(--txt)" title="Nueva conversación">＋</button>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px">
+        <div style="align-self:flex-end;max-width:85%;background:var(--panel2);border-radius:12px 12px 4px 12px;padding:9px 13px;font-size:12.5px;line-height:1.5">arregla el bug de reconexión en websocket.ts</div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;max-width:95%">
+          <div style="display:flex;align-items:center;gap:7px">
+            <div style="width:18px;height:18px;border-radius:6px;background:var(--green);display:flex;align-items:center;justify-content:center;color:#E5322D;font-size:9px">★</div>
+            <span style="font-size:11px;color:var(--mut)">Fidel · claude-sonnet-4</span>
+          </div>
+          <div style="font-size:12.5px;line-height:1.55;color:var(--txt)">El bucle de reconexión no tenía espera entre intentos. Añadí backoff exponencial con jitter y un tope de 30 s.</div>
+
+          <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden">
+            <div style="padding:8px 12px;background:var(--panel2);font-size:11.5px;font-weight:600;display:flex;gap:8px;align-items:center">Plan <span style="color:var(--mut);font-weight:400">3/3</span>
+              <div style="flex:1;height:3px;border-radius:99px;background:var(--line)"><div style="width:100%;height:100%;border-radius:99px;background:var(--green)"></div></div>
+            </div>
+            <div style="padding:8px 12px;display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--mut)">
+              <div><span style="color:var(--green)">✓</span> Leer websocket.ts y tests</div>
+              <div><span style="color:var(--green)">✓</span> Implementar backoff con jitter</div>
+              <div><span style="color:var(--green)">✓</span> Ejecutar pruebas — 12 pasaron</div>
+            </div>
+          </div>
+
+          <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden">
+            <div style="padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:12px">
+              <span style="color:var(--red)">✎</span><span style="font:500 11.5px 'JetBrains Mono',monospace">websocket.ts</span>
+              <span style="font:500 11px 'JetBrains Mono',monospace;color:var(--green)">+3</span><span style="font:500 11px 'JetBrains Mono',monospace;color:var(--red)">−1</span>
+              <div style="flex:1"></div>
+              <button style="background:none;border:none;color:var(--mut);font-size:11.5px;cursor:pointer;font-family:'Figtree',sans-serif" style-hover="color:var(--txt)">Ver diff</button>
+            </div>
+            <div style="display:flex;gap:8px;padding:0 12px 10px">
+              <button style="flex:1;background:var(--red);border:none;border-radius:8px;padding:7px 0;color:#fff;font:600 12px 'Figtree',sans-serif;cursor:pointer" style-hover="background:var(--redh)">Aceptar</button>
+              <button style="flex:1;background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 0;color:var(--mut);font:500 12px 'Figtree',sans-serif;cursor:pointer" style-hover="color:var(--txt);border-color:var(--mut)">Rechazar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:6px">
+          <span style="font:500 10.5px 'JetBrains Mono',monospace;color:var(--mut);border:1px solid var(--line);border-radius:99px;padding:2px 9px;cursor:pointer" style-hover="color:var(--txt)">/compare</span>
+          <span style="font:500 10.5px 'JetBrains Mono',monospace;color:var(--mut);border:1px solid var(--line);border-radius:99px;padding:2px 9px;cursor:pointer" style-hover="color:var(--txt)">/run</span>
+          <span style="font:500 10.5px 'JetBrains Mono',monospace;color:var(--mut);border:1px solid var(--line);border-radius:99px;padding:2px 9px;cursor:pointer" style-hover="color:var(--txt)">/files</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 14px" style-focus="border-color:var(--mut)">
+          <span style="flex:1;color:var(--faint);font-size:12.5px;padding-bottom:4px">Ordena algo a Fidel…</span>
+          <button style="width:32px;height:32px;border-radius:9px;background:var(--red);border:none;color:#fff;font-size:14px;cursor:pointer" style-hover="background:var(--redh)">→</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ══ Barra de estado ══ -->
+  <footer style="display:flex;align-items:center;gap:16px;padding:5px 14px;border-top:1px solid var(--line);background:var(--panel);font-size:11px;color:var(--mut)">
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:99px;background:var(--green)"></span>3 APIs conectadas</span>
+    <span>⑂ main</span>
+    <div style="flex:1"></div>
+    <span>TypeScript · UTF-8</span>
+    <span>Ln 16, Col 42</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;tema&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;dark&quot;, &quot;light&quot;], &quot;default&quot;: &quot;dark&quot;, &quot;tsType&quot;: &quot;'dark' | 'light'&quot;, &quot;section&quot;: &quot;Apariencia&quot;},
+  &quot;anchoAgente&quot;: {&quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 360, &quot;min&quot;: 300, &quot;max&quot;: 480, &quot;step&quot;: 10, &quot;unit&quot;: &quot;px&quot;, &quot;section&quot;: &quot;Apariencia&quot;},
+  &quot;terminal&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Paneles&quot;}
+}">
+class Component extends DCLogic {
+  state = { theme: null };
+
+  getTheme() {
+    return this.state.theme ?? this.props.tema ?? 'dark';
+  }
+
+  applyTheme() {
+    document.body.classList.toggle('light', this.getTheme() === 'light');
+  }
+
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+
+  renderVals() {
+    const theme = this.getTheme();
+    return {
+      themeIcon: theme === 'light' ? '☾' : '☀',
+      toggleTheme: () => this.setState({ theme: theme === 'light' ? 'dark' : 'light' }),
+      agentW: (this.props.anchoAgente ?? 360) + 'px',
+      showTerminal: this.props.terminal ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+/* Panel de la prueba maestra §15. Archivo aparte a propósito: ui/app.css está
+   reservado para las columnas del X-sheet en este reparto, y no queremos los
+   dos editando la misma hoja. Ver ui/core/session-recorder.js. */
+
+.p15 {
+  position: fixed; z-index: 900; right: 18px; bottom: 46px;
+  width: 380px; max-height: min(72vh, 640px); display: flex; flex-direction: column;
+  background: var(--panel, #1b1d22); color: var(--txt, #e9ebe8);
+  border: 1px solid var(--line, #2a2d35); border-radius: 12px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
+  font: 400 12px/1.4 Figtree, sans-serif; overflow: hidden;
+}
+.p15-head {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: var(--panel2, #24262c); border-bottom: 1px solid var(--line, #2a2d35);
+  cursor: move; user-select: none;
+}
+.p15-head strong { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.p15-persona {
+  flex: 1 1 auto; min-width: 0; padding: 3px 7px; border-radius: 6px;
+  background: var(--panel, #1b1d22); color: var(--txt, #e9ebe8);
+  border: 1px solid var(--line, #2a2d35); font: 400 11px Figtree, sans-serif;
+}
+.p15-head button {
+  flex: none; width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--mut, #8a93a6);
+  border: 1px solid transparent; font-size: 15px; line-height: 1;
+}
+.p15-head button:hover { background: var(--line, #2a2d35); color: var(--txt, #e9ebe8); }
+
+.p15-resumen {
+  padding: 8px 10px; border-bottom: 1px solid var(--line, #2a2d35);
+  background: rgba(0, 0, 0, .12); font-size: 11.5px;
+}
+.p15-resumen b { color: var(--accent, #F0450E); font-size: 13px; }
+.p15-resumen small {
+  display: block; margin-top: 3px; color: var(--mut, #8a93a6);
+  font-family: "JetBrains Mono", monospace; font-size: 10px;
+}
+
+.p15-pasos { flex: 1 1 auto; overflow-y: auto; margin: 0; padding: 4px 0; list-style: none; counter-reset: p15; }
+.p15-paso {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+  padding: 7px 10px 7px 30px; position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, .04);
+}
+.p15-paso::before {
+  counter-increment: p15; content: counter(p15);
+  position: absolute; left: 9px; top: 7px;
+  font: 500 10px/1.5 "JetBrains Mono", monospace; color: var(--mut, #8a93a6);
+}
+.p15-paso.abierto { background: rgba(240, 69, 14, .09); }
+.p15-paso.abierto::before { color: var(--accent, #F0450E); }
+.p15-texto { font-size: 11.5px; }
+.p15-datos {
+  grid-column: 2; align-self: start; white-space: nowrap;
+  font: 500 10px "JetBrains Mono", monospace; color: var(--mut, #8a93a6);
+}
+.p15-botones { grid-column: 1 / -1; display: flex; gap: 5px; margin-top: 4px; }
+.p15-botones button {
+  padding: 3px 9px; border-radius: 6px; cursor: pointer;
+  background: var(--panel2, #24262c); color: var(--txt, #e9ebe8);
+  border: 1px solid var(--line, #2a2d35); font: 500 10.5px Figtree, sans-serif;
+}
+.p15-botones button:hover:not(:disabled) { border-color: var(--accent, #F0450E); }
+.p15-botones button:disabled { opacity: .38; cursor: not-allowed; }
+
+/* El resultado se lee de un vistazo, y «con ayuda» NO se disfraza de logrado:
+   la §15 pide los doce pasos SIN ayuda, así que se distingue. */
+.p15-paso.r-ok .p15-texto { color: #7bc47f; }
+.p15-paso.r-con-ayuda .p15-texto { color: #e0b341; }
+.p15-paso.r-no-pude .p15-texto { color: #df5d57; text-decoration: line-through; }
+
+.p15-pie {
+  display: flex; align-items: center; gap: 7px; padding: 8px 10px;
+  border-top: 1px solid var(--line, #2a2d35); background: var(--panel2, #24262c);
+}
+.p15-pie button {
+  padding: 4px 10px; border-radius: 7px; cursor: pointer;
+  background: var(--panel, #1b1d22); color: var(--txt, #e9ebe8);
+  border: 1px solid var(--line, #2a2d35); font: 500 11px Figtree, sans-serif;
+}
+.p15-pie button:hover { border-color: var(--accent, #F0450E); }
+.p15-ruta {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--mut, #8a93a6); font-size: 10px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .p15 { animation: p15Entra .18s ease-out both; }
+  @keyframes p15Entra { from { opacity: 0; transform: translateY(10px); } }
+}

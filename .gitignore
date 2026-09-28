@@ -1,0 +1,60 @@
+# Batch files
+*.bat
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editors
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.a
+*.o
+*.obj
+*.out
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Perfiles de Chromium que dejan las corridas E2E (tools/check_*_ui.js).
+# No son artefactos del proyecto: se pueden borrar sin perder nada.
+.e2e-*/
+
+# Carpetas de build por version (build-release-*, build-rig-*, build-check...).
+# Son salidas de PyInstaller de releases pasados, no fuente.
+build-*/
+
+# Datos locales de la app (config, sesiones, escenas de recuperacion).
+.low/
+
+# Perfiles de navegador de las pruebas E2E. Se colaron 133 archivos —incluido un
+# volcado de fallo de 1,4 MB— en un `git add -A`, a un repositorio publico. Las
+# bases estaban vacias (solo la tabla meta), pero no puede volver a pasar.
+.tmp-chrome*/
+.chrome-profile*/
+cdp-profile*/
+low-e2e*/
+
+# Respaldos que dejan los agentes al editar index.html a mano: nunca se publican
+ui/.limb-*
+ui/.*-before.html

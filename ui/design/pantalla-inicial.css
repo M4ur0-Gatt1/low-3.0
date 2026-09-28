@@ -1,0 +1,110 @@
+/* La primera pantalla del módulo 2D. Ver ui/application/pantalla-inicial.js:
+   abrir el estudio sin documento dejaba un damero enorme sin nada que hacer, y
+   eso no se lee como «listo para empezar», se lee como «algo falló». */
+
+.bien2d {
+  position: absolute; inset: 0; z-index: 5;
+  display: grid; place-items: center; padding: 24px;
+  /* No tapa el lienzo con un color: lo atenúa, para que se entienda que el
+     estudio ya está acá y sólo falta el documento. */
+  background: radial-gradient(ellipse at center,
+    rgba(21, 21, 20, .92) 0%, rgba(21, 21, 20, .74) 70%, rgba(21, 21, 20, .55) 100%);
+  font: 400 13px/1.5 Figtree, sans-serif; color: var(--txt, #e9ebe8);
+}
+.bien2d-cuerpo { max-width: 420px; text-align: center; }
+.bien2d h2 {
+  margin: 0 0 6px; font: 600 20px/1.2 Figtree, sans-serif;
+  color: var(--txt, #e9ebe8); letter-spacing: -.01em;
+}
+.bien2d p { margin: 0 0 18px; color: var(--mut, #8a93a6); font-size: 12.5px; }
+.bien2d-acciones { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; }
+.bien2d-acciones button {
+  padding: 9px 17px; border-radius: 9px; cursor: pointer;
+  background: var(--panel2, #24262c); color: var(--txt, #e9ebe8);
+  border: 1px solid var(--line, #2a2d35);
+  font: 500 12.5px Figtree, sans-serif;
+}
+.bien2d-acciones button:hover { border-color: var(--accent, #F0450E); }
+.bien2d-acciones .bien2d-primario {
+  background: var(--accent, #F0450E); border-color: var(--accent, #F0450E); color: #fff;
+}
+.bien2d-acciones .bien2d-primario:hover { filter: brightness(1.08); }
+.bien2d-agente {
+  margin-top: 14px; padding: 4px 8px; border: 0; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--mut, #8a93a6);
+  font: 400 11.5px Figtree, sans-serif; text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, .18); text-underline-offset: 3px;
+}
+.bien2d-agente:hover { color: var(--txt, #e9ebe8); }
+
+/* EL RESCATE ANTE CAÍDA. Se muestra sólo cuando hay algo de verdad que
+   recuperar, y se ve distinto de las dos acciones de arriba: no es «empezar»,
+   es «no perder lo de ayer». */
+.bien2d-rescate {
+  margin: 16px auto 0; max-width: 360px; padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent, #F0450E) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent, #F0450E) 8%, transparent);
+}
+.bien2d-rescate p {
+  margin: 0 0 8px; color: var(--txt, #e9ebe8);
+  font: 400 11.5px/1.45 Figtree, sans-serif;
+}
+.bien2d-rescate button {
+  width: 100%; padding: 7px 10px; border-radius: 7px; cursor: pointer;
+  background: var(--accent, #F0450E); border: 1px solid var(--accent, #F0450E);
+  color: #fff; font: 600 11.5px Figtree, sans-serif;
+}
+.bien2d-rescate button:hover { filter: brightness(1.08); }
+.bien2d-rescate button[disabled] { opacity: .45; cursor: default; filter: none; }
+
+/* MIENTRAS ARRANCA. La invitación se pinta a los ~100 ms para que no se vea la
+   pantalla vieja —medido: el estudio aparecía a los 6.542 ms, esperando a que
+   cargara el chat de la IA—, pero «Nuevo documento» necesita el puente de
+   Python. Un botón visible que no hace nada es el defecto que se acaba de
+   arreglar, así que hasta que el arranque termina se ven apagados y se dice. */
+.bien2d-acciones button[disabled] {
+  cursor: default; opacity: .45;
+  background: var(--panel2, #24262c); border-color: var(--line, #2a2d35);
+  color: var(--mut, #8a93a6);
+}
+.bien2d-acciones button[disabled]:hover { border-color: var(--line, #2a2d35); filter: none; }
+.bien2d-espera {
+  margin: 14px 0 0; color: var(--mut, #8a93a6);
+  font: 400 11.5px Figtree, sans-serif;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bien2d-espera { animation: bien2dLate 1.4s ease-in-out infinite; }
+  @keyframes bien2dLate { 50% { opacity: .45; } }
+}
+
+/* El botón que lleva al agente. Lleva texto además del ícono: es un cambio de
+   pantalla, no una acción de la herramienta, y conviene que se lea. */
+.ibtn.dz-ir-agente {
+  width: auto; padding: 0 8px 0 6px; gap: 4px;
+  display: inline-flex; align-items: center;
+}
+.ibtn.dz-ir-agente span {
+  font: 600 9.5px/1 "JetBrains Mono", monospace; letter-spacing: .04em;
+}
+.ibtn.dz-ir-agente:hover { color: var(--accent, #F0450E); }
+
+/* El botón al estudio 3D, al lado del de la IA. Se distingue por color: los dos
+   cambian de pantalla, pero a lugares distintos, y desde que el 2D es la
+   primera pantalla ESTE es la única puerta al 3D —la barra izquierda queda
+   tapada por #designView, que es position:fixed con inset:0—. */
+.ibtn.dz-ir-agente.dz-ir-3d:hover { color: var(--ok, #33B5E8); }
+.ibtn.dz-ir-agente.dz-ir-3d span { letter-spacing: .06em; }
+
+/* Al irse al agente, la pluma de la barra izquierda es el camino de vuelta:
+   se marca para que se vea que hay un dibujo esperando. */
+.abtn.vuelve-al-2d { color: var(--accent, #F0450E); }
+.abtn.vuelve-al-2d::after {
+  content: ""; position: absolute; right: 4px; top: 4px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent, #F0450E);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bien2d { animation: bien2dEntra .2s ease-out both; }
+  @keyframes bien2dEntra { from { opacity: 0; } }
+}
