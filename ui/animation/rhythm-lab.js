@@ -63,5 +63,38 @@
     doc.touch();doc.emit("cells");doc.emit("frame");
     return true;
   }
-  A.rhythm={capture,fit,at,apply,cellsFor,total,durations};
+  /* ── EL TIEMPO COMO INSTRUMENTO: tomas retroactivas y comping ─────────────
+     Como el «Capture MIDI» de un DAW: no hay que apretar grabar. Mientras el
+     laboratorio está abierto cada golpe de Espacio queda anotado; una PASADA es
+     una serie de golpes sin pausas largas, y cuando junta un golpe por cambio
+     de pose más el del final (poses + 1) se convierte sola en una TOMA. Las
+     pasadas cortadas se descartan y se cuentan, para poder decirlo.
+
+     `passes` es PURA: recibe los tiempos de los golpes en milisegundos y
+     devuelve las tomas. La vista la usa en vivo, golpe a golpe, y las pruebas
+     con listas fijas. */
+  const GAP_MS=2500;
+  function passes(taps, poseCount, fps, {gap=GAP_MS}={}) {
+    const need=poseCount+1, takes=[];
+    let current=[], cut=0;
+    for(const t of taps) {
+      const last=current.at(-1);
+      if(last!=null && t-last>gap){ if(current.length>1) cut++; current=[]; }
+      current.push(t);
+      if(current.length===need){
+        takes.push(current.slice(1).map((v,i)=>Math.max(1,Math.round((v-current[i])*fps/1000))));
+        current=[];
+      }
+    }
+    return {takes, pending:current.length, cut, need};
+  }
+  /** COMPING: la duración de cada pose sale de la toma que se eligió para esa
+   *  pose. `choice[i]` es el índice de la toma; `null` deja la duración actual. */
+  function comp(takes, choice, current) {
+    return current.map((v,i)=>{
+      const k=choice[i];
+      return k!=null && takes[k] && Number.isInteger(takes[k][i]) ? takes[k][i] : v;
+    });
+  }
+  A.rhythm={capture,fit,at,apply,cellsFor,total,durations,passes,comp,GAP_MS};
 })(window);

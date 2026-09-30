@@ -21,7 +21,7 @@
 .rhythm-comparison { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
 .rhythm-caption { display:flex; justify-content:space-between; gap:12px; padding:8px 0; font-size:12px; }
 .rhythm-caption b { font-weight:500; }.rhythm-caption span { color:#b7b4ad; font-variant-numeric:tabular-nums; }
-.rhythm-screen { height:clamp(84px,24vh,250px); background:#f2ede3; border-radius:8px; overflow:hidden; }
+.rhythm-screen { height:clamp(84px,21vh,240px); background:#f2ede3; border-radius:8px; overflow:hidden; }
 .rhythm-screen img { width:100%; height:100%; object-fit:contain; }
 .rhythm-track { display:flex; position:relative; height:9px; margin-top:9px; gap:3px; }
 .rhythm-track span { background:#62605c; min-width:1px; border-radius:2px; }
@@ -33,7 +33,7 @@
 .rhythm-hint { color:#f0b18d; min-height:18px; margin:8px 0; font-size:12px; }
 .rhythm-poses { display:flex; gap:9px; overflow-x:auto; padding:2px 2px 12px; scrollbar-width:thin; }
 .rhythm-pose { flex:0 0 125px; border:1px solid #42413e; border-radius:8px; padding:7px; background:#242526; }
-.rhythm-pose img { display:block; width:100%; height:70px; object-fit:contain; background:#ece6da; border-radius:4px; }
+.rhythm-pose img { display:block; width:100%; height:52px; object-fit:contain; background:#ece6da; border-radius:4px; }
 .rhythm-pose>span { display:block; font-size:11px; margin:7px 0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .rhythm-pose>div { font-size:11px; color:#aaa59b; }
 .rhythm-pose input { width:70px; border:1px solid #514b43; border-radius:4px; background:#18191b; padding:4px 6px; color:#f6eee1; font:600 13px Figtree,sans-serif; }
@@ -56,10 +56,28 @@
 .bien2d:has(.rhythm-home) { overflow:auto; }
 .bien2d:has(.rhythm-home) .bien2d-cuerpo { max-width:490px; margin:auto; }
 @media(max-width:650px) { .rhythm { padding:16px; }.rhythm-intro { display:block; }.rhythm-scope { display:block; margin-top:8px; text-align:left; }.rhythm-comparison { gap:10px; }.rhythm-controls label { margin-left:0; }.rhythm footer { align-items:flex-start; flex-direction:column; gap:10px; }.rhythm-summary { max-width:100%; } }
+/* CARRILES DE TOMAS: cada pasada tocada con Espacio, y comping pose por pose */
+.rhythm-takes { margin:2px 0 8px; }
+.rhythm-takes-head { display:flex; align-items:baseline; gap:10px; font-size:11px; margin-bottom:4px; }
+.rhythm-takes-head b { font-weight:600; font-size:12px; }
+.rhythm-takes-head span { color:#a9a397; }
+.rhythm-lanes { display:grid; gap:4px; max-height:64px; overflow-y:auto; scrollbar-width:thin; }
+.rhythm-lane { display:grid; grid-template-columns:92px 1fr auto auto; align-items:center; gap:6px; }
+.rhythm-lane-name { font-size:11px; color:#d8d2c7; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.rhythm-lane-track { display:flex; gap:2px; height:16px; }
+.rhythm .rhythm-lane-track button { min-width:3px; padding:0; border:0; border-radius:2px; background:#4b4844; }
+.rhythm .rhythm-lane-track button:hover { background:#8f7a6c; }
+.rhythm .rhythm-lane-track button.elegida { background:#eb7149; }
+.rhythm .rhythm-lane-use, .rhythm .rhythm-lane-del { padding:2px 8px; font-size:11px; }
 /* ventanas bajas (media pantalla): lo que se usa —poses y Aplicar— antes que el título */
 @media (max-height:640px) {
   .rhythm { padding-top:12px; }
   .rhythm h1, .rhythm-intro p { display:none; }
+  /* sin la franja del encabezado: Cerrar queda en la esquina */
+  .rhythm-head { position:absolute; top:10px; right:22px; z-index:3; background:none; padding:0; }
+  .rhythm-scope { display:none; }
+  .rhythm-eyebrow { display:none; }
+  .rhythm-intro { padding-right:96px; }
   .rhythm-intro { margin-bottom:4px; }
   .rhythm-caption { padding:4px 0; }
   .rhythm-screen { height:clamp(70px,19vh,130px); }
@@ -69,4 +87,6 @@
   .rhythm-pose { flex-basis:104px; padding:5px; }
   .rhythm-pose img { height:40px; }
   .rhythm-pose>span { margin:4px 0; }
+  .rhythm-lanes { max-height:44px; }
+  .rhythm-takes { margin:0 0 5px; }
 }

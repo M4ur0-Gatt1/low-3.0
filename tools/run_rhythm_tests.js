@@ -12,4 +12,23 @@ test('stale drawings or cells and locked layers cannot be overwritten',()=>{for(
 test('invalid duration never partially changes the scene',()=>{for(const bad of [[0,1,2],[NaN,1,2],[Infinity,1,2],[2.5,1,2],[12000,1,2],[1,2]]){const d=fixture(),s=R.capture(d),before=JSON.stringify(d.scene.toJSON());assert.throws(()=>R.apply(d,s,bad));assert.equal(JSON.stringify(d.scene.toJSON()),before);}});
 test('unrelated layers and drawings stay identical',()=>{const d=fixture(),s=R.capture(d),other=d.addLayer('Other');other.cells=[1,1,1];const saved=JSON.stringify(d.scene.levels.map(l=>l.toJSON())),cells=other.cells.slice();R.apply(d,s,[3,1,2]);assert.deepEqual(other.cells,cells);assert.equal(JSON.stringify(d.scene.levels.map(l=>l.toJSON())),saved);});
 test('sampling honors frame boundaries and last pose',()=>{assert.equal(R.at([2,3],0),0);assert.equal(R.at([2,3],1),0);assert.equal(R.at([2,3],2),1);assert.equal(R.at([2,3],5),1);});
+// ── tomas retroactivas y comping ──
+test('a pass with one tap per pose change plus the end becomes a take, with no record button',()=>{
+  // 3 poses -> 4 golpes; a 24 fps, 250 ms = 6 F
+  const r=R.passes([0,250,500,1000],3,24);assert.deepEqual(r.takes,[[6,6,12]]);assert.equal(r.pending,0);assert.equal(r.cut,0);});
+test('consecutive passes each become their own take',()=>{
+  const r=R.passes([0,250,500,1000, 5000,5125,5500,6000],3,24);assert.deepEqual(r.takes,[[6,6,12],[3,9,12]]);});
+test('a long pause cuts an incomplete pass and it is counted, not turned into a bad take',()=>{
+  const r=R.passes([0,250, 4000,4250,4500,5000],3,24);assert.deepEqual(r.takes,[[6,6,12]]);assert.equal(r.cut,1);});
+test('an unfinished pass is reported as pending',()=>{
+  const r=R.passes([0,250],3,24);assert.deepEqual(r.takes,[]);assert.equal(r.pending,2);assert.equal(r.need,4);});
+test('taps faster than a frame still give at least one frame per pose',()=>{
+  const r=R.passes([0,5,10,15],3,24);assert.deepEqual(r.takes,[[1,1,1]]);});
+test('comping takes each pose from the chosen take and keeps the rest',()=>{
+  const takes=[[6,6,12],[3,9,12]];assert.deepEqual(R.comp(takes,[1,0,null],[4,4,4]),[3,6,4]);});
+test('comping with a missing take index never invents a duration',()=>{
+  assert.deepEqual(R.comp([[6,6,12]],[5,null,0],[4,4,4]),[4,4,12]);});
+test('a comped rhythm applies like any other: one Undo',()=>{const d=fixture(),s=R.capture(d);
+  const takes=R.passes([0,125,250,375],3,24).takes;const v=R.comp(takes,[0,0,0],s.original);
+  assert(R.apply(d,s,v));assert.equal(d.history.undoStack.length,1);d.history.undo();assert.deepEqual(R.capture(d).original,[2,1,3]);});
 console.log('RHYTHM '+count+' suites OK');
