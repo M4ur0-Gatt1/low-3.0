@@ -158,7 +158,8 @@
       this.host.innerHTML = "";
       this.host.appendChild(box);
       const act = tira.querySelector(".ls2-item.actual");
-      if (act && act.scrollIntoView) act.scrollIntoView({ inline: "nearest", block: "nearest" });
+      // sólo dentro de la tira: scrollIntoView arrastraba el panel lateral entero
+      if (act && (global.LOW && global.LOW.core && global.LOW.core.scrollDentro)) global.LOW.core.scrollDentro(act, { limite: this.host });
     }
 
     _menu(e, d) {
@@ -196,7 +197,14 @@
           doc.deleteDrawing(d.number);
       });
       document.body.appendChild(m);
-      const cerrar = () => { m.remove(); document.removeEventListener("pointerdown", cerrar); };
+      /* El clic DENTRO del menú no lo cierra. Reportado en v3.1.0: «los dibujos
+         del nivel no se borran». MEDIDO: el pointerdown del propio clic sobre
+         «Borrar el dibujo» cerraba el menú, el botón desaparecía antes de su
+         click y NINGÚN ítem hacía nada (Exponer, Duplicar, Renumerar, Borrar). */
+      const cerrar = (ev) => {
+        if (ev && ev.target && m.contains(ev.target)) return;
+        m.remove(); document.removeEventListener("pointerdown", cerrar);
+      };
       setTimeout(() => document.addEventListener("pointerdown", cerrar), 0);
     }
   }

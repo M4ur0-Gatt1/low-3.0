@@ -70,8 +70,50 @@
     devolver();
     requestAnimationFrame(devolver);
     setTimeout(devolver, 0);
+    /* NO ALCANZABA CON EL CLIC. Reportado en v3.0.1: «el dial del papel cebolla
+       no anda, cuando quiero hacer clic se scrollea el sidebar». MEDIDO con un
+       arrastre real: a mitad del gesto #dzAnimationDock saltaba 0 → 387 px, el
+       fader agarrado quedaba en y=-220 (fuera de la pantalla) y el puntero caía
+       sobre OTRO canal, que terminaba en 0. Así que el scroll de los ancestros
+       se SOSTIENE hasta soltar. */
+    const sostener = () => devolver();
+    const soltar = () => {
+      document.removeEventListener("scroll", sostener, true);
+      document.removeEventListener("pointerup", soltar, true);
+      document.removeEventListener("pointercancel", soltar, true);
+      window.removeEventListener("blur", soltar);
+      setTimeout(devolver, 0);
+    };
+    document.addEventListener("scroll", sostener, true);
+    document.addEventListener("pointerup", soltar, true);
+    document.addEventListener("pointercancel", soltar, true);
+    window.addEventListener("blur", soltar);
   }, true);
 
   window.dzOnionScrollFoto = dzOnionScrollFoto;
   window.dzOnionScrollRestaurar = dzOnionScrollRestaurar;
+
+  /* AL ABRIR EL PAPEL CEBOLLA, QUE SE VEA. MEDIDO a 1000x560: el panel
+     lateral quedaba bajado 179 px y el mezclador arriba, fuera de la vista: se
+     abría un panel que no se veía. Se lo trae a la vista dentro del panel
+     lateral (y sólo ahí). */
+  function enganchar() {
+    const original = window.dzOnionPanelSet;
+    if (typeof original !== "function" || original.__alaVista) return;
+    const envuelto = function (show) {
+      const r = original.apply(this, arguments);
+      if (show) {
+        const panel = document.getElementById("dzOnionPanel");
+        const dock = panel && panel.closest(".dz-animation-dock");
+        const traer = () => { if (panel && !panel.hidden && window.LOW?.core?.scrollDentro)
+          window.LOW.core.scrollDentro(panel, { inline: null, limite: dock || null }); };
+        traer(); requestAnimationFrame(traer);
+      }
+      return r;
+    };
+    envuelto.__alaVista = true;
+    window.dzOnionPanelSet = envuelto;
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", enganchar, { once: true });
+  else enganchar();
 })();

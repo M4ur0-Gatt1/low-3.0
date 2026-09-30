@@ -170,6 +170,8 @@ jobs:
           node tools/check_tradigital_ui.js
           node tools/check_rhythm_ui.js
           node tools/check_tomas_ui.js
+          node tools/check_cebolla_ui.js
+          node tools/check_borrar_dibujo_ui.js
           node tools/check_taller_vector_ui.js
           node tools/check_rig_flujo_ui.js
           node tools/check_riel_herramientas_ui.js

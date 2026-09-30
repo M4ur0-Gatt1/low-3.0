@@ -960,8 +960,15 @@
         ly.cells = ly.cells.map((c) => (c === number ? null : c));
         cambios.push({ id: ly.id, antes, despues: ly.cells.slice() });
       }
+      // ¿era el dibujo que está sobre la mesa? (las celdas ya se vaciaron: se
+      // pregunta con el estado de ANTES)
+      const actual = cambios.find((c) => c.id === this.layerId);
+      const aLaVista = !!actual && actual.antes[this.frame - 1] === number;
       lv.removeDrawing(number);
       this.touch(); this.emit("cells"); this.emit("level");
+      // si lo era, la mesa tiene que dejar de mostrarlo: si no, el volcado del
+      // lienzo lo vuelve a guardar como un dibujo nuevo y «no se borra»
+      if (aLaVista) this.emit("frame");
       if (this.history) {
         const doc = this;
         this.history.push({

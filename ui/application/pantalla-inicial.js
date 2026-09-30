@@ -239,7 +239,7 @@
     caja.innerHTML = `<div class="bien2d-cuerpo">
       <h2>LOW · Animación 2D</h2>
       <p>Dibujo cuadro a cuadro, X-sheet, esqueletos, cámara y multiplano.</p>
-      <section class="rhythm-home"><small>INTERPRETAR / EXPERIMENTO 01</small><h3>Dibujá las poses.<br>Interpretá el tiempo.</h3><p>Un mismo dibujo puede flotar, pesar o golpear. Probá dos ritmos juntos y elegí el que cuenta tu historia.</p><div class="rhythm-home-score" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><button type="button" data-a="interpretar">Probar con una escena de ejemplo →</button></section>
+      <section class="rhythm-home"><small>INTERPRETAR / EXPERIMENTO 01</small><h3>Dibujá las poses. <br>Interpretá el tiempo.</h3><p>Un mismo dibujo puede flotar, pesar o golpear. Probá dos ritmos juntos y elegí el que cuenta tu historia.</p><div class="rhythm-home-score" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><button type="button" data-a="interpretar">Probar con una escena de ejemplo →</button></section>
       <div class="bien2d-acciones">
         <button type="button" data-a="nuevo" class="bien2d-primario" disabled>Nuevo documento</button>
         <button type="button" data-a="abrir" disabled>Abrir documento…</button>

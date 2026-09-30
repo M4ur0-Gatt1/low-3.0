@@ -111,9 +111,38 @@
     });
   }
 
+  /* EL PAPEL TAPABA AL PAPEL CEBOLLA. Reportado en v3.0.1: «el papel cebolla
+     no anda». MEDIDO: los fantasmas SÍ se dibujaban, pero la cebolla los mete
+     como PRIMEROS hijos de la hoja, y un documento nuevo trae como primer
+     elemento de su dibujo la hoja blanca opaca (rect[data-low-page], 1920x1080
+     #ffffff): quedaban DEBAJO del papel. En el mock no pasa porque no tiene
+     hoja. Lo mismo les pasaba a las capas de atrás de esta mesa y a la cebolla
+     de poses. Todo lo de asistencia que está antes del papel se mueve a
+     inmediatamente DESPUÉS, en el mismo orden: papel · capas de atrás ·
+     fantasmas · dibujo activo. */
+  function sobreElPapel(svg) {
+    if (!svg) return false;
+    const hijos = [...svg.children];
+    const esPapel = (n) => n.matches && (n.matches("rect[data-low-page]") ||
+      (typeof global.dzIsCanvasBackground === "function" && global.dzIsCanvasBackground(n)));
+    const papel = hijos.find(esPapel);
+    if (!papel) return false;
+    const antes = hijos.slice(0, hijos.indexOf(papel)).filter((n) => n.classList && n.classList.contains("dz-onion"));
+    if (!antes.length) return false;
+    let ancla = papel.nextSibling;
+    for (const n of antes) svg.insertBefore(n, ancla);
+    return true;
+  }
+
+  function pintar() {
+    const n = pintarCapas();
+    try { sobreElPapel(hoja()); } catch (_) { /* reordenar no puede tumbar la mesa */ }
+    return n;
+  }
+
   /** Pinta el contexto de las otras capas para el cuadro actual. Devuelve
    *  cuántas capas puso. */
-  function pintar() {
+  function pintarCapas() {
     const a = app(), svg = hoja();
     if (!svg) return 0;
     svg.querySelectorAll(":scope > g.dz-capa").forEach((n) => n.remove());
@@ -206,7 +235,7 @@
 
   function enganchar() { envolverMesa(); envolverExport(); try { pintar(); } catch (_) { /* sin documento todavía */ } }
 
-  animation.capasEnMesa = { pintar, envolverMesa, envolverExport, LAVADO, _cache: cache };
+  animation.capasEnMesa = { pintar, sobreElPapel, envolverMesa, envolverExport, LAVADO, _cache: cache };
   global.dzCapasEnMesa = pintar;
 
   if (document.readyState === "loading")

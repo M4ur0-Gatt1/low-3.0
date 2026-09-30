@@ -17,7 +17,7 @@
   function demo() {
     const heights=[150,136,100,54,100,136,150];
     const runs=heights.map((y,i)=>({number:i+1,frames:4,name:["Apoyo","Impulso","Subida","Suspensión","Caída","Contacto","Peso"][i],
-      content:`<path d="M35 176H285" stroke="#c6beb1" stroke-width="2"/><ellipse cx="160" cy="178" rx="${27-(150-y)/7}" ry="4" fill="#d4cabc"/><ellipse cx="160" cy="${y}" rx="${i===6?30:22}" ry="${i===6?16:22}" fill="#eb623b" stroke="#462c28" stroke-width="3"/><path d="M151 ${y-3}l3 -1m12 1l3 -1" stroke="#462c28" stroke-width="3" stroke-linecap="round"/>`}));
+      content:`<path d="M35 176H285" stroke="#c9c9c4" stroke-width="2"/><ellipse cx="160" cy="178" rx="${27-(150-y)/7}" ry="4" fill="#e2e2de"/><ellipse cx="160" cy="${y}" rx="${i===6?30:22}" ry="${i===6?16:22}" fill="#F0450E" stroke="#171716" stroke-width="3"/><path d="M151 ${y-3}l3 -1m12 1l3 -1" stroke="#171716" stroke-width="3" stroke-linecap="round"/>`}));
     return {layerName:"Estudio de peso",fps:24,width:320,height:210,runs,original:runs.map(()=>4),palette:"",demo:true,signature:"demo"};
   }
   function imageFor(s,run) {

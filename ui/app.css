@@ -2575,9 +2575,13 @@ footer #ver { color: var(--mut); border-color: transparent; background: var(--pa
 .tl2 { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: auto;
   font: 500 10px/1 "JetBrains Mono", ui-monospace, monospace;
   color: var(--fg, #e6e9f0); background: var(--panel, #17181c); user-select: none; }
-.tl2-ruler { display: flex; position: sticky; top: 0; z-index: 2;
+.tl2-ruler { display: flex; position: sticky; top: var(--tl-tools-h, 33px); z-index: 2;
   background: var(--panel2, #1e2026); border-bottom: 1px solid var(--line, #2a2d35); }
-.tl2-tools { flex: 0 0 auto; display: flex; align-items: stretch; gap: 6px; padding: 3px 6px;
+/* la barra de botones también FIJA: al cambiar de cuadro la línea de tiempo se
+   desplaza para mostrar la celda activa y la barra se iba hacia arriba (medido
+   a 1000x560: quedaba cortada debajo del scroll) */
+.tl2-tools { position: sticky; top: 0; z-index: 3; box-sizing: border-box; height: var(--tl-tools-h, 33px);
+  flex: 0 0 auto; display: flex; align-items: stretch; gap: 6px; padding: 3px 6px;
   overflow-x: auto; background: var(--panel, #191a1f); border-bottom: 1px solid var(--line, #2a2d35);
   scrollbar-width: thin; }
 .tl2-toolgroup { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 2px;
@@ -2590,6 +2594,7 @@ footer #ver { color: var(--mut); border-color: transparent; background: var(--pa
   color: var(--mut, #a8a49c); font: 600 10px/12px Figtree, sans-serif; letter-spacing: .035em; }
 #dzTlGrid { container: tlgrid / size; }
 @container tlgrid (min-height: 300px) {
+  .tl2 { --tl-tools-h: 60px; }
   .tl2-tools { gap: 8px; padding: 6px 8px; }
   .tl2-toolgroup { padding: 17px 8px 0 0; gap: 3px; }
   .tl2-toolgroup::before { display: block; }

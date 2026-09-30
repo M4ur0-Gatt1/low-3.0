@@ -50,7 +50,8 @@
       if (cell) cell.classList.add("cursor");
       const info = this.host.querySelector(".xs2-tpinfo");
       if (info) info.textContent = `${this.doc.frame} / ${this.doc.scene.playRange().out}`;
-      if (row && row.scrollIntoView) row.scrollIntoView({ block: "nearest" });
+      // sólo dentro de la X-sheet: scrollIntoView arrastraba el panel lateral entero
+      if (row && (global.LOW && global.LOW.core && global.LOW.core.scrollDentro)) global.LOW.core.scrollDentro(row, { block: "nearest", inline: null, limite: this.host });
     }
 
     /** Cuántas filas mostrar. */
@@ -162,7 +163,7 @@
 
       // dejar visible el frame actual sin saltos bruscos
       const act = cuerpo.querySelector(".xs2-row.actual");
-      if (act && act.scrollIntoView) act.scrollIntoView({ block: "nearest" });
+      if (act && (global.LOW && global.LOW.core && global.LOW.core.scrollDentro)) global.LOW.core.scrollDentro(act, { block: "nearest", inline: null, limite: this.host });
     }
 
     _celda(cls, txt) {

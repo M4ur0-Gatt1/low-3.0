@@ -158,7 +158,7 @@
       if (label) label.textContent = this.view.compact ? String(this.doc.frame)
         : `${this.doc.frame} / ${this.doc.scene.playRange().out}`;
       const active = this.host.querySelector(`.tl2-cell[data-layer-id="${this.doc.layerId}"][data-frame="${this.doc.frame}"]`);
-      if (active && active.scrollIntoView) active.scrollIntoView({ inline: "nearest", block: "nearest" });
+      if (active && (global.LOW && global.LOW.core && global.LOW.core.scrollDentro)) global.LOW.core.scrollDentro(active, { limite: this.host });
     }
 
     _frames() {
@@ -663,7 +663,7 @@
       // preferencia no debe saltar de posición ni desorientar al animador.
       if (!old) {
         const act = cont.querySelector(".tl2-cell.actual") || cont.querySelector(".tl2-tick.actual");
-        if (act && act.scrollIntoView) act.scrollIntoView({ inline: "nearest", block: "nearest" });
+        if (act && (global.LOW && global.LOW.core && global.LOW.core.scrollDentro)) global.LOW.core.scrollDentro(act, { limite: this.host });
       }
     }
     _inSelection(layerId, frame) {

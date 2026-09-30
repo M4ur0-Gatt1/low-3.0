@@ -1,88 +1,123 @@
-/* LOW Interpretar — space belongs to the drawings, timing remains tangible. */
-/* en la barra, un ícono como los demás: con texto pisaba al botón de 3D */
-#designView .rhythm-launch.ibtn { color:#f29169; }
-.rhythm { box-sizing:border-box; width:min(1120px,94vw); max-height:94vh; padding:18px 22px 0; overflow:auto; color:#f0ece4; background:#1b1c1e; border:1px solid #4b4540; border-radius:18px; box-shadow:0 30px 120px #0009; font:14px/1.5 Figtree,sans-serif; }
-.rhythm::backdrop { background:#090a0de0; backdrop-filter:blur(6px); }
+/* LOW · Interpretar — con el lenguaje de LOW.
+   Reportado en v3.1.0: «el estilo de este panel se parece más a Claude que a
+   LOW». Tenía una paleta propia —beige, salmón, degradé cálido y esquinas de
+   18 px— que no aparece en ningún otro lugar del programa. Ahora usa SÓLO los
+   tokens de LOW (app.css, `body`): fondos neutros --bg/--panel/--panel2,
+   filetes --line, texto --txt/--mut, UN acento —el naranja del rayo, --red—,
+   radios --r-sm/--r-md, Figtree para el texto y JetBrains Mono para números y
+   rótulos, como la barra de estado y los encabezados de panel. Con tokens,
+   además, el tema claro sale solo. El papel es el de la mesa: blanco. */
+#designView .rhythm-launch.ibtn { color: var(--red); }
+
+.rhythm { box-sizing:border-box; width:min(1120px,94vw); max-height:94vh; padding:16px 20px 0; overflow:auto;
+  color:var(--txt); background:var(--panel); border:1px solid var(--line); border-radius:var(--r-lg);
+  box-shadow:var(--elev-1), 0 0 0 1px rgba(0,0,0,.4); font:13px/1.45 Figtree,'Segoe UI',sans-serif; }
+.rhythm::backdrop { background:rgba(0,0,0,.62); }
 .rhythm *, .rhythm-home * { box-sizing:border-box; }
-.rhythm-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
-.rhythm-eyebrow { color:#efa27e; font-size:10px; font-weight:700; letter-spacing:.16em; }
-.rhythm h1 { font-size:clamp(19px,2.3vw,28px); line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px; font-weight:500; }
+
+.rhythm-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px;
+  padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid var(--line); }
+.rhythm-eyebrow { color:var(--mut); font:600 10px/1 'JetBrains Mono',ui-monospace,monospace; letter-spacing:.14em; }
+.rhythm h1 { font-size:clamp(18px,2vw,24px); line-height:1.2; letter-spacing:-.015em; margin:8px 0 0; font-weight:600; color:var(--txt); }
 /* una línea: el encabezado grande se comía ~170 px y dejaba las poses y «Aplicar» fuera de la ventana */
 .rhythm h1 br { display:none; }
-.rhythm button { padding:9px 13px; border:1px solid #4a4845; border-radius:7px; color:#eee9df; background:#292a2c; font:600 12px/1.3 Figtree,sans-serif; cursor:pointer; }
-.rhythm button:hover { border-color:#f0a17c; background:#363230; }
-.rhythm button:focus-visible, .rhythm input:focus-visible { outline:2px solid #ffb38e; outline-offset:3px; }
-.rhythm button.rhythm-primary { background:#eb7149; border-color:#eb7149; color:#181414; }
-.rhythm button:disabled { opacity:.4; cursor:default; }
+
+.rhythm button { padding:7px 12px; border:1px solid var(--line); border-radius:var(--r-sm); color:var(--txt);
+  background:var(--panel2); font:600 12px/1.3 Figtree,sans-serif; cursor:pointer; }
+.rhythm button:hover { border-color:rgba(255,255,255,.2); background:rgba(255,255,255,.06); }
+.rhythm button:focus-visible, .rhythm input:focus-visible { outline:none; box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--red); }
+.rhythm button.rhythm-primary { background:var(--red); border-color:var(--red); color:#fff; }
+.rhythm button.rhythm-primary:hover { background:var(--redh); border-color:var(--redh); }
+.rhythm button:disabled { opacity:.38; cursor:default; }
+
 .rhythm-intro { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:8px; }
-.rhythm-intro b { font-size:16px; font-weight:600; }
-.rhythm-intro p { margin:4px 0 0; color:#b8b5af; }
-.rhythm-scope { color:#bfb9ae; font-size:10px; letter-spacing:.07em; text-align:right; }
-.rhythm-comparison { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-.rhythm-caption { display:flex; justify-content:space-between; gap:12px; padding:8px 0; font-size:12px; }
-.rhythm-caption b { font-weight:500; }.rhythm-caption span { color:#b7b4ad; font-variant-numeric:tabular-nums; }
-.rhythm-screen { height:clamp(84px,21vh,240px); background:#f2ede3; border-radius:8px; overflow:hidden; }
+.rhythm-intro b { font-size:14px; font-weight:700; }
+.rhythm-intro p { margin:3px 0 0; color:var(--mut); font-size:12px; }
+.rhythm-scope { color:var(--mut); font:500 10px/1.2 'JetBrains Mono',ui-monospace,monospace; letter-spacing:.08em; text-align:right; }
+
+.rhythm-comparison { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.rhythm-caption { display:flex; justify-content:space-between; gap:12px; padding:6px 0; font-size:12px; }
+.rhythm-caption b { font-weight:600; }
+.rhythm-caption span { color:var(--mut); font:500 11px 'JetBrains Mono',ui-monospace,monospace; }
+/* el papel de la mesa: blanco, con el mismo filete que la hoja del editor */
+.rhythm-screen { height:clamp(84px,21vh,240px); background:#fff; border:1px solid var(--line); border-radius:var(--r-sm); overflow:hidden; }
 .rhythm-screen img { width:100%; height:100%; object-fit:contain; }
-.rhythm-track { display:flex; position:relative; height:9px; margin-top:9px; gap:3px; }
-.rhythm-track span { background:#62605c; min-width:1px; border-radius:2px; }
-[data-track="b"] span { background:#c47b5d; }
-.rhythm-track::after { content:""; position:absolute; left:var(--progress,0%); top:-2px; bottom:-2px; width:2px; background:#fff6e9; }
-.rhythm-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; }
-.rhythm-controls label { display:flex; align-items:center; gap:7px; margin-left:auto; color:#d1ccc3; font-size:12px; }
-.rhythm input { accent-color:#ed855c; }
-.rhythm-hint { color:#f0b18d; min-height:18px; margin:8px 0; font-size:12px; }
-.rhythm-poses { display:flex; gap:9px; overflow-x:auto; padding:2px 2px 12px; scrollbar-width:thin; }
-.rhythm-pose { flex:0 0 125px; border:1px solid #42413e; border-radius:8px; padding:7px; background:#242526; }
-.rhythm-pose img { display:block; width:100%; height:52px; object-fit:contain; background:#ece6da; border-radius:4px; }
-.rhythm-pose>span { display:block; font-size:11px; margin:7px 0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-.rhythm-pose>div { font-size:11px; color:#aaa59b; }
-.rhythm-pose input { width:70px; border:1px solid #514b43; border-radius:4px; background:#18191b; padding:4px 6px; color:#f6eee1; font:600 13px Figtree,sans-serif; }
+.rhythm-track { display:flex; position:relative; height:8px; margin-top:8px; gap:2px; }
+.rhythm-track span { background:var(--faint); min-width:1px; border-radius:1px; }
+[data-track="b"] span { background:var(--red); opacity:.85; }
+.rhythm-track::after { content:""; position:absolute; left:var(--progress,0%); top:-3px; bottom:-3px; width:2px; background:var(--txt); }
+
+.rhythm-controls { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:12px; }
+.rhythm-controls label { display:flex; align-items:center; gap:7px; margin-left:auto; color:var(--mut); font-size:12px; }
+.rhythm input { accent-color:var(--red); }
+.rhythm-hint { color:var(--txt); min-height:18px; margin:8px 0; font-size:12px; opacity:.9; }
+.rhythm-hint:not(:empty)::before { content:""; display:inline-block; width:6px; height:6px; margin-right:7px; border-radius:50%;
+  background:var(--red); vertical-align:1px; }
+
+.rhythm-poses { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 12px; scrollbar-width:thin; }
+.rhythm-pose { flex:0 0 125px; border:1px solid var(--line); border-radius:var(--r-sm); padding:6px; background:var(--panel2); }
+.rhythm-pose img { display:block; width:100%; height:52px; object-fit:contain; background:#fff; border-radius:4px; }
+.rhythm-pose>span { display:block; font-size:11px; margin:6px 0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--txt); }
+.rhythm-pose>div { font:500 11px 'JetBrains Mono',ui-monospace,monospace; color:var(--mut); }
+.rhythm-pose input { width:66px; border:1px solid var(--line); border-radius:5px; background:var(--bg); padding:4px 6px;
+  color:var(--txt); font:600 12px 'JetBrains Mono',ui-monospace,monospace; }
+
 /* «Aplicar» SIEMPRE a la vista: el pie queda pegado abajo aunque el contenido scrollee */
 .rhythm footer { position:sticky; bottom:0; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px;
-  padding:10px 0 14px; margin-top:4px; border-top:1px solid #3d3b38; background:#1b1c1e; }
-.rhythm-summary { font-size:11px; color:#bcb5aa; max-width:65%; margin:0; }
+  padding:10px 0 14px; margin-top:4px; border-top:1px solid var(--line); background:var(--panel); }
+.rhythm-summary { font:500 11px/1.4 'JetBrains Mono',ui-monospace,monospace; color:var(--mut); max-width:65%; margin:0; }
 .rhythm footer button { flex-shrink:0; }
-.rhythm-home { text-align:left; margin:24px 0 18px; padding:22px; border:1px solid #78604d; border-radius:14px; background:linear-gradient(125deg,#342923,#1d2023); }
-.rhythm-home small { color:#f2ac7e; letter-spacing:.14em; font:600 10px Figtree,sans-serif; }
-.rhythm-home h3 { font:500 25px/1.1 Figtree,sans-serif; letter-spacing:-.025em; margin:10px 0; }
-.rhythm-home p { color:#d0c3b4; margin:0 0 16px; font-size:12px; }
-.rhythm-home button { background:#ed855c; color:#211a16; padding:10px 14px; border:0; border-radius:7px; font:700 12px Figtree,sans-serif; cursor:pointer; }
-.rhythm-home button:focus-visible { outline:2px solid #fff; outline-offset:3px; }
-.rhythm-home-score { display:flex; align-items:end; height:30px; gap:5px; margin-bottom:18px; }
-.rhythm-home-score i { display:block; flex:1; background:#bd7958; border-radius:3px; height:12px; }
-.rhythm-home-score i:nth-child(2),.rhythm-home-score i:nth-child(6) { height:20px; }
-.rhythm-home-score i:nth-child(3),.rhythm-home-score i:nth-child(5) { height:25px; }
-.rhythm-home-score i:nth-child(4) { height:30px; flex:2.5; background:#f0b184; }
-.bien2d:has(.rhythm-home) { overflow:auto; }
-.bien2d:has(.rhythm-home) .bien2d-cuerpo { max-width:490px; margin:auto; }
-@media(max-width:650px) { .rhythm { padding:16px; }.rhythm-intro { display:block; }.rhythm-scope { display:block; margin-top:8px; text-align:left; }.rhythm-comparison { gap:10px; }.rhythm-controls label { margin-left:0; }.rhythm footer { align-items:flex-start; flex-direction:column; gap:10px; }.rhythm-summary { max-width:100%; } }
+
 /* CARRILES DE TOMAS: cada pasada tocada con Espacio, y comping pose por pose */
 .rhythm-takes { margin:2px 0 8px; }
-.rhythm-takes-head { display:flex; align-items:baseline; gap:10px; font-size:11px; margin-bottom:4px; }
-.rhythm-takes-head b { font-weight:600; font-size:12px; }
-.rhythm-takes-head span { color:#a9a397; }
+.rhythm-takes-head { display:flex; align-items:baseline; gap:10px; margin-bottom:4px; }
+.rhythm-takes-head b { font:600 10px 'JetBrains Mono',ui-monospace,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); }
+.rhythm-takes-head span { color:var(--mut); font-size:11px; }
 .rhythm-lanes { display:grid; gap:4px; max-height:64px; overflow-y:auto; scrollbar-width:thin; }
 .rhythm-lane { display:grid; grid-template-columns:92px 1fr auto auto; align-items:center; gap:6px; }
-.rhythm-lane-name { font-size:11px; color:#d8d2c7; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.rhythm-lane-name { font:500 11px 'JetBrains Mono',ui-monospace,monospace; color:var(--txt); white-space:nowrap; }
 .rhythm-lane-track { display:flex; gap:2px; height:16px; }
-.rhythm .rhythm-lane-track button { min-width:3px; padding:0; border:0; border-radius:2px; background:#4b4844; }
-.rhythm .rhythm-lane-track button:hover { background:#8f7a6c; }
-.rhythm .rhythm-lane-track button.elegida { background:#eb7149; }
+.rhythm .rhythm-lane-track button { min-width:3px; padding:0; border:0; border-radius:2px; background:rgba(255,255,255,.12); }
+.rhythm .rhythm-lane-track button:hover { background:rgba(255,255,255,.28); }
+.rhythm .rhythm-lane-track button.elegida { background:var(--red); }
 .rhythm .rhythm-lane-use, .rhythm .rhythm-lane-del { padding:2px 8px; font-size:11px; }
+
+/* PANTALLA INICIAL: una tarjeta como las del resto de la bienvenida de LOW,
+   no un afiche. Panel neutro, filete, rótulo mono y el acento sólo en el
+   botón y en la pose que se sostiene. */
+.rhythm-home { text-align:left; margin:22px 0 16px; padding:18px 18px 16px; border:1px solid var(--line);
+  border-radius:var(--r-md); background:var(--panel2); }
+.rhythm-home small { color:var(--mut); letter-spacing:.14em; font:600 10px 'JetBrains Mono',ui-monospace,monospace; }
+.rhythm-home h3 { font:700 19px/1.2 Figtree,sans-serif; letter-spacing:-.01em; margin:8px 0 6px; color:var(--txt); }
+.rhythm-home h3 br { display:none; }
+.rhythm-home p { color:var(--mut); margin:0 0 14px; font-size:12px; line-height:1.5; }
+.rhythm-home button { background:transparent; color:var(--txt); padding:8px 12px; border:1px solid var(--line);
+  border-radius:var(--r-sm); font:600 12px Figtree,sans-serif; cursor:pointer; }
+.rhythm-home button:hover { border-color:var(--red); color:var(--red); }
+.rhythm-home button:focus-visible { outline:none; box-shadow:0 0 0 2px var(--panel2),0 0 0 4px var(--red); }
+/* la «partitura»: siete poses; la del medio se sostiene más */
+.rhythm-home-score { display:flex; align-items:end; height:22px; gap:3px; margin-bottom:14px; }
+.rhythm-home-score i { display:block; flex:1; background:var(--faint); border-radius:1px; height:6px; }
+.rhythm-home-score i:nth-child(2),.rhythm-home-score i:nth-child(6) { height:10px; }
+.rhythm-home-score i:nth-child(3),.rhythm-home-score i:nth-child(5) { height:14px; }
+.rhythm-home-score i:nth-child(4) { height:22px; flex:2.5; background:var(--red); }
+.bien2d:has(.rhythm-home) { overflow:auto; }
+.bien2d:has(.rhythm-home) .bien2d-cuerpo { max-width:490px; margin:auto; }
+
+@media(max-width:650px) { .rhythm { padding:14px; }.rhythm-intro { display:block; }.rhythm-scope { display:block; margin-top:8px; text-align:left; }.rhythm-comparison { gap:10px; }.rhythm-controls label { margin-left:0; }.rhythm footer { align-items:flex-start; flex-direction:column; gap:10px; }.rhythm-summary { max-width:100%; } }
 /* ventanas bajas (media pantalla): lo que se usa —poses y Aplicar— antes que el título */
 @media (max-height:640px) {
   .rhythm { padding-top:12px; }
   .rhythm h1, .rhythm-intro p { display:none; }
   /* sin la franja del encabezado: Cerrar queda en la esquina */
-  .rhythm-head { position:absolute; top:10px; right:22px; z-index:3; background:none; padding:0; }
+  .rhythm-head { position:absolute; top:10px; right:20px; z-index:3; background:none; padding:0; margin:0; border:0; }
   .rhythm-scope { display:none; }
   .rhythm-eyebrow { display:none; }
-  .rhythm-intro { padding-right:96px; }
-  .rhythm-intro { margin-bottom:4px; }
+  .rhythm-intro { padding-right:96px; margin-bottom:4px; }
   .rhythm-caption { padding:4px 0; }
   .rhythm-screen { height:clamp(70px,19vh,130px); }
   .rhythm-controls { margin-top:8px; }
-  .rhythm-controls button { padding:6px 10px; }
+  .rhythm-controls button { padding:5px 10px; }
   .rhythm-hint { margin:5px 0; }
   .rhythm-pose { flex-basis:104px; padding:5px; }
   .rhythm-pose img { height:40px; }
