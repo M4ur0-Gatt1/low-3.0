@@ -2577,17 +2577,31 @@ footer #ver { color: var(--mut); border-color: transparent; background: var(--pa
   color: var(--fg, #e6e9f0); background: var(--panel, #17181c); user-select: none; }
 .tl2-ruler { display: flex; position: sticky; top: 0; z-index: 2;
   background: var(--panel2, #1e2026); border-bottom: 1px solid var(--line, #2a2d35); }
-.tl2-tools { min-height: 29px; display: flex; align-items: center; gap: 3px; padding: 2px 5px;
-  overflow-x: auto; background: var(--panel, #191a1f); border-bottom: 1px solid var(--line, #2a2d35); }
-.tl2-toolgroup { display: flex; align-items: center; gap: 1px; padding-right: 4px;
-  border-right: 1px solid var(--line, #2a2d35); }
-.tl2-tools button, .tl2-lighttable button { height: 24px; padding: 0; border: 1px solid transparent;
-  border-radius: 3px; background: transparent; color: var(--mut, #a8a49c); font: 600 9px/1 Figtree, sans-serif; cursor: pointer; white-space: nowrap; }
-.tl2-tools button { width: 24px; min-width: 24px; display: inline-grid; place-items: center; }
-.tl2-tools .tl2-icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.tl2-tools button.tl2-badge span { letter-spacing: -.02em; }
-.tl2-tools button:hover, .tl2-lighttable button:hover { background: rgba(255,255,255,.06); color: var(--txt, #eee); }
-.tl2-tools button.on { color: var(--accent, #F0450E); border-color: rgba(240,69,14,.4); background: rgba(240,69,14,.10); }
+.tl2-tools { flex: 0 0 auto; display: flex; align-items: stretch; gap: 6px; padding: 3px 6px;
+  overflow-x: auto; background: var(--panel, #191a1f); border-bottom: 1px solid var(--line, #2a2d35);
+  scrollbar-width: thin; }
+.tl2-toolgroup { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 2px;
+  padding: 0 6px 0 0; border-right: 1px solid var(--line, #2a2d35); }
+.tl2-toolgroup:last-child { border-right: 0; padding-right: 0; }
+/* Los rótulos de grupo agregaban un RENGLÓN (58 px de barra): a 1366x768 la
+   línea de tiempo quedaba con una sola capa visible. Se muestran sólo cuando la
+   línea de tiempo tiene alto de sobra; si no, el nombre está en el cartel. */
+.tl2-toolgroup::before { content: attr(data-label); position: absolute; top: 0; left: 3px; display: none;
+  color: var(--mut, #a8a49c); font: 600 10px/12px Figtree, sans-serif; letter-spacing: .035em; }
+#dzTlGrid { container: tlgrid / size; }
+@container tlgrid (min-height: 300px) {
+  .tl2-tools { gap: 8px; padding: 6px 8px; }
+  .tl2-toolgroup { padding: 17px 8px 0 0; gap: 3px; }
+  .tl2-toolgroup::before { display: block; }
+}
+.tl2-tools button, .tl2-lighttable button { height: 26px; padding: 0; border: 1px solid transparent;
+  border-radius: 5px; background: transparent; color: var(--fg, #e6e9f0); font: 600 11px/1 Figtree, sans-serif; cursor: pointer; white-space: nowrap; }
+.tl2-tools button { width: 26px; min-width: 26px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.tl2-tools button.tl2-badge { width: auto; padding: 0 7px; background: rgba(255,255,255,.035); border-color: var(--line, #2a2d35); }
+.tl2-tools .tl2-icon { width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tl2-tools button.tl2-badge span { letter-spacing: 0; }
+.tl2-tools button:hover, .tl2-lighttable button:hover { background: rgba(255,255,255,.09); color: var(--txt, #eee); }
+.tl2-tools button.on { color: var(--accent, #F0450E); border-color: rgba(240,69,14,.5); background: rgba(240,69,14,.14); }
 .tl2-tools button:focus-visible { outline: 2px solid var(--accent, #F0450E); outline-offset: -2px; }
 .tl2-lighttable { display: flex; border-bottom: 1px solid var(--line2, #23252c); background: rgba(0,0,0,.10); }
 .tl2-lighttable .tl2-name { justify-content: space-between; color: var(--mut, #a8a49c); }

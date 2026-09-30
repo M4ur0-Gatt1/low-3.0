@@ -12973,8 +12973,7 @@ async function dzPanelCellCommand(action) {
   if (!doc || !selection) { dzSetStatus("Abrí una escena de animación para editar celdas"); return false; }
   const cells = LOW.animation.shortcuts && LOW.animation.shortcuts.cells;
   if (action === "new-drawing") {
-    if (doc.cell == null) doc.ensureDrawing();
-    else { const drawing = doc.duplicateDrawing(doc.cell); if (drawing) doc.setCell(doc.frame, drawing.number); }
+    doc.createBlankDrawing();
     doc.emit("frame");
   } else if (action === "new-level") {
     // LEVEL-01: un nivel nuevo PROPONE un nombre descriptivo en vez de crear
@@ -12997,12 +12996,12 @@ async function dzPanelCellCommand(action) {
   } else if (action === "clear-cells") doc.clearCells(selection, "Vaciar rango");
   else if (action === "shorter-exposure") doc.apply("stepChange", doc.frame, -1);
   else if (action === "longer-exposure") doc.apply("stepChange", doc.frame, +1);
-  else if (/^step-[123]$/.test(action)) doc.apply("step", selection.from, selection.to, +action.slice(-1));
-  else if (action === "autoexpose") doc.apply("autoexpose", selection.from, selection.to);
-  else if (action === "dedupe") doc.apply("dedupe", selection.from, selection.to);
-  else if (action === "repeat-cells") doc.apply("repeat", selection.from, selection.to, 1);
-  else if (action === "reverse-cells") doc.apply("reverse", selection.from, selection.to);
-  else if (action === "swing-cells") doc.apply("swing", selection.from, selection.to);
+  else if (/^step-[123]$/.test(action)) doc.applySelectedTiming("step", selection, +action.slice(-1));
+  else if (action === "autoexpose") doc.applySelectedTiming("autoexpose", selection);
+  else if (action === "dedupe") doc.applySelectedTiming("dedupe", selection);
+  else if (action === "repeat-cells") doc.applySelectedTiming("repeat", selection, 1);
+  else if (action === "reverse-cells") doc.applySelectedTiming("reverse", selection);
+  else if (action === "swing-cells") doc.applySelectedTiming("swing", selection);
   else return false;
   return true;
 }
@@ -16645,90 +16644,11 @@ function dzAlignClear() {
   DZ.alignLines = [];
 }
 
-function dzAlign(mode) {
-  const el = DZ.sel;
-  const svg = $("#dzCanvas").querySelector(":scope > svg");
-  if (!el || !svg) return;
-  dzSnapshot();
-  const vb = (svg.getAttribute("viewBox") || "0 0 1080 1080").split(/\s+/).map(Number);
-  const b = el.getBoundingClientRect();
-  const p1 = dzToUser(b.left, b.top), p2 = dzToUser(b.right, b.bottom);
-  let dx = 0, dy = 0;
-  if (mode === "l") dx = vb[0] - p1.x;
-  if (mode === "ch") dx = (vb[0] + vb[2] / 2) - (p1.x + p2.x) / 2;
-  if (mode === "r") dx = (vb[0] + vb[2]) - p2.x;
-  if (mode === "t") dy = vb[1] - p1.y;
-  if (mode === "cv") dy = (vb[1] + vb[3] / 2) - (p1.y + p2.y) / 2;
-  if (mode === "b") dy = (vb[1] + vb[3]) - p2.y;
-  dzWritePos(el, dzReadPos(el), dx, dy);
-  dzPositionHandle(); dzMarkDirty(); dzBuildInspector(el);
-}
-
-/* ── alineación ENTRE objetos + distribuir (multi-selección, estilo Illustrator) ── */
-function dzSelBounds(els) {
-  return els.map(el => {
-    const b = el.getBoundingClientRect();
-    const p1 = dzToUser(b.left, b.top), p2 = dzToUser(b.right, b.bottom);
-    return { el, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
-             cx: (p1.x + p2.x) / 2, cy: (p1.y + p2.y) / 2, w: p2.x - p1.x, h: p2.y - p1.y };
-  });
-}
-function dzAlignSel(mode) {
-  const els = (DZ.multi || []).length > 1 ? DZ.multi : null;
-  if (!els) return;
-  dzSnapshot();
-  const bs = dzSelBounds(els);
-  const L = Math.min(...bs.map(b => b.x1)), R = Math.max(...bs.map(b => b.x2));
-  const T = Math.min(...bs.map(b => b.y1)), B = Math.max(...bs.map(b => b.y2));
-  for (const b of bs) {
-    let dx = 0, dy = 0;
-    if (mode === "l") dx = L - b.x1;
-    if (mode === "ch") dx = (L + R) / 2 - b.cx;
-    if (mode === "r") dx = R - b.x2;
-    if (mode === "t") dy = T - b.y1;
-    if (mode === "cv") dy = (T + B) / 2 - b.cy;
-    if (mode === "b") dy = B - b.y2;
-    if (dx || dy) dzWritePos(b.el, dzReadPos(b.el), dx, dy);
-  }
-  dzPositionHandle(); dzMarkDirty();
-  dzSetStatus(" " + els.length + " alineados");
-}
-function dzDistribute(axis) {
-  const els = (DZ.multi || []).length > 2 ? DZ.multi : null;
-  if (!els) { dzSetStatus("distribuir necesita 3+ elementos (Shift+clic)"); return; }
-  dzSnapshot();
-  const bs = dzSelBounds(els).sort((a, b) => axis === "h" ? a.cx - b.cx : a.cy - b.cy);
-  const first = bs[0], last = bs[bs.length - 1];
-  const span = axis === "h" ? last.cx - first.cx : last.cy - first.cy;
-  const step = span / (bs.length - 1);
-  bs.forEach((b, i) => {
-    if (i === 0 || i === bs.length - 1) return;
-    const target = (axis === "h" ? first.cx : first.cy) + step * i;
-    const d = target - (axis === "h" ? b.cx : b.cy);
-    dzWritePos(b.el, dzReadPos(b.el), axis === "h" ? d : 0, axis === "h" ? 0 : d);
-  });
-  dzMarkDirty(); dzSetStatus(" distribuidos con espaciado parejo");
-}
-/* voltear horizontal/vertical (uno o varios), anclado al centro local */
-function dzFlip(axis) {
-  const els = (DZ.multi || []).length > 1 ? DZ.multi : (DZ.sel ? [DZ.sel] : []);
-  if (!els.length) return;
-  dzSnapshot();
-  for (const el of els) {
-    let lb = null; try { lb = el.getBBox(); } catch (e) { continue; }
-    const cx = lb.x + lb.width / 2, cy = lb.y + lb.height / 2;
-    const sx = axis === "h" ? -1 : 1, sy = axis === "h" ? 1 : -1;
-    const chunk = ` translate(${(cx * (1 - sx)).toFixed(2)} ${(cy * (1 - sy)).toFixed(2)}) scale(${sx} ${sy})`;
-    const tr = el.getAttribute("transform") || "";
-    el.setAttribute("transform", (tr ? tr + " " : "") + chunk.trim());
-  }
-  dzPositionHandle(); dzMarkDirty();
-}
-
 /* ── 🧬 Variaciones: el agente evoluciona el diseño y elegís con un clic.
    Cría selectiva de diseños — elegí una y volvé a evolucionar desde ella. ── */
 async function dzVariations() {
-  if (!DZ.path || DZ.busy) return;
+  if (!DZ.path) return dzSetStatus("Variaciones requiere un SVG abierto; todavía no admite documentos .low.");
+  if (DZ.busy) return;
   DZ.busy = true;
   dzSetStatus("🧬 Generando variaciones del diseño (4 direcciones en paralelo)…");
   try {

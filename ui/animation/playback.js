@@ -46,7 +46,7 @@
       if (out <= ini) return;
       this.playing = true;
       // si está parado al final, arranca de nuevo desde el principio
-      this.frame0 = this.doc.frame >= out ? ini : this.doc.frame;
+      this.frame0 = this.doc.frame < ini || this.doc.frame >= out ? ini : this.doc.frame;
       this.t0 = (global.performance || Date).now();
       this._marcas = [];
       // el audio arranca desde el MISMO frame: si no, cada vez que pausás y
@@ -113,16 +113,20 @@
     setLoop(v) { this.loop = !!v; this._emit(); }
     setFps(v) {
       if (!this.doc) return;
-      this.doc.scene.fps = Math.max(1, Math.min(120, Math.round(v) || 24));
-      this.doc.touch();
+      const doc = this.doc, before = doc.scene.fps;
+      const after = Math.max(1, Math.min(120, Math.round(v) || 24));
+      if (before === after) return;
+      const apply = value => { this.stop(); doc.scene.fps = value; doc.touch(); doc.emit("fps"); this._emit(); };
+      doc.scene.fps = after; doc.touch();
+      doc.history?.push({label:"Cambiar FPS",domain:"anim",before,after,apply:(_direction,value)=>apply(value)});
       // reanclar el reloj para que el cambio se sienta ya mismo
       if (this.playing) { this.frame0 = this.doc.frame; this.t0 = (global.performance || Date).now(); }
       this._emit();
     }
     setRange(a, z) {
       if (!this.doc) return;
-      this.doc.scene.range = { in: Math.max(1, a || 1), out: Math.max(0, z || 0) };
-      this.doc.touch();
+      this.stop();
+      this.doc.setPlaybackRange(a, z);
       this._emit();
     }
   }

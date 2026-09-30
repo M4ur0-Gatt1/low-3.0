@@ -36,6 +36,7 @@ jobs:
       - name: Pruebas del modelo 2D
         run: |
           node tools/run_2d_model_tests.js
+          node tools/run_rhythm_tests.js
           node tools/run_safe_mode_tests.js
       - name: Modelos de composición, colaboración y storyboard
         run: |
@@ -166,6 +167,8 @@ jobs:
           node tools/check_escala_contorno_ui.js
           node tools/check_herramientas_vector_ui.js
           node tools/check_inspector_corners_ui.js
+          node tools/check_tradigital_ui.js
+          node tools/check_rhythm_ui.js
           node tools/check_taller_vector_ui.js
           node tools/check_rig_flujo_ui.js
           node tools/check_riel_herramientas_ui.js

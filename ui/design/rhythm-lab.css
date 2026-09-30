@@ -1,0 +1,72 @@
+/* LOW Interpretar — space belongs to the drawings, timing remains tangible. */
+/* en la barra, un ícono como los demás: con texto pisaba al botón de 3D */
+#designView .rhythm-launch.ibtn { color:#f29169; }
+.rhythm { box-sizing:border-box; width:min(1120px,94vw); max-height:94vh; padding:18px 22px 0; overflow:auto; color:#f0ece4; background:#1b1c1e; border:1px solid #4b4540; border-radius:18px; box-shadow:0 30px 120px #0009; font:14px/1.5 Figtree,sans-serif; }
+.rhythm::backdrop { background:#090a0de0; backdrop-filter:blur(6px); }
+.rhythm *, .rhythm-home * { box-sizing:border-box; }
+.rhythm-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+.rhythm-eyebrow { color:#efa27e; font-size:10px; font-weight:700; letter-spacing:.16em; }
+.rhythm h1 { font-size:clamp(19px,2.3vw,28px); line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px; font-weight:500; }
+/* una línea: el encabezado grande se comía ~170 px y dejaba las poses y «Aplicar» fuera de la ventana */
+.rhythm h1 br { display:none; }
+.rhythm button { padding:9px 13px; border:1px solid #4a4845; border-radius:7px; color:#eee9df; background:#292a2c; font:600 12px/1.3 Figtree,sans-serif; cursor:pointer; }
+.rhythm button:hover { border-color:#f0a17c; background:#363230; }
+.rhythm button:focus-visible, .rhythm input:focus-visible { outline:2px solid #ffb38e; outline-offset:3px; }
+.rhythm button.rhythm-primary { background:#eb7149; border-color:#eb7149; color:#181414; }
+.rhythm button:disabled { opacity:.4; cursor:default; }
+.rhythm-intro { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:8px; }
+.rhythm-intro b { font-size:16px; font-weight:600; }
+.rhythm-intro p { margin:4px 0 0; color:#b8b5af; }
+.rhythm-scope { color:#bfb9ae; font-size:10px; letter-spacing:.07em; text-align:right; }
+.rhythm-comparison { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.rhythm-caption { display:flex; justify-content:space-between; gap:12px; padding:8px 0; font-size:12px; }
+.rhythm-caption b { font-weight:500; }.rhythm-caption span { color:#b7b4ad; font-variant-numeric:tabular-nums; }
+.rhythm-screen { height:clamp(84px,24vh,250px); background:#f2ede3; border-radius:8px; overflow:hidden; }
+.rhythm-screen img { width:100%; height:100%; object-fit:contain; }
+.rhythm-track { display:flex; position:relative; height:9px; margin-top:9px; gap:3px; }
+.rhythm-track span { background:#62605c; min-width:1px; border-radius:2px; }
+[data-track="b"] span { background:#c47b5d; }
+.rhythm-track::after { content:""; position:absolute; left:var(--progress,0%); top:-2px; bottom:-2px; width:2px; background:#fff6e9; }
+.rhythm-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; }
+.rhythm-controls label { display:flex; align-items:center; gap:7px; margin-left:auto; color:#d1ccc3; font-size:12px; }
+.rhythm input { accent-color:#ed855c; }
+.rhythm-hint { color:#f0b18d; min-height:18px; margin:8px 0; font-size:12px; }
+.rhythm-poses { display:flex; gap:9px; overflow-x:auto; padding:2px 2px 12px; scrollbar-width:thin; }
+.rhythm-pose { flex:0 0 125px; border:1px solid #42413e; border-radius:8px; padding:7px; background:#242526; }
+.rhythm-pose img { display:block; width:100%; height:70px; object-fit:contain; background:#ece6da; border-radius:4px; }
+.rhythm-pose>span { display:block; font-size:11px; margin:7px 0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.rhythm-pose>div { font-size:11px; color:#aaa59b; }
+.rhythm-pose input { width:70px; border:1px solid #514b43; border-radius:4px; background:#18191b; padding:4px 6px; color:#f6eee1; font:600 13px Figtree,sans-serif; }
+/* «Aplicar» SIEMPRE a la vista: el pie queda pegado abajo aunque el contenido scrollee */
+.rhythm footer { position:sticky; bottom:0; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px;
+  padding:10px 0 14px; margin-top:4px; border-top:1px solid #3d3b38; background:#1b1c1e; }
+.rhythm-summary { font-size:11px; color:#bcb5aa; max-width:65%; margin:0; }
+.rhythm footer button { flex-shrink:0; }
+.rhythm-home { text-align:left; margin:24px 0 18px; padding:22px; border:1px solid #78604d; border-radius:14px; background:linear-gradient(125deg,#342923,#1d2023); }
+.rhythm-home small { color:#f2ac7e; letter-spacing:.14em; font:600 10px Figtree,sans-serif; }
+.rhythm-home h3 { font:500 25px/1.1 Figtree,sans-serif; letter-spacing:-.025em; margin:10px 0; }
+.rhythm-home p { color:#d0c3b4; margin:0 0 16px; font-size:12px; }
+.rhythm-home button { background:#ed855c; color:#211a16; padding:10px 14px; border:0; border-radius:7px; font:700 12px Figtree,sans-serif; cursor:pointer; }
+.rhythm-home button:focus-visible { outline:2px solid #fff; outline-offset:3px; }
+.rhythm-home-score { display:flex; align-items:end; height:30px; gap:5px; margin-bottom:18px; }
+.rhythm-home-score i { display:block; flex:1; background:#bd7958; border-radius:3px; height:12px; }
+.rhythm-home-score i:nth-child(2),.rhythm-home-score i:nth-child(6) { height:20px; }
+.rhythm-home-score i:nth-child(3),.rhythm-home-score i:nth-child(5) { height:25px; }
+.rhythm-home-score i:nth-child(4) { height:30px; flex:2.5; background:#f0b184; }
+.bien2d:has(.rhythm-home) { overflow:auto; }
+.bien2d:has(.rhythm-home) .bien2d-cuerpo { max-width:490px; margin:auto; }
+@media(max-width:650px) { .rhythm { padding:16px; }.rhythm-intro { display:block; }.rhythm-scope { display:block; margin-top:8px; text-align:left; }.rhythm-comparison { gap:10px; }.rhythm-controls label { margin-left:0; }.rhythm footer { align-items:flex-start; flex-direction:column; gap:10px; }.rhythm-summary { max-width:100%; } }
+/* ventanas bajas (media pantalla): lo que se usa —poses y Aplicar— antes que el título */
+@media (max-height:640px) {
+  .rhythm { padding-top:12px; }
+  .rhythm h1, .rhythm-intro p { display:none; }
+  .rhythm-intro { margin-bottom:4px; }
+  .rhythm-caption { padding:4px 0; }
+  .rhythm-screen { height:clamp(70px,19vh,130px); }
+  .rhythm-controls { margin-top:8px; }
+  .rhythm-controls button { padding:6px 10px; }
+  .rhythm-hint { margin:5px 0; }
+  .rhythm-pose { flex-basis:104px; padding:5px; }
+  .rhythm-pose img { height:40px; }
+  .rhythm-pose>span { margin:4px 0; }
+}

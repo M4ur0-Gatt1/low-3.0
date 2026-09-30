@@ -121,8 +121,38 @@ async function main() {
     assert.equal(await ev("document.querySelector('#acceptanceText').getAttribute('font-style')"),'italic');
     assert.equal(await ev('DZ.history.undoStack.length'),1,'Italic is one intention');
     await ev('dzUndo()');await wait(350);assert.equal(await ev('dzCanvasInner()'),originalText);
-    assert.deepEqual(errors,[]);console.log('INSPECTOR + CORNERS UI OK: focus, canonical edits, coalescing, Escape/pointercancel/tool/frame, Alt, Undo/Redo, scene roundtrip');
+    await setup();
+    const beforeAlign=await ev('dzCanvasInner()');
+    await click('[data-al="l"]');
+    const aligned=await ev('dzCanvasInner()');
+    assert.notEqual(aligned,beforeAlign,'Alignment moves the selected drawing');
+    assert.equal(await ev('DZ.doc.drawing.content===dzCanvasInner()'),true,'Alignment commits immediately');
+    assert.equal(await ev('DZ.history.undoStack.length'),1,'Alignment is one intention');
+    await click('[data-al="l"]');
+    assert.equal(await ev('DZ.history.undoStack.length'),1,'Already aligned does not consume Undo');
+    await ev('dzUndo()');await wait(350);
+    assert.equal(await ev('dzCanvasInner()'),beforeAlign,'Alignment Undo survives delayed commit');
+    await ev('dzRedo()');await wait(350);
+    assert.equal(await ev('dzCanvasInner()'),aligned,'Alignment Redo restores drawing');
+    assert.equal(await ev('LOW.animation.LowDoc.fromJSON(JSON.parse(JSON.stringify(DZ.doc.toJSON()))).drawing.content===dzCanvasInner()'),true,'Alignment persists');
+    for (const selector of ['[data-alsel="t"]','[data-dist="h"]','[data-flip="h"]']) {
+      await setup();
+      await ev(`(()=>{const first=document.querySelector('#acceptanceRect'),svg=first.ownerSVGElement;
+        const others=[ [1400,650], [1800,950] ].map(([x,y],i)=>{const el=first.cloneNode(true);el.id='alignFixture'+i;el.setAttribute('x',x);el.setAttribute('y',y);el.setAttribute('width',150);dzArtAppend(svg,el);return el;});
+        DZ.multi=[first,...others];dzDocCommit();dzBuildInspector(first);DZ.history.clear();})()`);
+      await wait(350);await ev('dzDocCommit();DZ.history.clear()');
+      const before=await ev('dzCanvasInner()');await click(selector);
+      const after=await ev('dzCanvasInner()');assert.notEqual(after,before,selector+' changes artwork');
+      assert.equal(await ev('DZ.doc.drawing.content===dzCanvasInner()'),true,selector+' canonical immediately');
+      assert.equal(await ev('DZ.history.undoStack.length'),1,selector+' single Undo');
+      if(!selector.includes('flip')){await click(selector);assert.equal(await ev('DZ.history.undoStack.length'),1,selector+' no-op preserves history');}
+      await ev('dzUndo()');await wait(350);assert.equal(await ev('dzCanvasInner()'),before,selector+' Undo');
+      await ev('dzRedo()');await wait(350);assert.equal(await ev('dzCanvasInner()'),after,selector+' Redo');
+      assert.equal(await ev('LOW.animation.LowDoc.fromJSON(JSON.parse(JSON.stringify(DZ.doc.toJSON()))).drawing.content===dzCanvasInner()'),true,selector+' persists');
+      await ev(`document.querySelectorAll('[id^="alignFixture"]').forEach(el=>el.remove());DZ.multi=[];dzDocCommit();`);
+    }
+    assert.deepEqual(errors,[]);console.log('INSPECTOR + CORNERS UI OK: focus, canonical edits, coalescing, Escape/pointercancel/tool/frame, Alt, Undo/Redo, scene roundtrip, alignment/distribution/flip canonical + no-op + Undo/Redo');
   } finally {socket.close();await fetch(endpoint+'/json/close/'+tab.id).catch(()=>{});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
-setTimeout(()=>{console.error('Inspector/corners test timed out');process.exit(1);},45000).unref();
+setTimeout(()=>{console.error('Inspector/corners test timed out');process.exit(1);},60000).unref();

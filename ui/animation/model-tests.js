@@ -1779,6 +1779,23 @@
       ok("no se elimina la ÚLTIMA capa", sola.removeLayer(sola.layerId) === false && sola.scene.layers.length === 1);
     }
 
+    // Borrar y duplicar deben conservar identidad y datos al recorrer el historial.
+    {
+      const doc = new animation.LowDoc(), h = new LOW.core.HistoryManager();
+      doc.setHistory(h); doc.writeDrawing('<path id="original"/>');
+      doc.drawing.name = 'Pose clave'; doc.drawing.meta = { review: { approved: true } };
+      const saved = JSON.stringify(doc.drawing.toJSON()), number = doc.cell;
+      h.clear(); doc.deleteDrawing(number); h.undo();
+      ok('borrar Undo recupera identidad y metadatos', JSON.stringify(doc.drawing.toJSON()) === saved);
+      h.redo(); h.undo();
+      ok('borrar segundo Undo recupera datos completos', JSON.stringify(doc.drawing.toJSON()) === saved);
+      h.clear(); const copy = doc.duplicateDrawing(number), copySaved = JSON.stringify(copy.toJSON());
+      h.undo(); h.redo();
+      ok('duplicar Redo conserva identidad', JSON.stringify(doc.level.byNumber(copy.number).toJSON()) === copySaved);
+      const reopened = animation.LowDoc.fromJSON(JSON.parse(JSON.stringify(doc.toJSON())));
+      ok('restaurar y guardar conserva metadatos', JSON.stringify(reopened.drawing.toJSON()) === saved);
+    }
+
     const fallan = res.filter((r) => !r.ok);
     return { total: res.length, ok: res.length - fallan.length, fallan, detalle: res };
   }

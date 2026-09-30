@@ -619,6 +619,42 @@ el sentido que pide esta biblia.
 
 ## 14. Definición de terminado
 
+Avance 2026-09-29 — rango reversible y vocabulario tradigital: In/Out entra
+por `LowDoc.setPlaybackRange`; Undo/Redo repinta Timeline/X-sheet y sincroniza
+los campos de exportación. Arrastrar sólo modifica una previsualización de la
+vista: pointerup confirma una intención; Escape, pointercancel, pérdida de foco
+y disponer la vista descartan el gesto. Sin movimiento no hay Undo. Timeline
+muestra Vacío, Duplicar (copia independiente en la celda actual) y Reexponer
+(celdas copiadas, mismo dibujo dentro del nivel). El duplicado es atómico.
+Pruebas: 395 de modelo, contratos 2D, recorrido tradigital ampliado (eventos
+sintéticos de puntero para cancelación), exportación con puente mock y copiar/
+pegar. Falta tableta física y ejecutable empaquetado. No se publica versión.
+
+Avance 2026-09-29 — auditoría tradigital: dibujo vacío ahora crea material
+vacío independiente con un Undo; Timeline y X-sheet comparten operaciones de
+timing sobre la selección, incluidas varias capas, sin ampliar silenciosamente
+una celda a toda la capa. Reproducir desde antes del In comienza en In; cambiar
+FPS registra Undo/Redo. Variaciones informa que todavía requiere SVG y no admite
+.low; no se agregó generación para ese formato. La etiqueta de Guardar se refiere
+al documento. `check_tradigital_ui` cubre los cinco casos y roundtrip del modelo,
+y entra en CI. Los 395 tests de modelo pasan. Pendientes: tableta física,
+ejecutable empaquetado y exportación de producción; esto no declara un release.
+
+Avance del 2026-09-28 — inspector, alineación y distribución (§3/§5/§7):
+alinear al lienzo, alinear selección, distribuir y voltear ahora registran la
+intención mediante `dzDrawingEditRecord`, con escritura inmediata en LowDoc.
+Repetir una alineación o distribución ya satisfecha no agrega Undo (tolerancia
+de 0,001 unidades para el ruido de coordenadas del navegador). Estas operaciones
+salieron de `app.js` hacia `ui/panels/element-inspector.js`.
+La selección múltiple `dz-msel` se excluye del dibujo serializado, igual que
+`dz-sel`: una marca de interfaz no debe persistir como arte.
+Verificado en Edge headless mediante `check_inspector_corners_ui`: clics de
+puntero, documento canónico inmediato, no-op, un Undo/Redo y roundtrip JSON para
+alineación, distribución y volteo, además del recorrido previo de propiedades,
+esquinas y guardado/reapertura con puente simulado. Contratos 2D aprobados.
+No cierra la validación con tableta ni ejecutable empaquetado; no es un release.
+
+
 Avance del 2026-09-18 — inspector y esquinas (§3/§5/§12): se reprodujeron y
 corrigieron el Undo creado sólo por enfocar una propiedad, los campos que no
 notificaban el guardado y el arrastre de esquina que se confirmaba al cancelar.

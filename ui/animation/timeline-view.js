@@ -36,13 +36,18 @@
       this._desuscribir = doc ? doc.subscribe((_d, reason) => this._docChanged(reason)) : null;
     }
     setDoc(doc) {
+      this._cancelRange?.();
       if (this._desuscribir) this._desuscribir();
       this.doc = doc;
       this._desuscribir = doc ? doc.subscribe((_d, reason) => this._docChanged(reason)) : null;
       this.render();
     }
-    dispose() { if (this._desuscribir) this._desuscribir(); if (this.host) this.host.innerHTML = ""; }
-    _docChanged(reason) { if (reason === "frame") this._updateCursor(); else this.render(); }
+    dispose() { this._cancelRange?.(); if (this._desuscribir) this._desuscribir(); if (this.host) this.host.innerHTML = ""; }
+    _docChanged(reason) { if(reason === "range") {
+      const r=this.doc.scene.range;
+      const a=document.querySelector('#tlIn'),z=document.querySelector('#tlOut');
+      if(a)a.value=r.in;if(z)z.value=r.out;
+    } if (reason === "frame") this._updateCursor(); else this.render(); }
 
     _timeline() { return animation.timeline || {}; }
     _loadView() {
@@ -102,48 +107,46 @@
      *  casilleros In/Out de la barra. Si se escribe uno solo, terminan
      *  diciendo cosas distintas: se arrastra el tramo y el export saca otro. */
     _escribirTramo(desde, hasta) {
-      const doc = this.doc, sc = doc.scene;
-      sc.range.in = desde;
-      sc.range.out = hasta;
-      const campoIn = document.querySelector("#tlIn"), campoOut = document.querySelector("#tlOut");
-      if (campoIn) campoIn.value = desde;
-      if (campoOut) campoOut.value = hasta;
-      if (this.playback && this.playback.setRange) this.playback.setRange(desde, hasta);
-      doc.touch(); doc.emit("frame");
+      if (this.playback) this.playback.setRange(desde, hasta);
+      else this.doc.setPlaybackRange(desde, hasta);
     }
 
-    /** Arrastrar un borde del tramo activo sobre la regla. */
     _arrastrarTramo(ev, borde, pista, total, tramo) {
       if (ev.button !== 0) return;
-      ev.preventDefault(); ev.stopPropagation();      // que no haga scrub
-      const doc = this.doc, sc = doc.scene;
-      const pointerId = ev.pointerId;
-      const rect = pista.getBoundingClientRect();
-      const aFrame = (x) => Math.max(1, Math.min(total,
-        1 + Math.floor((x - rect.left + pista.scrollLeft) / this._frameWidth())));
-      const mover = (e2) => {
-        if (e2.pointerId !== pointerId) return;
-        const f = aFrame(e2.clientX);
-        let a = borde === "in" ? f : tramo.in;
-        let z = borde === "in" ? tramo.out : f;
-        if (a > z) { const tmp = a; a = z; z = tmp; }
-        // al arrastrarlo queda fijo: si lo dejara abierto, llevarlo al final
-        // pareceria no hacer nada
-        this._escribirTramo(a, z);
+      ev.preventDefault(); ev.stopPropagation();
+      this._cancelRange?.(); this.playback?.stop();
+      const pointerId = ev.pointerId, rect = pista.getBoundingClientRect();
+      const scroll = pista.scrollLeft, width = this._frameWidth();
+      let preview = null, done = false;
+      const cleanup = () => {
+        done = true; this._rangePreview = null; this._cancelRange = null;
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        document.removeEventListener("pointercancel", cancelPointer);
+        document.removeEventListener("keydown", key, true);
+        window.removeEventListener("blur", cancel);
+      };
+      const cancel = () => { if (done) return; cleanup(); this.render(); };
+      const cancelPointer = e => { if(e.pointerId===pointerId) cancel(); };
+      const key = e => { if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();cancel();} };
+      const move = e => {
+        if(done || e.pointerId!==pointerId) return;
+        const f=Math.max(1,Math.min(total,1+Math.floor((e.clientX-rect.left+scroll)/width)));
+        let a=borde==="in"?f:tramo.in, z=borde==="out"?f:tramo.out;
+        if(a>z)[a,z]=[z,a];
+        preview={in:a,out:z}; this._rangePreview=preview; this.render();
+      };
+      const up = e => {
+        if(done || e.pointerId!==pointerId) return;
+        cleanup(); if(preview) this._escribirTramo(preview.in,preview.out);
         this.render();
       };
-      const soltar = (e2) => {
-        if (e2 && e2.pointerId != null && e2.pointerId !== pointerId) return;
-        document.removeEventListener("pointermove", mover);
-        document.removeEventListener("pointerup", soltar);
-        document.removeEventListener("pointercancel", soltar);
-        const r = sc.playRange();
-        if (this.status) this.status("Tramo activo: F" + r.in + " a F" + r.out +
-          " \u00b7 " + (r.out - r.in + 1) + " cuadros \u00b7 doble clic en la regla para toda la escena");
-      };
-      document.addEventListener("pointermove", mover);
-      document.addEventListener("pointerup", soltar);
-      document.addEventListener("pointercancel", soltar);
+      this._cancelRange=cancel;
+      document.addEventListener("pointermove",move);
+      document.addEventListener("pointerup",up);
+      document.addEventListener("pointercancel",cancelPointer);
+      document.addEventListener("keydown",key,true);
+      window.addEventListener("blur",cancel);
     }
     _updateCursor() {
       if (!this.host || !this.doc) return;
@@ -188,7 +191,7 @@
 
       // ── herramientas de celdas ──
       const tools = document.createElement("div"); tools.className = "tl2-tools";
-      const group = () => { const g = document.createElement("span"); g.className = "tl2-toolgroup"; tools.appendChild(g); return g; };
+      const group = (label) => { const g = document.createElement("span"); g.className = "tl2-toolgroup"; g.dataset.label = label; g.setAttribute("role", "group"); g.setAttribute("aria-label", label); tools.appendChild(g); return g; };
       const button = (host, icon, title, action, active=false, badge="") => {
         const b = document.createElement("button");
         b.title = title; b.setAttribute("aria-label", title);
@@ -209,15 +212,15 @@
         b.onclick = (event) => { event.stopPropagation(); this._toggleCollapsed(id); };
         return b;
       };
-      const edit = group();
+      const edit = group("Dibujos");
       button(edit, "i-blank-frame", "Crear un dibujo vacío en la celda actual", () => {
-        if (doc.cell == null) doc.ensureDrawing();
-        else { const d = doc.duplicateDrawing(doc.cell); if (d) doc.setCell(doc.frame, d.number); }
+        doc.createBlankDrawing();
         doc.emit("frame");
-      });
+      }, false, "Vacío");
+      button(edit, "i-copy", "Duplicar dibujo: copia independiente en esta celda", () => doc.createBlankDrawing(true), false, "Duplicar");
       button(edit, "i-level", "Crear un nivel y una columna", () => { doc.addLayer(); doc.emit("frame"); });
       // HIST-02: el mismo comando que usan la X-sheet y el teclado
-      const clipboard = group(), cells = animation.shortcuts && animation.shortcuts.cells;
+      const clipboard = group("Celdas"), cells = animation.shortcuts && animation.shortcuts.cells;
       button(clipboard, "i-cut", "Cortar las celdas seleccionadas", () => {
         if (cells) cells.cut(doc, selected());
       });
@@ -225,29 +228,29 @@
         const r = cells && cells.copy(doc, selected());
         if (r && this.status) this.status(cells.medida(r) + " copiadas");
       });
-      button(clipboard, "i-paste", "Pegar desde la celda actual", () => {
+      button(clipboard, "i-paste", "Reexponer celdas copiadas: conserva el dibujo compartido dentro del mismo nivel", () => {
         const r = cells && cells.paste(doc);
-        if (r && this.status) this.status(cells.medida(r) + " pegadas");
-      });
-      const timing = group();
+        if (this.status) this.status(r ? cells.medida(r) + " reexpuestas; en el mismo nivel comparten dibujo" : "Copiá celdas antes de reexponer");
+      }, false, "Reexponer");
+      const timing = group("Exposición");
       button(timing, "i-insert", "Insertar una celda antes del fotograma actual", () => doc.apply("insert", doc.frame, 1));
       button(timing, "i-eraser", "Vaciar las celdas sin borrar sus dibujos", () => doc.clearCells(selected(), "Vaciar rango"));
       button(timing, "i-exposure-less", "Acortar la exposición actual", () => doc.apply("stepChange", doc.frame, -1));
       button(timing, "i-exposure-more", "Extender la exposición actual", () => doc.apply("stepChange", doc.frame, +1));
-      const sequence = group();
-      button(sequence, "", "Exponer cada dibujo por un fotograma", () => { const s = selected(); doc.apply("step", s.from, s.to, 1); }, false, "1F");
-      button(sequence, "", "Exponer cada dibujo por dos fotogramas", () => { const s = selected(); doc.apply("step", s.from, s.to, 2); }, false, "2F");
-      button(sequence, "", "Exponer cada dibujo por tres fotogramas", () => { const s = selected(); doc.apply("step", s.from, s.to, 3); }, false, "3F");
-      button(sequence, "i-autoexpose", "Completar los huecos sosteniendo el dibujo anterior", () => { const s = selected(); doc.apply("autoexpose", s.from, s.to); });
-      button(sequence, "i-dedupe", "Dejar una celda por dibujo", () => { const s = selected(); doc.apply("dedupe", s.from, s.to); });
-      button(sequence, "i-loop", "Repetir el rango seleccionado", () => { const s = selected(); doc.apply("repeat", s.from, s.to, 1); });
-      button(sequence, "i-reverse", "Invertir el orden del rango seleccionado", () => { const s = selected(); doc.apply("reverse", s.from, s.to); });
-      button(sequence, "i-swing", "Crear un ciclo ping-pong con el rango", () => { const s = selected(); doc.apply("swing", s.from, s.to); });
-      const media = group();
+      const sequence = group("Secuencia");
+      button(sequence, "", "Exponer cada dibujo por un fotograma", () => doc.applySelectedTiming("step", selected(), 1), false, "1F");
+      button(sequence, "", "Exponer cada dibujo por dos fotogramas", () => doc.applySelectedTiming("step", selected(), 2), false, "2F");
+      button(sequence, "", "Exponer cada dibujo por tres fotogramas", () => doc.applySelectedTiming("step", selected(), 3), false, "3F");
+      button(sequence, "i-autoexpose", "Completar los huecos sosteniendo el dibujo anterior", () => doc.applySelectedTiming("autoexpose", selected()));
+      button(sequence, "i-dedupe", "Dejar una celda por dibujo", () => doc.applySelectedTiming("dedupe", selected()));
+      button(sequence, "i-loop", "Repetir el rango seleccionado", () => doc.applySelectedTiming("repeat", selected(), 1));
+      button(sequence, "i-reverse", "Invertir el orden del rango seleccionado", () => doc.applySelectedTiming("reverse", selected()));
+      button(sequence, "i-swing", "Crear un ciclo ping-pong con el rango", () => doc.applySelectedTiming("swing", selected()));
+      const media = group("Referencias");
       button(media, "i-onion", "Activar el papel cebolla", () => { if (this.toggleOnion) this.toggleOnion(); }, this.onionEnabled);
       button(media, "i-mixer", "Abrir los faders de papel cebolla", () => { if (this.openOnion) this.openOnion(); });
       button(media, "i-audio", "Cargar una pista de audio", () => { if (this.loadAudio) this.loadAudio(); });
-      const view = group();
+      const view = group("Vista");
       button(view, "", "Alejar el tiempo (Ctrl+rueda)", () => this._zoom(-1), false, "−");
       button(view, "", "Acercar el tiempo (Ctrl+rueda)", () => this._zoom(1), false, "+");
       button(view, "", "Encajar toda la escena", () => this._fit("scene"), false, "▭");
@@ -299,7 +302,7 @@
       // activa de Toon Boom / OpenToonz; antes solo se podian escribir a mano.
       const ultimo = Math.max(1, sc.lastFrame() || 1);
       const abierto = !(sc.range.out > 0);
-      const tramo = { in: Math.max(1, sc.range.in || 1),
+      const tramo = this._rangePreview || { in: Math.max(1, sc.range.in || 1),
                       out: abierto ? ultimo : Math.max(1, sc.range.out) };
       const majorStep = this._timeline().majorTickStep
         ? this._timeline().majorTickStep(this._frameWidth()) : 6;

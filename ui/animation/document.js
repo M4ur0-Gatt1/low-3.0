@@ -847,12 +847,55 @@
     // ── operaciones sobre DIBUJOS (el material, no el tiempo) ────────────
     /** Duplica un dibujo con número nuevo. Es lo que se hace para partir de una
      *  pose y modificarla, en vez de dibujar de cero. */
+    setPlaybackRange(a, z) {
+      const before = {...this.scene.range};
+      const start = Math.max(1, Math.round(Number(a)) || 1);
+      const end = Math.max(0, Math.round(Number(z)) || 0);
+      const after = {in:start,out:end ? Math.max(start,end) : 0};
+      if (JSON.stringify(before) === JSON.stringify(after)) return false;
+      const apply = value => { this.scene.range = {...value}; this.touch(); this.emit("range"); };
+      apply(after);
+      this.history?.push({label:"Cambiar rango de reproducción",domain:"anim",before,after,
+        apply:(_direction,value)=>apply(value)});
+      return true;
+    }
+
+    createBlankDrawing(copyCurrent = false) {
+      const ly = this.layer, lv = this.level;
+      if (!ly || !lv || ly.locked) return null;
+      const before = this._snapshot([ly.id], [lv.id]);
+      const drawing = lv.addDrawing(lv.nextNumber(), copyCurrent ? (this.drawing?.content || "") : "");
+      ly.setCell(this.frame, drawing.number);
+      this._histRange(copyCurrent ? "Duplicar dibujo en la celda" : "Crear dibujo vacío", before, this._snapshot([ly.id], [lv.id]));
+      this.touch(); this.emit("level"); this.emit("cells"); this.emit("frame");
+      return drawing;
+    }
+
+    applySelectedTiming(op, selection, ...args) {
+      const fn = animation.exposures[op];
+      if (!fn) return false;
+      const sel = selection || {fromLayerId:this.layerId,toLayerId:this.layerId,from:this.frame,to:this.frame};
+      const layers = this.scene.layers;
+      const a = layers.findIndex(l => l.id === sel.fromLayerId), b = layers.findIndex(l => l.id === sel.toLayerId);
+      if (a < 0 || b < 0) return false;
+      const targets = layers.slice(Math.min(a,b),Math.max(a,b)+1).filter(l=>!l.locked);
+      const ids = targets.map(l=>l.id), before = this._snapshot(ids, []);
+      const from = Math.max(1,Math.min(sel.from,sel.to)), to = Math.max(from,sel.from,sel.to);
+      targets.forEach(l=>fn(l,from,to,...args));
+      const after = this._snapshot(ids, []);
+      if (JSON.stringify(before) === JSON.stringify(after)) return false;
+      this._histRange(ETIQUETAS[op] || "Cambiar exposiciones", before, after);
+      this.touch(); this.emit("cells"); this.emit("frame");
+      return true;
+    }
+
     duplicateDrawing(number) {
       const lv = this.level;
       const src = lv && lv.byNumber(number);
       if (!src) return null;
       const n = lv.nextNumber();
       const nuevo = lv.addDrawing(n, src.content);
+      const snapshot = JSON.parse(JSON.stringify(nuevo.toJSON()));
       this.touch(); this.emit("level");
       if (this.history) {
         const doc = this;
@@ -862,7 +905,7 @@
             const l = doc.scene.level(lv.id);
             if (!l) return;
             if (dir === "undo") l.removeDrawing(n);
-            else l.addDrawing(n, src.content);
+            else { l.drawings.push(new animation.Drawing(snapshot)); l.drawings.sort((a,b) => a.number-b.number); }
             doc.emit("level"); doc.emit("frame");
           },
         });
@@ -909,7 +952,7 @@
       const lv = this.level;
       const d = lv && lv.byNumber(number);
       if (!d) return false;
-      const copia = { number: d.number, content: d.content, name: d.name };
+      const copia = JSON.parse(JSON.stringify(d.toJSON()));
       const cambios = [];
       for (const ly of this.scene.layers) {
         if (ly.levelId !== lv.id) continue;
@@ -926,7 +969,7 @@
           apply: (dir) => {
             const l = doc.scene.level(lv.id);
             if (!l) return;
-            if (dir === "undo") { const nd = l.addDrawing(copia.number, copia.content); nd.name = copia.name; }
+            if (dir === "undo") { l.drawings.push(new animation.Drawing(copia)); l.drawings.sort((a,b) => a.number-b.number); }
             else l.removeDrawing(copia.number);
             for (const c of cambios) {
               const capa = doc.scene.layer(c.id);

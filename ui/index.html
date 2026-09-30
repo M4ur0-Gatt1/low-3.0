@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="design/session-recorder.css?v=3.0.1">
 <link rel="stylesheet" href="design/pantalla-inicial.css?v=3.0.1">
 <link rel="stylesheet" href="design/forma.css?v=3.0.1">
+<link rel="stylesheet" href="design/rhythm-lab.css?v=3.0.1">
 </head>
 <body>
 <!-- Splash de arranque. Se desvanece por CSS y NUNCA intercepta clics: si la
@@ -135,6 +136,7 @@
   <symbol id="i-onion" viewBox="0 0 24 24"><circle cx="9.5" cy="12" r="6.5"/><circle cx="14.5" cy="12" r="6.5" opacity=".55"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21"/><path d="M18 12v3.5M14.8 12v2.5"/></symbol>
   <!-- calavera: el ESQUELETO / cut-out. Antes usaba la llave, igual que el fotograma clave, y en la línea de tiempo había dos botones idénticos -->
+  <symbol id="i-rhythm" viewBox="0 0 24 24"><path d="M4 19v-4M8 19v-7M12 19V5M16 19v-7M20 19v-4"/><path d="M3 21h18"/></symbol>
   <symbol id="i-skull" viewBox="0 0 24 24"><path d="M12 3C7.8 3 4.8 5.9 4.8 9.9c0 2.2.9 3.9 2.4 5v2.4c0 .6.4 1 1 1h7.6c.6 0 1-.4 1-1v-2.4c1.5-1.1 2.4-2.8 2.4-5C19.2 5.9 16.2 3 12 3z"/><circle cx="9.2" cy="10.6" r="1.7"/><circle cx="14.8" cy="10.6" r="1.7"/><path d="M12 13.2l-1 1.9h2z"/><path d="M10 18.3V21M12 18.3V21M14 18.3V21"/></symbol>
   <symbol id="i-insert" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 16v4h16v-4"/></symbol>
   <symbol id="i-blank-frame" viewBox="0 0 24 24"><rect x="3" y="4" width="14" height="16" rx="2"/><path d="M17 11h5M19.5 8.5v5"/></symbol>
@@ -480,7 +482,7 @@
     <button class="ibtn" id="dzZen" title="Modo dibujo (Tab): oculta paneles y menús para dibujar sin distracción"><svg class="ico"><use href="#i-tool"/></svg></button>
     <button class="ibtn" id="dzPrefs" title="Preferencias del estudio: atajos de teclado y suavizado"><svg class="ico"><use href="#i-gear"/></svg></button>
     <button class="ibtn" id="dzCodeBtn" title="Ver/editar el código SVG">&lt;/&gt;</button>
-    <button class="ibtn" id="dzSave" title="Guardar cambios al .svg"><svg class="ico"><use href="#i-save"/></svg></button>
+    <button class="ibtn" id="dzSave" title="Guardar documento"><svg class="ico"><use href="#i-save"/></svg></button>
     <button class="ibtn" id="dzExt" title="Abrir en el navegador"><svg class="ico"><use href="#i-ext"/></svg></button>
     <button class="ibtn" id="dzClose" title="Salir del módulo 2D"><svg class="ico"><use href="#i-x"/></svg></button>
     </div>
@@ -1325,5 +1327,7 @@
 <script src="animation/capas-en-mesa.js?v=3.0.1"></script>
 <script src="animation/capas-propiedades.js?v=3.0.1"></script>
 <script src="rigging/sostener-ui.js?v=3.0.1"></script>
+<script src="animation/rhythm-lab.js?v=3.0.1"></script>
+<script src="panels/rhythm-lab-view.js?v=3.0.1"></script>
 </body>
 </html>

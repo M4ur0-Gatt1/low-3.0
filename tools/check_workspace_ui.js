@@ -170,7 +170,9 @@ async function main() {
     // 4ter. Los botones de exposicion se rotulan en FOTOGRAMAS. Decian «1s»
     // —de «on ones» en ingles— y en castellano eso se lee como segundos, que es
     // justo lo contrario de lo que hacen.
-    const badges=[...document.querySelectorAll("button.tl2-badge span")].map(b=>b.textContent);
+    // se buscan los botones de EXPOSICIÓN por lo que dicen, no por su lugar: la
+    // barra tiene también Vacío/Duplicar/Reexponer con texto, y van antes
+    const badges=[...document.querySelectorAll("button.tl2-badge span")].map(b=>b.textContent).filter(t=>/^[0-9][sF]$/.test(t));
     await dzXsMount(); await espera(700);
     const opsXs=[...document.querySelectorAll(".xs2-op")].map(b=>b.textContent);
     const exposicion={timeline:badges.slice(0,3), xsheet:opsXs.slice(0,3),

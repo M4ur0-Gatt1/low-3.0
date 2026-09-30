@@ -464,27 +464,22 @@
       const doc = this.doc;
       const b = document.createElement("div");
       b.className = "xs2-bar";
-      const rango = () => {
-        const ly = doc.layer;
-        const s = this.sel && this.sel.fromLayerId === doc.layerId && this.sel.toLayerId === doc.layerId && this.sel.to > this.sel.from
-          ? this.sel : null;
-        return s ? [s.from, s.to] : [1, Math.max(1, ly ? ly.lastFrame() : 1)];
-      };
+      const timing = (op, ...args) => doc.applySelectedTiming(op, this.sel || doc.cellSelection, ...args);
       const btn = (txt, title, fn) => {
         const x = document.createElement("button");
         x.className = "xs2-op"; x.textContent = txt; x.title = title;
         x.onclick = fn; b.appendChild(x); return x;
       };
-      btn("1F", "Un fotograma por dibujo: saca los sostenidos", () => { const [a, z] = rango(); doc.apply("step", a, z, 1); });
-      btn("2F", "Cada dibujo dura 2 fotogramas", () => { const [a, z] = rango(); doc.apply("step", a, z, 2); });
-      btn("3F", "Cada dibujo dura 3 fotogramas", () => { const [a, z] = rango(); doc.apply("step", a, z, 3); });
+      btn("1F", "Un fotograma por dibujo: saca los sostenidos", () => timing("step", 1));
+      btn("2F", "Cada dibujo dura 2 fotogramas", () => timing("step", 2));
+      btn("3F", "Cada dibujo dura 3 fotogramas", () => timing("step", 3));
       btn("+", "Alargar la exposición del frame actual", () => doc.apply("stepChange", doc.frame, +1));
       btn("−", "Acortar la exposición del frame actual", () => doc.apply("stepChange", doc.frame, -1));
       btn("⤒", "Insertar un frame vacío acá", () => doc.apply("insert", doc.frame, 1));
       btn("⌫", "Quitar este frame y correr lo que sigue", () => doc.apply("remove", doc.frame, doc.frame));
-      btn("↔", "Rellenar los huecos sosteniendo cada dibujo", () => { const [a, z] = rango(); doc.apply("autoexpose", a, z); });
-      btn("⟲", "Invertir el orden", () => { const [a, z] = rango(); doc.apply("reverse", a, z); });
-      btn("⇄", "Ida y vuelta (swing)", () => { const [a, z] = rango(); doc.apply("swing", a, z); });
+      btn("↔", "Rellenar los huecos sosteniendo cada dibujo", () => timing("autoexpose"));
+      btn("⟲", "Invertir el orden", () => timing("reverse"));
+      btn("⇄", "Ida y vuelta (swing)", () => timing("swing"));
       return b;
     }
   }
