@@ -241,6 +241,10 @@ function dzNodesClick(e) {   // misma puntería que la selección: ver drawing/h
  *  dzSnapshot lo crea y ahi ya seria tarde para abrirla. */
 function dzNodesHistoria() {
   if (!DZ.history) DZ.history = new LOW.core.HistoryManager({ limit: 180 });
+  // Lo pendiente del lienzo (el trazo de recien, que se vuelca con 260 ms de
+  // retardo) es OTRO paso: se vuelca ANTES de abrir la transaccion, o el Ctrl+Z
+  // de mover un punto se llevaria tambien el trazo entero.
+  if (DZ.doc && DZ.docPendiente === DZ.doc && !DZ.history.transaction) { clearTimeout(DZ_DOC_TIMER); dzDocCommit(); }
   if (!DZ.history.transaction) DZ.history.begin("Editar puntos");
 }
 

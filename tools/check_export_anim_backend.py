@@ -53,7 +53,8 @@ def bridge_for(base):
 
 
 def main():
-    tiene_ffmpeg = bool(shutil.which("ffmpeg"))
+    import main as _m
+    tiene_ffmpeg = bool(_m._ffmpeg_exe())   # el del PATH o el de imageio-ffmpeg: es lo que usa el puente
     try:
         from PIL import Image
         tiene_pillow = True
@@ -184,6 +185,8 @@ def main():
         #       arbol de archivos: sin eso el resultado no aparece hasta reabrir.
         assert "ws" in puente.avisos, "el puente no avisa que hay archivos nuevos"
 
+    capacidades()
+
     faltantes = []
     if not tiene_ffmpeg:
         faltantes.append("sin ffmpeg: se comprobo el mensaje, no el MP4")
@@ -192,6 +195,31 @@ def main():
     print("EXPORT ANIM OK: secuencia PNG intacta y ordenable, cuadro roto sin "
           "secuencia a medias, MP4, GIF y spritesheet"
           + (" (" + "; ".join(faltantes) + ")" if faltantes else ""))
+
+
+def capacidades():
+    """-- 9. `export_capacidades` dice la VERDAD sobre MP4 en esta maquina. El
+    dialogo de exportar lo usa para no ofrecer como principal un MP4 que va a
+    fallar (medido en la app real, sin ffmpeg: el boton principal fallaba)."""
+    import shutil
+    import sys as _sys
+    import main as m
+    puente = Api.__new__(Api)
+    original = shutil.which
+    guardado = _sys.modules.get("imageio_ffmpeg", "nada")
+    try:
+        shutil.which = lambda nombre: None          # sin ffmpeg en el PATH...
+        _sys.modules["imageio_ffmpeg"] = None       # ...ni el del paquete pip
+        assert m._ffmpeg_exe() is None
+        assert puente.export_capacidades() == {"mp4": False},             "sin ffmpeg el puente dice que MP4 anda: el dialogo lo ofreceria como principal"
+        shutil.which = lambda nombre: "C:/ffmpeg/ffmpeg.exe" if nombre == "ffmpeg" else None
+        assert puente.export_capacidades() == {"mp4": True}
+    finally:
+        shutil.which = original
+        if guardado == "nada":
+            _sys.modules.pop("imageio_ffmpeg", None)
+        else:
+            _sys.modules["imageio_ffmpeg"] = guardado
 
 
 if __name__ == "__main__":

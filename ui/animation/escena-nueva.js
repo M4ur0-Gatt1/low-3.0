@@ -28,7 +28,9 @@
  *  porque un dibujo de la escena no es un archivo, es la marca que va en la
  *  hoja. */
 const DZ_ESCENA_PAGINA =
-  '<rect data-low-page="1" x="0" y="0" width="1920" height="1080" fill="#ffffff"/>' +
+  // `></rect>` y no `/>`: es como lo serializa el lienzo. Con la otra forma el
+  // primer volcado veía una «diferencia» y el documento nuevo nacía sin guardar.
+  '<rect data-low-page="1" x="0" y="0" width="1920" height="1080" fill="#ffffff"></rect>' +
   '<g data-low-art="colour" aria-label="Color"></g>' +
   '<g data-low-art="line" aria-label="Línea"></g>';
 
@@ -96,9 +98,18 @@ async function dzEscenaNueva() {
   if (typeof api === "undefined" || !api || typeof api.new_scene !== "function") return false;
   const doc = dzEscenaEnBlanco();
   if (!doc) return false;
-  const respuesta = await api.new_scene(JSON.stringify(doc.toJSON(), null, 1));
+  /* El puente puede LANZAR, no solo devolver {error}: pywebview convierte la
+     excepcion de Python en una promesa rechazada. Sin este catch, el rechazo
+     iba al aviso global, que lo escribe en el chat de IA —que en el estudio 2D
+     no se ve— y «Nuevo documento» parecia un boton muerto. Medido en la app
+     real el 3-oct-2026, en un primer arranque sin carpeta de proyecto. */
+  let respuesta;
+  try { respuesta = await api.new_scene(JSON.stringify(doc.toJSON(), null, 1)); }
+  catch (err) { respuesta = { error: (err && err.message) || String(err) }; }
   if (!respuesta || respuesta.error || !respuesta.path) {
-    dzSetStatus("No pude crear el documento: " + ((respuesta && respuesta.error) || "el puente no contestó"));
+    const motivo = (respuesta && respuesta.error) || "el puente no contestó";
+    dzSetStatus("No pude crear el documento: " + motivo);
+    if (typeof dzNotice === "function") await dzNotice("No pude crear el documento: " + motivo);
     return false;
   }
   const anterior = dzDocumentTabPrepareNew();

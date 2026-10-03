@@ -51,12 +51,98 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.1.1"
+LOW_VERSION = "3.1.2"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
 # y la disposición de paneles—. Ver el bloque de `webview.start` al final.
 LOW_UI_PORT = 47141
+
+
+def _ui_sin_cache():
+    """La interfaz se sirve con `Cache-Control: no-cache` (revalida siempre).
+
+    pywebview 6.x lo INTENTA y lo pierde: pone la cabecera en `bottle.response`
+    y devuelve lo de `bottle.static_file`, un HTTPResponse con cabeceras propias.
+    Sin Cache-Control, WebView2 cachea con frescura heuristica, y como el perfil
+    es persistente la cache sobrevive a las actualizaciones. Medido el 3-oct-2026:
+    tras cambiar el index.html, la app cargo el VIEJO desde la cache (0 bytes
+    transferidos), con Python nuevo e interfaz vieja. Para quien actualiza LOW
+    eso es «instale el arreglo y sigue igual». tools/check_ui_sin_cache_backend.py
+    """
+    try:
+        import bottle
+    except Exception:
+        return False
+    original = bottle.static_file
+    if getattr(original, "_low_sin_cache", False):
+        return True
+
+    def static_file(*a, **kw):
+        r = original(*a, **kw)
+        try:
+            r.set_header("Cache-Control", "no-cache")
+        except Exception:
+            pass
+        return r
+
+    static_file._low_sin_cache = True
+    bottle.static_file = static_file
+    return True
+
+
+def _cache_de_version(perfil, version=None):
+    """Al cambiar de version, se vacia la cache HTTP del perfil de WebView2.
+
+    `_ui_sin_cache` arregla lo que se sirve de aca en adelante, pero quien ya
+    tiene una version instalada guardo su index.html SIN Cache-Control, con
+    frescura heuristica (10% de su antiguedad): tras actualizar puede seguir
+    «fresco» y cargarse el viejo. Se borra SOLO la cache (Cache, Code Cache):
+    Local Storage —el rescate, los pinceles, los paneles— no se toca.
+    Devuelve True si vacio algo. tools/check_ui_sin_cache_backend.py
+    """
+    import shutil
+    version = version or LOW_VERSION
+    marca = Path(perfil) / ".low_version"
+    try:
+        anterior = marca.read_text(encoding="utf-8").strip()
+    except OSError:
+        anterior = ""
+    if anterior == version:
+        return False
+    vacio = False
+    for sub in ("Cache", "Code Cache"):
+        d = Path(perfil) / "EBWebView" / "Default" / sub
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
+            vacio = True
+    try:
+        Path(perfil).mkdir(parents=True, exist_ok=True)
+        marca.write_text(version, encoding="utf-8")
+    except OSError as e:
+        log("no pude anotar la version del perfil: %s" % e)
+    if vacio:
+        log("LOW %s: cache de la interfaz vaciada (venia de %s)" % (version, anterior or "otra version"))
+    return vacio
+
+
+def _ffmpeg_exe():
+    """ffmpeg del PATH o, si no hay, el que trae el paquete pip `imageio-ffmpeg`.
+
+    Sin ffmpeg no hay MP4. En la maquina de un chico no hay ffmpeg en el PATH, y
+    el boton principal del dialogo de exportar fallaba (medido el 3-oct-2026).
+    Si `imageio-ffmpeg` esta instalado, trae su propio binario y alcanza.
+    """
+    import shutil
+    ff = shutil.which("ffmpeg")
+    if ff:
+        return ff
+    try:
+        import imageio_ffmpeg
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+        return ff if ff and Path(ff).exists() else None
+    except Exception:
+        return None
 
 
 def _puerto_libre(puerto: int) -> bool:
@@ -919,10 +1005,31 @@ class Api:
                 "carpeta": str(destino)}
 
     def _base(s):
-        """Workspace efectivo para las tools. Si no hay, lanza excepción
-        para que el frontend pida al usuario que abra una carpeta."""
+        """Workspace efectivo: donde LOW crea, exporta y guarda.
+
+        EL PRIMER ARRANQUE NO TIENE CARPETA. Antes esto lanzaba «No hay
+        workspace abierto» y, medido el 3-oct-2026 en la app real con un perfil
+        nuevo, «Nuevo documento» NO HACIA NADA: la excepcion volvia a la
+        interfaz como promesa rechazada y nadie la mostraba. Es lo primero que
+        aprieta quien instala LOW. Ahora, sin carpeta elegida, se adopta la
+        carpeta de proyectos de LOW dentro de Documentos y se recuerda para el
+        proximo arranque. Elegir otra sigue siendo Archivo -> Abrir carpeta."""
         if not s.ws:
-            raise RuntimeError("No hay workspace abierto. Por favor, abre una carpeta de proyecto primero.")
+            casa = Path.home()
+            docs = casa / "Documents" if (casa / "Documents").is_dir() else casa
+            # NO «Documents/LOW»: en la maquina de Mauro es un arbol de codigo viejo
+            carpeta = docs / "LOW Proyectos"
+            try:
+                carpeta.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                raise RuntimeError("No pude crear la carpeta de proyectos %s: %s" % (carpeta, e))
+            s.ws = str(carpeta)
+            try:
+                s.cfg.data["last_workspace"] = s.ws
+                s.cfg.save()
+            except Exception as e:   # recordarla vale menos que poder crear el documento
+                log("no pude recordar la carpeta de proyectos: %s" % e)
+            log("sin carpeta de proyecto: LOW adopta %s" % carpeta)
         return Path(s.ws)
 
     def _initp(s):
@@ -1278,6 +1385,11 @@ class Api:
         return {"path": str(outdir), "name": limpio + ".xml",
                 "frames": len(frames_png or []), "audio": bool(wav_b64)}
 
+    def export_capacidades(s):
+        """Que salidas de video andan en ESTA maquina: el dialogo de exportar lo
+        pregunta para no ofrecer como principal algo que va a fallar."""
+        return {"mp4": bool(_ffmpeg_exe())}
+
     def export_anim(s, path, frames_png, fps=12, kind="gif"):
         """Exporta la animación: el frontend rasteriza cada cuadro a PNG dataURL
         y acá se arma el archivo final. kind: 'gif' (Pillow) o 'png' (secuencia).
@@ -1326,10 +1438,10 @@ class Api:
                 # rasterizados como PNG del frontend  los escribo a temp y encodeo.
                 import shutil
                 import tempfile
-                ff = shutil.which("ffmpeg")
+                ff = _ffmpeg_exe()
                 if not ff:
-                    return {"error": "exportar MP4 necesita ffmpeg en el PATH "
-                                     "(probá GIF o secuencia PNG, que no lo necesitan)"}
+                    return {"error": "exportar MP4 necesita el programa ffmpeg en esta "
+                                     "computadora (probá GIF o secuencia PNG, que no lo necesitan)"}
                 if not imgs:
                     return {"error": "no llegó ningún cuadro"}
                 tdir = Path(tempfile.mkdtemp())
@@ -6043,6 +6155,7 @@ def main():
     if puerto is None:
         log("el puerto %d esta ocupado: LOW arranca sin origen fijo y NO va a "
             "conservar preferencias ni rescate entre arranques" % LOW_UI_PORT)
+    _ui_sin_cache(); _cache_de_version(perfil)
     try:
         webview.start(debug="--debug" in sys.argv, private_mode=False,
                       storage_path=perfil, http_port=puerto)

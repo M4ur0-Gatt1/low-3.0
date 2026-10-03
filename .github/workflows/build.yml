@@ -67,6 +67,7 @@ jobs:
           python tools/check_export_premiere_backend.py
           python tools/check_diag_log_backend.py
           python tools/check_perfil_instancias_backend.py
+          python tools/check_ui_sin_cache_backend.py
       - name: Contratos críticos de interacción 2D
         run: python tools/check_2d_interaction_contracts.py
       - name: Recorridos reales — dibujo, rigging, composición y storyboard
@@ -144,6 +145,11 @@ jobs:
           node tools/check_cortar_no_dibuja_ui.js
           node tools/check_tl_pestania_ui.js
           node tools/check_timeline_una_vista_ui.js
+          node tools/check_un_trazo_un_deshacer_ui.js
+          node tools/check_rescate_escena_ui.js
+          node tools/check_cerrar_documento_ui.js
+          node tools/check_reproducir_no_ensucia_ui.js
+          node tools/check_exportar_sin_ffmpeg_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js
           node tools/check_paneles_plegables_ui.js

@@ -57,7 +57,12 @@ async function main() {
     const NS="http://www.w3.org/2000/svg";
     const limpiar=()=>{ dzNodesClear(); hoja().querySelectorAll("[data-prueba]").forEach(n=>n.remove()); };
     const poner=(tag,attrs)=>{ const n=document.createElementNS(NS,tag); n.setAttribute("data-prueba","1");
-      for(const k in attrs) n.setAttribute(k,attrs[k]); hoja().appendChild(n); return n; };
+      for(const k in attrs) n.setAttribute(k,attrs[k]); hoja().appendChild(n);
+      // como lo pone CUALQUIER herramienta: marcando el cambio. Sin esto el
+      // trazado vivia en el lienzo y no en el documento —algo que ninguna
+      // herramienta real hace— y la prueba solo pasaba porque el deshacer viejo
+      // sacaba una foto del SVG (dos entradas por trazo, ver check_un_trazo_un_deshacer_ui).
+      if(typeof dzMarkDirty==="function") dzMarkDirty(); return n; };
     const nodos=()=>[...lienzo.querySelectorAll(".dz-node")];
     const pantalla=(ux,uy)=>{ const p=hoja().createSVGPoint(); p.x=ux; p.y=uy;
       const s=p.matrixTransform(hoja().getScreenCTM()); return {x:Math.round(s.x),y:Math.round(s.y)}; };
@@ -190,7 +195,7 @@ async function main() {
     for(let i=1;i<=10;i++){ lapiz("pointermove",lx+i*22,ly+Math.round(Math.sin(i/2)*20)); await wait(13); }
     lapiz("pointerup",lx+220,ly); await wait(700);
     const dibujado=[...hoja().querySelectorAll("path")].pop();
-    dibujado.id="trazoReal";
+    dibujado.id="trazoReal"; dzMarkDirty();   // un cambio al lienzo se marca, como en las herramientas reales
     const dReal=dibujado.getAttribute("d");
     dzSetTool("nodes"); await wait(130); dzNodesShow(dibujado); await wait(250);
     const pila0=DZ.history.undoStack.length;

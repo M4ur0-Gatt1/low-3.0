@@ -28,7 +28,13 @@ async function main() {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const mouse = (type, x, y, buttons) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons, clickCount: 1 });
   const clickEn = async (expr) => {
-    const p = await ev(`(()=>{const e=${expr};if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+    // se ESPERA al elemento (hasta 3 s) en vez de suponer un tiempo fijo: con la
+    // puerta entera corriendo, 300 ms a veces no alcanzaban (en frío tarda ~75 ms)
+    let p = null;
+    for (let i = 0; i < 30 && !p; i++) {
+      p = await ev(`(()=>{const e=${expr};if(!e)return null;const r=e.getBoundingClientRect();if(!r.width)return null;return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+      if (!p) await wait(100);
+    }
     assert.ok(p, "no está en pantalla: " + expr);
     await mouse("mousePressed", p.x, p.y, 1); await mouse("mouseReleased", p.x, p.y, 0); await wait(300);
   };

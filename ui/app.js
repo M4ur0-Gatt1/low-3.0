@@ -3087,7 +3087,7 @@ async function dzDocumentTabClose(id) {
   if (next) return dzDocumentTabActivate(next.id);
   dzDocumentTabParkRuntime();
   if (DZ.d3) dz3dExit(true);
-  $("#designView").hidden = true; DZ.sel = null; if (RULER) dzRulerClear();
+  DZ.sel = null; if (RULER) dzRulerClear(); window.dzVolverAlEstudio ? dzVolverAlEstudio() : ($("#designView").hidden = true);   // ídem: al estudio 2D, no al editor de código
   dzDocumentTabsRender(); return true;
 }
 const DZModeMachine = window.LOW?.application?.createModeMachine?.() || null;
@@ -4818,8 +4818,8 @@ function dzMarkDirty() {
   // al cambiar de frame: si dibujabas y guardabas sin moverte, ese trazo no
   // llegaba nunca al documento. Con retardo, para no serializar el SVG en cada
   // punto de un trazo.
-  clearTimeout(DZ_DOC_TIMER);
-  DZ_DOC_TIMER = setTimeout(() => { if (DZ.doc) dzDocCommit(); }, 260);
+  clearTimeout(DZ_DOC_TIMER); const deQuien = DZ.doc || null; DZ.docPendiente = deQuien;   // hay un cambio del LIENZO sin volcar, de ESTE documento: Deshacer lo vuelca antes
+  DZ_DOC_TIMER = setTimeout(() => { if (DZ.doc && DZ.doc === deQuien) dzDocCommit(); }, 260);   // armado para OTRO documento (o sin ninguno) no vuelca sobre el actual: todo documento nuevo nacía «sin guardar» y con un «Dibujar» fantasma
   clearTimeout(DZ_RECOVERY_TIMER);
   DZ_RECOVERY_TIMER = setTimeout(() => {
     const svg = $("#dzCanvas")?.querySelector(":scope > svg");
@@ -7491,7 +7491,7 @@ async function dzDoExport(kind) {
     if (!txt) continue;
     txt = dzRigView(txt, dzFrameNum(frames[i]));
     if (throughCam) txt = dzCamView(txt, dzCamAt(dzFrameNum(frames[i])));
-    const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : 1080);
+    const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : kind === "gif" ? 1080 : Math.max(DZ.doc?.scene?.width || 1080, DZ.doc?.scene?.height || 1080));   // MP4/PNG/Premiere a la resolución del DOCUMENTO (salía 1080×608 de un 1920×1080); el GIF, topeado para compartir
     if (du) pngs.push(du);
     dzSetStatus(` Rasterizando${throughCam ? " por cámara 🎬" : ""}… ${i + 1}/${frames.length}`);
   }
@@ -10134,7 +10134,7 @@ async function dzDoExportDoc(kind) {
     if (!txt) txt = dzExportCuadroEnBlanco(DZ.doc.scene);   // un cuadro en blanco es un cuadro: saltearlo ADELANTA todo lo que sigue
     txt = dzRigView(txt, f);                  // las poses del rig, aplicadas
     if (throughCam) txt = dzCamView(txt, dzCamAt(f));
-    const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : 1080);
+    const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : kind === "gif" ? 1080 : Math.max(DZ.doc?.scene?.width || 1080, DZ.doc?.scene?.height || 1080));   // MP4/PNG/Premiere a la resolución del DOCUMENTO (salía 1080×608 de un 1920×1080); el GIF, topeado para compartir
     if (du) pngs.push(du);
     dzSetStatus("Rasterizando" + (throughCam ? " por c\u00e1mara" : "") +
       "\u2026 " + (i + 1) + "/" + cuadros.length);
@@ -11816,7 +11816,7 @@ function dzMenuAction(act) {
     "escena-abrir": dzSceneOpen,
     documento: dzDocModal, guardar: () => DZ.doc ? dzSceneSave(false) : dzSave(),
     "escena-guardar-como": () => DZ.doc ? dzSceneSave(true) : dzSave(),
-    "cerrar-documento": dzDocumentClose,
+    "cerrar-documento": closeDesign,   // el mismo camino que la X: saca la PESTAÑA. dzDocumentClose la dejaba colgada y reabrir el archivo «activaba» una pestaña muerta
     "borrar-documento": dzDocumentTrash,
     importar: dzImportImage,
     exportar: dzExportModal, exportanim: dzExportModal,
@@ -15783,7 +15783,7 @@ async function dzDocumentClose() {
   if (!DZ.path && !DZ.doc) return false;
   if (!(await dzDocumentMayDiscard("Cerrar el documento"))) return false;
   dzDocumentReset();
-  $("#designView").hidden = true;
+  window.dzVolverAlEstudio ? dzVolverAlEstudio() : ($("#designView").hidden = true);   // cerrar el dibujo te deja en el ESTUDIO 2D con su invitación, no en la pantalla de código e IA
   $("#dzTitle").textContent = "Sin documento";
   if (RULER) dzRulerClear();
   return true;
@@ -15867,10 +15867,10 @@ async function dzSceneSave(comoNuevo) {
  *  directo — es el camino del doble clic en un .low. Es UNA sola
  *  implementación a propósito: dos caminos que abren escenas se desincronizan
  *  en cuanto uno de los dos cambia. */
-async function dzSceneOpen(ruta) {
+async function dzSceneOpen(ruta, leido) {   // leido: lo ya leído (el rescate de la pantalla inicial). Lo del disco pasa por dzEscenaConRescate: si quedaron cambios sin guardar, pregunta (workspace/rescate-escena.js)
   try {
-    const r = ruta ? await api.open_file(ruta) : await api.open_dialog();
-    if (!r || r.error) { if (r && r.error) sysMsg(" " + r.error); return false; }
+    const r = leido || await (window.dzEscenaConRescate || (x => x))(ruta ? await api.open_file(ruta) : await api.open_dialog());
+    if (!r || r.error) { if (r && r.error) dzNotice("No pude abrir el documento: " + r.error); return false; }   // en el ESTUDIO: sysMsg escribe en el chat de IA, que desde el 2D no se ve
     if (!r.content) return false;
     const doc = LOW.animation.LowDoc.fromJSON(r.content); if (!$("#dzWorkspaces")?.children.length) dzWsInit();   // las pestañas de espacios las montaba openDesign, y esto no pasa por ahi
     const existing = r.path && dzDocumentTabFind(r.path);
@@ -15881,16 +15881,16 @@ async function dzSceneOpen(ruta) {
     $("#designView").hidden = false;
     $("#dzTitle").textContent = r.name || doc.scene.name || "Documento de animación";
     dzDocumentTabRegister(r.path || doc.path || `scene:${Date.now()}`, r.name || doc.scene.name || "Documento de animación");
-    requestAnimationFrame(() => dzFitView());
-    dzSetStatus(" Escena abierta: " + (r.name || r.path));
+    requestAnimationFrame(() => dzFitView()); { const W = LOW.workspace?.workspaces, ws = W?.get?.(W.activeId); if (!DZ.anim && ws?.panels?.some(p => p.id === "timeline" && !p.hidden)) W.activate(ws.id, window.dzWsAplicar); }   // si el espacio ACTIVO pide la línea de tiempo, se enciende: por Abrir/rescate quedaba la barra de transporte sola, sin capas. No se cambia de espacio: quien está en Dibujo, sigue en Dibujo
+    dzSetStatus(" Escena abierta: " + (r.name || r.path)); if (r.rescatado) window.dzEscenaRescatadaMarcar?.(doc);
     return true;
-  } catch (err) { sysMsg(" No pude abrir la escena: " + (err.message || err)); }
+  } catch (err) { dzNotice("No pude abrir el documento: " + (err.message || err)); }
   return false;
 }
 
 /** Pone un documento en uso y reengancha todo lo que depende de él. */
 function dzDocUse(doc) {
-  DZ.doc = doc; dzHojaDeDibujoAsegurar(doc.scene);   // sin hoja de dibujo, el lienzo escribe en un overlay oculto y el commit siguiente VACIA el documento
+  DZ.doc = doc; dzHojaDeDibujoAsegurar(doc.scene); DZ.dirty = !!doc.dirty; DZ.docPendiente = null;   // sin hoja de dibujo, el lienzo escribe en un overlay oculto y el commit siguiente VACIA el documento. Y lo «sin guardar» es el del DOCUMENTO: abrir desde la pantalla vacía arrastraba el DZ.dirty del lienzo anterior y cerrar preguntaba por cambios inexistentes
   if (!DZ.history) DZ.history = new LOW.core.HistoryManager({ limit: 180 });
   else DZ.history.clear();
   doc.setHistory(DZ.history);
@@ -16224,9 +16224,9 @@ function dzCanvasSet(contenido) {
 
 /** Guarda lo que hay en el lienzo dentro del dibujo actual del documento. */
 function dzDocCommit() {
-  if (!DZ.doc) return;
+  DZ.docPendiente = false; if (!DZ.doc) return;
   if (DZPointerController?.owns('vector:corners')) DZPointerController.cancel('document-commit');
-  DZ.doc.writeDrawing(dzCanvasInner());
+  DZ.doc.writeDrawing(dzCanvasInner()); if (!DZ.path && !DZ.doc.dirty) { DZ.dirty = false; const t = dzDocumentTabCurrent(); if (t?.dirty) { t.dirty = false; dzDocumentTabsRender(); } }   // con un .low, lo «sin guardar» lo decide el DOCUMENTO: organizar un cuadro vacío al reproducir marcaba el lienzo y cerrar preguntaba por cambios inexistentes
 }
 
 /** Abre el frame `f`: guarda lo actual y muestra el dibujo que corresponde. */
@@ -16722,6 +16722,8 @@ function dzApplyCode() {
 function dzSnapshot() {
   const svg = $("#dzCanvas").querySelector(":scope > svg");
   if (!svg) return;
+  // Con un .low la historia es la del DOCUMENTO: el volcado del cambio apila «Dibujar». La foto del SVG era una SEGUNDA entrada por trazo y deshacerla restauraba un lienzo viejo sin las otras capas (vista vacía al 2º Ctrl+Z, medido en la app real). Se vuelca lo pendiente, que es el «antes».
+  if (DZ.doc) { clearTimeout(DZ_DOC_TIMER); if (DZ.docPendiente === DZ.doc) dzDocCommit(); return; }
   if (!DZ.history) DZ.history = new LOW.core.HistoryManager({ limit: 180 });
   DZ.history.push({ label: "Editar dibujo", domain: "drawing", before: dzSerialize(svg), after: null,
     capture: () => { const current = $("#dzCanvas").querySelector(":scope > svg"); return current ? dzSerialize(current) : null; },
@@ -16729,18 +16731,16 @@ function dzSnapshot() {
   DZ.undo = DZ.history.undoStack; DZ.redo = DZ.history.redoStack;
 }
 function dzUndo() {
-  // El volcado del lienzo al modelo está en camino (260 ms): si se dispara
-  // DESPUÉS de deshacer, vuelve a escribir lo que acabás de sacar. Se cancela.
-  clearTimeout(DZ_DOC_TIMER);
+  clearTimeout(DZ_DOC_TIMER); if (DZ.doc && DZ.docPendiente === DZ.doc) dzDocCommit();   // lo pendiente (260 ms) entra ANTES de deshacer: cancelarlo perdía el último trazo y el Ctrl+Z se llevaba el anterior. SÓLO lo pendiente: volcar siempre apilaba una entrada fantasma con dibujos no canónicos (importados, generados) y el Ctrl+Z parecía muerto
   if (!DZ.history || !DZ.history.undo()) { setStatus("(nada para deshacer)"); return; }
-  DZ.undo = DZ.history.undoStack; DZ.redo = DZ.history.redoStack;
+  clearTimeout(DZ_DOC_TIMER); DZ.docPendiente = false; DZ.undo = DZ.history.undoStack; DZ.redo = DZ.history.redoStack;   // el repintado del deshacer NO es un cambio del usuario: volcarlo vaciaba el Rehacer
   const sig = DZ.history.redoStack[DZ.history.redoStack.length - 1];
   setStatus("↩ deshecho" + (sig && sig.label ? ": " + sig.label.toLowerCase() : ""));
 }
 function dzRedo() {
-  clearTimeout(DZ_DOC_TIMER);
+  clearTimeout(DZ_DOC_TIMER); if (DZ.doc && DZ.docPendiente === DZ.doc) dzDocCommit();   // un cambio pendiente es un cambio nuevo: invalida el rehacer, no se pierde
   if (!DZ.history || !DZ.history.redo()) return;
-  DZ.undo = DZ.history.undoStack; DZ.redo = DZ.history.redoStack;
+  clearTimeout(DZ_DOC_TIMER); DZ.docPendiente = false; DZ.undo = DZ.history.undoStack; DZ.redo = DZ.history.redoStack;   // ídem
   setStatus("↪ rehecho");
 }
 /* serializa el svg sin las marcas de la UI (clase de selección) */

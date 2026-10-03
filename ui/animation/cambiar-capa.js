@@ -53,6 +53,9 @@
   const cancelarVolcado = () => {
     // DZ_DOC_TIMER es de app.js (ámbito global compartido entre scripts)
     try { if (typeof DZ_DOC_TIMER !== "undefined") clearTimeout(DZ_DOC_TIMER); } catch (_) { /* nada pendiente */ }
+    // y ya no hay nada pendiente: lo del lienzo era de OTRA capa o cuadro. Sin
+    // esto, el próximo Ctrl+Z lo volcaba antes de deshacer (app.js, dzUndo).
+    try { if (typeof DZ !== "undefined" && DZ) DZ.docPendiente = false; } catch (_) { /* sin app */ }
   };
 
   function envolverApp() {

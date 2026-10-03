@@ -94,16 +94,17 @@
       }
     } catch (_) { /* sin almacenamiento */ }
     if (mejor) return mejor;
-    // Y si no hay ninguno, el de la escena. Se pregunta por contenido de verdad
-    // con la misma vara que usa `dzDocInit`: más de 40 caracteres de geometría.
-    // Un lienzo en blanco no es «trabajo».
+    // Y si no hay ninguno, el de la escena: el más nuevo que tenga TRABAJO.
+    // La vara vieja —más de 40 caracteres— contaba como trabajo los dos planos
+    // vacíos de un documento recién creado, y ese vacío tapaba al de verdad
+    // (workspace/rescate-escena.js lo explica entero).
     const almacen = global.LOW && global.LOW.workspace && global.LOW.workspace.sceneRecovery;
     if (!almacen || typeof almacen.list !== "function") return null;
+    const trabajo = global.dzEscenaTieneTrabajo || (() => false);
     try {
-      const r = almacen.list().find((x) => ((x.content && x.content.scene &&
-        x.content.scene.levels) || []).some((nivel) => (nivel.drawings || [])
-          .some((d) => d.content && d.content.length > 40)));
-      return r ? { tipo: "escena", savedAt: r.savedAt } : null;
+      const r = almacen.list().find((x) => trabajo(x.content));
+      return r ? { tipo: "escena", savedAt: r.savedAt, identidad: r.identity,
+        ruta: r.path || null, nombre: r.name || "" } : null;
     } catch (_) { return null; }
   }
 
@@ -280,11 +281,12 @@
         // archivo del disco y pregunta cuál querés. Es el camino probado.
         boton.onclick = () => global.openDesign?.(rescate.ruta);
       } else {
-        fila.querySelector("p").textContent =
-          "Quedó una escena sin guardar de una sesión anterior" + cuandoFue(rescate.savedAt) + ".";
-        // El rescate de la escena lo consume `dzDocInit`, que corre al abrir un
-        // documento: se delega ahí y él pregunta.
-        boton.onclick = () => global.dzMenuAction?.("nuevo");
+        fila.querySelector("p").textContent = "Quedó «" + (rescate.ruta ? soloElNombre(rescate.ruta) :
+          (rescate.nombre || "una escena")) + "» sin guardar" + cuandoFue(rescate.savedAt) + ".";
+        // Se abre ESE rescate, en su archivo. Antes delegaba en «Nuevo
+        // documento» esperando que dzDocInit lo encontrara: el documento nuevo
+        // ya no pasa por ahí, y el botón creaba una escena VACÍA.
+        boton.onclick = () => global.dzEscenaRescatar?.(rescate.identidad);
       }
     }
     lienzo.appendChild(caja);
