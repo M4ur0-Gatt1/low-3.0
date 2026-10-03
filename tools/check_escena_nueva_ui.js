@@ -70,11 +70,11 @@ async function main() {
     window.__svgSueltos = 0; window.__guardados = [];
     const nuevoSvg = api.new_design;
     api.new_design = (...a) => { window.__svgSueltos++; return nuevoSvg.apply(api, a); };
-    const guardar = api.save_file;
     api.save_file = (ruta, contenido, sugerido) => {
       window.__guardados.push({ ruta:String(ruta||""), sugerido:String(sugerido||""), bytes:(contenido||"").length });
-      return guardar ? guardar.call(api, ruta, contenido, sugerido)
-        : { path: String(ruta||"C:/mock/escena_1.low"), name:"escena_1.low" };
+      const path = String(ruta||"C:/mock/escena_1.low");
+      (window.__lowFiles = window.__lowFiles || {})[path] = { path, name:"escena_1.low", content:contenido };
+      return Promise.resolve({ path, name:"escena_1.low" });
     };
     return true;
   })()`);
@@ -151,6 +151,16 @@ async function main() {
     if (guardado) break;
     await w(300);
   }
+
+  // El botón visible debe guardar lo mismo que Ctrl+S.
+  await ev('DZ.dirty=true; DZ.doc.dirty=true');
+  const prevSaves = await ev('(window.__guardados||[]).length');
+  await clickEn('#dzSave');
+  await w(400);
+  const toolbarSave = await ev('(window.__guardados||[]).at(-1)');
+  if (await ev('(window.__guardados||[]).length') !== prevSaves + 1 || toolbarSave.ruta !== creado.ruta)
+    mal('el botón Guardar no guardó el documento .low', toolbarSave);
+  if (await ev('DZ.dirty || DZ.doc.dirty')) mal('Guardar deja aviso falso de cambios pendientes', toolbarSave);
 
   // ── 4. ABRIR UN .low QUE YA EXISTE no puede vaciarlo. Es la otra mitad, y es
   //       la que perdía trabajo: sin hoja de dibujo en el lienzo —el caso de

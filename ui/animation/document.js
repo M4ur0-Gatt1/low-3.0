@@ -455,8 +455,9 @@
     }
     /** Guarda el contenido dibujado en el dibujo actual. */
     writeDrawing(contenido, { label = "Dibujar", coalesce = null } = {}) {
-      const lyAntes = this.layer ? this.layer.cells.slice() : null;
       const habia = this.cell != null;
+      const createdBefore = !habia && this.layer && this.level
+        ? this._snapshot([this.layer.id], [this.level.id]) : null;
       /* NADA DIBUJADO NO ES UN DIBUJO. El lienzo le pone a toda hoja los dos
          planos de arte vacíos (Color y Línea), y el volcado con retardo los
          escribía: con eso, agregar una capa creaba un dibujo fantasma en su
@@ -465,6 +466,7 @@
          «Dibujar»—. Medido: ocho Ctrl+Z seguidos no llegaban a la capa. */
       if (animation.drawingIsEmpty(contenido) &&
           (!habia || animation.drawingIsEmpty(this.drawing ? this.drawing.content : ""))) return false;
+      if (habia && this.drawing?.content === (contenido || "")) return false;
       const d = this.ensureDrawing();
       if (!d) return false;
       const antes = d.content;
@@ -473,8 +475,8 @@
       this.emit("content");
       // si la celda estaba vacía, el dibujo se acaba de crear: eso también
       // tiene que poder deshacerse
-      if (!habia && lyAntes) this._histCells("Dibujar en un frame vacío", this.layerId, lyAntes);
-      this._histDrawing(label, this.layer && this.layer.levelId, d.number, antes, d.content, coalesce);
+      if (createdBefore) this._histRange(label, createdBefore, this._snapshot([this.layer.id], [this.level.id]));
+      else this._histDrawing(label, this.layer && this.layer.levelId, d.number, antes, d.content, coalesce);
       return true;
     }
     /** Expone un número de dibujo en la celda (escribirlo en la xsheet). */
@@ -860,11 +862,13 @@
       return true;
     }
 
-    createBlankDrawing(copyCurrent = false) {
+    createBlankDrawing(copyCurrent = false, sourceNumber = this.cell) {
       const ly = this.layer, lv = this.level;
       if (!ly || !lv || ly.locked) return null;
+      const source = copyCurrent ? lv.byNumber(sourceNumber) : null;
+      if (copyCurrent && !source) return null;
       const before = this._snapshot([ly.id], [lv.id]);
-      const drawing = lv.addDrawing(lv.nextNumber(), copyCurrent ? (this.drawing?.content || "") : "");
+      const drawing = lv.addDrawing(lv.nextNumber(), source?.content || "");
       ly.setCell(this.frame, drawing.number);
       this._histRange(copyCurrent ? "Duplicar dibujo en la celda" : "Crear dibujo vacío", before, this._snapshot([ly.id], [lv.id]));
       this.touch(); this.emit("level"); this.emit("cells"); this.emit("frame");
@@ -916,8 +920,10 @@
     /** Cambia el número de un dibujo y arrastra sus exposiciones: renumerar no
      *  puede dejar celdas apuntando a un dibujo que ya no existe. */
     renumberDrawing(from, to) {
+      from = Number(from); to = Number(to);
       const lv = this.level;
-      if (!lv || lv.byNumber(to)) return false;      // destino ocupado
+      if (!lv || !Number.isSafeInteger(to) || to < 1 || this.layer?.locked ||
+          this.scene.layers.some(l => l.levelId === lv.id && l.locked && l.cells.includes(from)) || lv.byNumber(to)) return false;      // destino ocupado
       if (!lv.renumber(from, to)) return false;
       const cambios = [];
       for (const ly of this.scene.layers) {
@@ -949,7 +955,9 @@
     /** Borra un dibujo del nivel Y vacía las celdas que lo exponían. Es la
      *  única operación que SÍ destruye un dibujo, y por eso es explícita. */
     deleteDrawing(number) {
+      number = Number(number);
       const lv = this.level;
+      if (!lv || this.layer?.locked || this.scene.layers.some(l => l.levelId === lv.id && l.locked && l.cells.includes(number))) return false;
       const d = lv && lv.byNumber(number);
       if (!d) return false;
       const copia = JSON.parse(JSON.stringify(d.toJSON()));

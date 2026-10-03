@@ -66,8 +66,7 @@
       nuevo.title = "Dibujo nuevo, vacío, expuesto en el frame actual";
       nuevo.onclick = () => {
         if (!lv) return;
-        const n = lv.nextNumber();
-        doc.setCell(doc.frame, n);
+        doc.createBlankDrawing();
       };
       head.appendChild(nuevo);
       box.appendChild(head);
@@ -182,19 +181,19 @@
         doc.exposeDrawings(lv.id, numbers.length ? numbers : [d.number], doc.layerId, doc.frame);
       });
       item("Duplicar", () => {
-        const nuevo = doc.duplicateDrawing(d.number);
-        if (nuevo) doc.setCell(doc.frame, nuevo.number);
+        doc.createBlankDrawing(true, d.number);
       });
       item("Renumerar…", async () => {
         const n = await dzPromptModal(`Renumerar dibujo ${d.number}`, "nuevo número", String(d.number));
         if (n === null) return;
-        const v = parseInt(n, 10);
-        if (!v || v === d.number) return;
-        if (!doc.renumberDrawing(d.number, v)) await dzNotice("Ese número ya está usado por otro dibujo.");
+        const v = Number(n);
+        if (!Number.isSafeInteger(v) || v < 1) { await dzNotice("Usá un número entero positivo para el dibujo."); return; }
+        if (v === d.number) return;
+        if (!doc.renumberDrawing(d.number, v)) await dzNotice("Ese número ya está usado o el dibujo pertenece a una capa bloqueada.");
       });
       item("Borrar el dibujo", async () => {
         if (await dzConfirmModal(`¿Borrar el dibujo ${d.number}? Se vacían las celdas donde estaba expuesto.`, { ok: "Borrar", danger: true }))
-          doc.deleteDrawing(d.number);
+          if (!doc.deleteDrawing(d.number)) await dzNotice("El dibujo está protegido por una capa bloqueada.");
       });
       document.body.appendChild(m);
       /* El clic DENTRO del menú no lo cierra. Reportado en v3.1.0: «los dibujos

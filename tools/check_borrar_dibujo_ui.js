@@ -74,11 +74,24 @@ async function main() {
     assert.deepEqual(deshecho.dibujos, [1, 2], "Deshacer no devolvió el dibujo: " + JSON.stringify(deshecho));
     assert.equal(deshecho.celdas[1], 2, "Deshacer no devolvió su celda");
 
+    await ev("DZ.history.clear()");
     // 4. otro ítem del menú: Duplicar
     await clic(miniatura(0), "miniatura del dibujo 1", "right");
     await clic(itemMenu("Duplicar"), "«Duplicar» en el menú");
     await wait(300);
     assert.equal((await estado()).dibujos.length, 3, "«Duplicar» del menú tampoco hace nada");
+    assert.equal(await ev('DZ.history.undoStack.length'), 1, 'Duplicar requiere más de un Deshacer');
+    await ev('dzUndo()'); await wait(400);
+    assert.deepEqual((await estado()).dibujos, [1,2], 'Undo duplicar deja un dibujo residual');
+    assert.equal((await estado()).celdas[1], 2, 'Undo duplicar no devuelve la exposición anterior');
+    await ev('dzRedo()'); await wait(400);
+    assert.equal((await estado()).dibujos.length, 3, 'Redo duplicar');
+    await ev('dzUndo(); DZ.history.clear()'); await wait(400);
+    await clic(`document.querySelector('.ls2-add')`, 'nuevo dibujo del nivel');
+    assert.equal(await ev('DZ.history.undoStack.length'), 1, 'Nuevo dibujo del nivel no es atómico');
+    await ev('dzUndo()'); await wait(400);
+    assert.deepEqual((await estado()).dibujos, [1,2], 'Undo nuevo dibujo deja dibujo residual');
+
 
     assert.deepEqual(errors, []);
     console.log("E2E borrar dibujo OK", JSON.stringify({ antes, borrado, deshecho }));

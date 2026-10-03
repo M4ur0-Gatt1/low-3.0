@@ -586,7 +586,7 @@ function bind() {
   // entorno de diseño
   dzStudioHierarchyInit();
   $("#dzClose").onclick = closeDesign;
-  $("#dzSave").onclick = dzSave;
+  $("#dzSave").onclick = () => DZ.doc ? dzSceneSave(false) : dzSave();
   // Pointer Events sirven tanto para mouse como para lápiz/tableta. Usar
   // mousedown acá dejaba selección, resize y rotación sin responder al stylus.
   $("#dzCanvas").addEventListener("pointerdown", dzPointerDown);
@@ -12399,13 +12399,13 @@ function dzTlKeysOf(svgText) {
 async function dzTlGridRender() {
   const g = $("#dzTlGrid");
   if (!g || g.hidden || !DZ.anim) return;
-  // La vista canónica es la dueña del panel principal. El render legacy queda
-  // como adaptador solo mientras todavía no se migró una escena.
-  if (DZ.doc && DZ.tlView) {
-    DZ.tlView.render();
-    await dzPublishAnimationPanelState([], [], 0);
-    return;
-  }
+  // LA VISTA CANÓNICA ES LA DUEÑA del hueco. El adaptador de abajo quedó para
+  // el .svg suelto y le pide los SVG al puente con `await`: al volver PISABA la
+  // timeline que dzTlMount ya había dibujado —#dzTlgRows con filas viejas, sin
+  // `.tl2`, sin «+ Capa» y sin capas—. Mirar DZ.tlView antes del await no
+  // alcanza: en el arranque todavía es null y la carrera se decide después.
+  if (DZ.doc) { if (!DZ.tlView) await dzTlMount();
+    if (DZ.tlView) { DZ.tlView.render(); await dzPublishAnimationPanelState([], [], 0); } return; }
   const svgs = await dzTlFrameSvgs();
   const perFrame = svgs.map(dzTlKeysOf);
   const order = [];
@@ -15846,7 +15846,7 @@ async function dzSceneSave(comoNuevo) {
     const r = await api.save_file(comoNuevo ? "" : (DZ.doc.path || ""), json, nombre);
     if (dzSaveOk(r)) {
       DZ.doc.path = r.path;
-      DZ.doc.dirty = false;
+      DZ.doc.dirty = false; DZ.dirty = false;
       const tab = dzDocumentTabCurrent();
       if (tab) { tab.path = r.path; tab.name = dzDocumentTabName(r.path, r.name || tab.name); tab.dirty = false; dzDocumentTabsRender(); }
       window.LOW?.workspace?.sceneRecovery?.clear?.(recoveryBefore);

@@ -143,6 +143,7 @@ jobs:
           node tools/check_rig_vinculos_ui.js
           node tools/check_cortar_no_dibuja_ui.js
           node tools/check_tl_pestania_ui.js
+          node tools/check_timeline_una_vista_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js
           node tools/check_paneles_plegables_ui.js

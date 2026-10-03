@@ -1796,6 +1796,31 @@
       ok('restaurar y guardar conserva metadatos', JSON.stringify(reopened.drawing.toJSON()) === saved);
     }
 
+    // Recorrido de producción: una intención no deja dibujos huérfanos ni rompe bloqueos.
+    {
+      const d = new animation.LowDoc(), h = new LOW.core.HistoryManager(); d.setHistory(h);
+      d.writeDrawing('<path id="primer-trazo"/>');
+      ok('primer trazo en celda vacía tiene un solo Undo', h.undoStack.length === 1);
+      h.undo(); ok('Undo primer trazo elimina celda y dibujo creado', d.cell === null && d.level.drawings.length === 0);
+      h.redo(); ok('Redo primer trazo restaura celda y contenido', d.drawing?.content.includes('primer-trazo'));
+      h.clear(); const number=d.cell, saved=JSON.stringify(d.scene.toJSON());
+      ok('renumerar rechaza negativos', d.renumberDrawing(number,-1) === false);
+      ok('renumerar inválido conserva escena', JSON.stringify(d.scene.toJSON()) === saved);
+    }
+    {
+      const d = new animation.LowDoc(); d.writeDrawing('<path id="protegido"/>');
+      const h = new LOW.core.HistoryManager();d.setHistory(h);d.layer.locked=true;
+      const saved=JSON.stringify(d.scene.toJSON());
+      ok('borrar respeta capa bloqueada', d.deleteDrawing(d.cell) === false);
+      ok('borrar bloqueado no cambia ni historial ni escena', JSON.stringify(d.scene.toJSON())===saved && h.undoStack.length===0);
+    }
+
+    {
+      const d=new animation.LowDoc();d.writeDrawing('<path id="guardado"/>');d.dirty=false;
+      const revision=d.scene.revision;
+      ok('volcar el mismo dibujo no vuelve a ensuciar', d.writeDrawing(d.drawing.content)===false && !d.dirty && d.scene.revision===revision);
+    }
+
     const fallan = res.filter((r) => !r.ok);
     return { total: res.length, ok: res.length - fallan.length, fallan, detalle: res };
   }
