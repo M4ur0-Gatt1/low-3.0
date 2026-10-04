@@ -40,6 +40,7 @@ async function main() {
     return { estudio: !!(v && !v.hidden), invitacion: !!document.querySelector("#dzBienvenida2D"),
       pestanas: (DZ.documentTabs || []).length, hayDoc: !!DZ.doc, ruta: DZ.doc ? DZ.doc.path : null,
       sinGuardar: !!(DZ.dirty || (DZ.doc && DZ.doc.dirty)),
+      lineaDeTiempo: ["#dzTimeline", "#dzTlGrid"].some(s => { const n = document.querySelector(s); return !!(n && !n.hidden && n.getBoundingClientRect().height > 0); }),
       modal: ((document.querySelector("#overlay:not([hidden]) #modal") || {}).textContent || "").trim().slice(0, 120) }; })()`);
   const nuevo = async () => { await ev(`dzMenuAction("nuevo")`); await wait(2200);
     await ev('(()=>{ if (typeof closeL3d === "function") closeL3d(); return true; })()');
@@ -49,6 +50,10 @@ async function main() {
     assert.ok(e.estudio, como + ": te sacó del estudio 2D a la pantalla de código e IA · " + JSON.stringify(e));
     assert.ok(e.invitacion, como + ": el estudio quedó vacío, sin la invitación para crear o abrir · " + JSON.stringify(e));
     assert.equal(e.pestanas, 0, como + ": quedó la pestaña del documento cerrado colgada · " + JSON.stringify(e));
+    // y la portada queda LIMPIA, como al arrancar: medido en la app real, la
+    // línea de tiempo seguía abierta y vacía, con «8 cuadro(s)» y «2/2» del
+    // documento que ya no estaba
+    assert.ok(!e.lineaDeTiempo, como + ": la línea de tiempo quedó abierta y vacía debajo de la portada · " + JSON.stringify(e));
   };
   const reabrir = async (ruta, como) => {
     const ok = await ev(`dzSceneOpen(${JSON.stringify(ruta)})`); await wait(800);

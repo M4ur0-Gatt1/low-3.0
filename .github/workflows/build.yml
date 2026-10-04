@@ -68,6 +68,7 @@ jobs:
           python tools/check_diag_log_backend.py
           python tools/check_perfil_instancias_backend.py
           python tools/check_ui_sin_cache_backend.py
+          python tools/check_recientes_backend.py
       - name: Contratos críticos de interacción 2D
         run: python tools/check_2d_interaction_contracts.py
       - name: Recorridos reales — dibujo, rigging, composición y storyboard

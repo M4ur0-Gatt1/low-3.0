@@ -12232,7 +12232,7 @@ function dzXsRender() {
   // modelo (LowDoc), la renderiza; el render legacy queda sólo como adaptador
   // mientras la escena todavía no se migró. Evita que la x-sheet vieja (basada
   // en archivos) pise la nueva (basada en el modelo).
-  if (DZ.doc && DZ.xsView) { DZ.xsView.render(); return; }
+  if (DZ.doc) { if (DZ.xsView) DZ.xsView.render(); else if (!$("#dzXsheet")?.hidden) void dzXsMount(); return; }   // con documento, NUNCA el adaptador viejo: mirar DZ.xsView antes de su await no alcanzaba, volvía y pisaba la vista con «(vacío)» (misma carrera que dzTlGridRender)
   return dzOpenToonzXsRender();
   /* Implementación histórica conservada temporalmente para compatibilidad. */
   const box = $("#dzXsRows");

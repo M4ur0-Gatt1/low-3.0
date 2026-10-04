@@ -81,6 +81,21 @@ async function main() {
     assert.ok(despues.canonica && despues.masCapa && despues.filasDeCapa >= 1,
       "después de pasar por el adaptador no quedó la vista del documento · " + JSON.stringify(despues));
 
+    // ── 3. LA X-SHEET TIENE LA MISMA CARRERA ─────────────────────────────────
+    //    Medido el 3-oct-2026 en la app real, abriendo un .low desde la portada:
+    //    la X-sheet decía «(vacío)» con columnas F / CAM / Notas —el adaptador
+    //    viejo— aunque el documento tenía dos capas. `dzXsRender` miraba
+    //    DZ.xsView arriba, se iba a esperar al puente y al volver pisaba la vista.
+    const xs = await ev(`(async()=>{ if (typeof dzXsSetVisible === "function") dzXsSetVisible(true);
+      await new Promise(r=>setTimeout(r,500)); DZ.xsView = null; await dzXsRender();
+      await new Promise(r=>setTimeout(r,800)); const box = document.querySelector("#dzXsRows");
+      return { vieja: !!box.querySelector(".dz-xs-head"), vacio: /\(vacío\)/.test(box.textContent),
+        capas: DZ.doc.scene.layers.map(l => l.name).filter(n => box.textContent.includes(n)).length,
+        total: DZ.doc.scene.layers.length }; })()`);
+    assert.ok(!xs.vieja && !xs.vacio,
+      "el adaptador viejo de la X-sheet pisó la vista del documento: dice «(vacío)» con un documento abierto · " + JSON.stringify(xs));
+    assert.equal(xs.capas, xs.total, "la X-sheet no muestra las capas del documento · " + JSON.stringify(xs));
+
     const graves = errores.filter((e) => !/ResizeObserver/.test(String(e)));
     assert.deepEqual(graves.slice(0, 3), [], "hubo excepciones durante el recorrido");
     console.log("E2E una sola vista de línea de tiempo OK " + JSON.stringify({ abierta, despues }));

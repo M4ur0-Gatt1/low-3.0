@@ -10,6 +10,8 @@ const pageUrl=process.argv[3]||'http://127.0.0.1:8791/ui/index.html?mock=1';
  for(let i=0;i<100;i++){if(await ev('typeof api!=="undefined" && !!api && typeof dzDocumentNew==="function"'))break;await new Promise(r=>setTimeout(r,100));}
  await ev('(async()=>{await dzDocumentNew();if(typeof closeL3d==="function")closeL3d();await dzEnsureAnimationWorkspace();})()');await new Promise(r=>setTimeout(r,700));
  const check=(v,m)=>{if(!v)throw Error(m)};
+ // Interpretar vive en el menú Animación (v3.2): se abre como lo abre un usuario.
+ const abrirInterpretar=async()=>{await click('[data-menu="animacion"]');await new Promise(r=>setTimeout(r,150));await click('#lowInterpretarOpen');await new Promise(r=>setTimeout(r,150));};
  const click=async selector=>{const box=await ev(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('Missing target');const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);await send('Input.dispatchMouseEvent',{type:'mousePressed',...box,button:'left',clickCount:1});await send('Input.dispatchMouseEvent',{type:'mouseReleased',...box,button:'left',clickCount:1});};
  await ev(`window.rhythmBefore=JSON.stringify(DZ.doc.scene.toJSON());lowInterpretar({sample:true});`);
  check(await ev(`document.querySelector('#lowInterpretar').open && document.querySelectorAll('.rhythm-pose').length===7`),'demo opens');
@@ -31,14 +33,14 @@ const pageUrl=process.argv[3]||'http://127.0.0.1:8791/ui/index.html?mock=1';
  if(process.argv[4]){const shot=await send('Page.captureScreenshot',{format:'png'});require('fs').writeFileSync(process.argv[4],Buffer.from(shot.result.data,'base64'));}
  await click('[data-action="close"]');
  await ev(`(()=>{const d=DZ.doc;d.writeDrawing('<circle cx="300" cy="300" r="100" fill="#ed7049"/>');const next=d.level.addDrawing(d.level.nextNumber(),'<circle cx="600" cy="300" r="100" fill="#ed7049"/>');d.layer.cells=[d.cell,d.cell,next.number,next.number];d.emit('frame');DZ.history.clear();})()`);
- await click('#lowInterpretarOpen');
+ await abrirInterpretar();
  check(await ev(`!!document.querySelector('#lowInterpretar')`),'real launcher');
  await ev('DZ.history.clear()');
  await ev(`(()=>{const e=document.querySelector('.rhythm-pose input');e.value=3;e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
  await click('[data-action="apply"]');
  check(await ev(`!document.querySelector('#lowInterpretar') && DZ.history.undoStack.length===1 && DZ.doc.layer.cells[2]===DZ.doc.layer.cells[0]`),'apply real scene atomic');
  check(await ev(`(()=>{DZ.history.undo();const good=DZ.doc.layer.cells[2]!==DZ.doc.layer.cells[0];DZ.history.redo();return good && DZ.doc.layer.cells[2]===DZ.doc.layer.cells[0];})()`),'undo redo');
- await click('#lowInterpretarOpen');await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+ await abrirInterpretar();await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
  check(await ev(`!document.querySelector('#lowInterpretar')`),'Escape closes');
  console.log('RHYTHM UI OK: demo, fixed duration, playback, browser key events, isolation, apply, Undo/Redo, Escape');
  ws.close();await fetch(endpoint+'/json/close/'+t.id);

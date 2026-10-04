@@ -172,9 +172,13 @@
     dialog.showModal();buttons.play.focus();
   }
   global.lowInterpretar=open;
+  /* Interpretar vive en el MENÚ (Animación -> Interpretar el ritmo…), como
+     herramienta: Mauro pidió que no sea la portada ni un botón más en la barra.
+     El item del menú trae el id de siempre; acá sólo se le da su acción. */
   function install(){
-    const close=document.querySelector('#dzClose');if(!close||document.querySelector('#lowInterpretarOpen'))return;
-    const button=document.createElement('button');button.id='lowInterpretarOpen';button.className='ibtn rhythm-launch';button.innerHTML='<svg class="ico"><use href="#i-rhythm"/></svg>';button.title='Interpretar: ensayar el ritmo de la capa y comparar antes de aplicar';button.setAttribute('aria-label',button.title);button.onclick=()=>open();close.before(button);
+    const item=document.querySelector('#lowInterpretarOpen');if(!item||item.__interpretar)return;
+    item.__interpretar=true;item.title='Ensayar el ritmo de la capa y comparar antes de aplicar';
+    item.addEventListener('mousedown',event=>{if(event.button!==0)return;event.preventDefault();item.closest('.dz-menu')?.classList.remove('open');open();});   // mousedown, como el resto del menú: el menú se cierra antes del click
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })(window);

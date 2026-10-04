@@ -7,41 +7,97 @@
   display: grid; place-items: center; padding: 24px;
   /* No tapa el lienzo con un color: lo atenúa, para que se entienda que el
      estudio ya está acá y sólo falta el documento. */
-  background: radial-gradient(ellipse at center,
-    rgba(21, 21, 20, .92) 0%, rgba(21, 21, 20, .74) 70%, rgba(21, 21, 20, .55) 100%);
+  background: var(--bg, #0B0B0C);   /* liso: detrás no hay documento, y la sombra de la hoja vacía asomaba */
   font: 400 13px/1.5 Figtree, sans-serif; color: var(--txt, #e9ebe8);
 }
-.bien2d-cuerpo { max-width: 420px; text-align: center; }
-.bien2d h2 {
-  margin: 0 0 6px; font: 600 20px/1.2 Figtree, sans-serif;
-  color: var(--txt, #e9ebe8); letter-spacing: -.01em;
+/* LA PORTADA (v3.2): una tarjeta de programa de animación con la FORMA de
+   Moho —barra de título, columnas— y la paleta de LOW: negro, naranja, celeste. Empezar a la izquierda, lo
+   reciente a la derecha. El experimento «Interpretar» ya no está acá: vive en
+   Animación -> Interpretar el ritmo…, como herramienta. */
+.bien2d-cuerpo {
+  width: min(720px, 100%); text-align: left;
+  background: var(--panel, #131315); border: 1px solid var(--line, rgba(255,255,255,.08)); border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .04);
+  overflow: hidden;
 }
-.bien2d p { margin: 0 0 18px; color: var(--mut, #8a93a6); font-size: 12.5px; }
-.bien2d-acciones { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; }
-.bien2d-acciones button {
-  padding: 9px 17px; border-radius: 9px; cursor: pointer;
-  background: var(--panel2, #24262c); color: var(--txt, #e9ebe8);
-  border: 1px solid var(--line, #2a2d35);
+.bien2d-cabecera {
+  display: flex; align-items: center; gap: 14px; padding: 16px 20px;
+  background: var(--panel2, #19191C); border-bottom: 1px solid var(--line, rgba(255,255,255,.08));
+}
+.bien2d-logo {
+  flex: none; display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 8px; background: #F0450E; color: #fff;
+  font: 800 13px/1 Figtree, sans-serif; letter-spacing: .04em;
+}
+.bien2d h2 {
+  margin: 0 0 2px; font: 600 17px/1.2 Figtree, sans-serif;
+  color: var(--txt, #F4F4F2); letter-spacing: -.005em;
+}
+.bien2d .bien2d-cabecera p { margin: 0; color: var(--mut, #98988F); font-size: 12px; }
+.bien2d-grilla { display: grid; grid-template-columns: 1fr 1fr; }
+.bien2d-col { padding: 16px 20px 18px; min-width: 0; }
+.bien2d-col + .bien2d-col { border-left: 1px solid var(--line, rgba(255,255,255,.08)); }
+.bien2d h3 {
+  margin: 0 0 10px; color: var(--mut, #98988F);
+  font: 600 10px/1 Figtree, sans-serif; letter-spacing: .12em; text-transform: uppercase;
+}
+.bien2d-acciones { display: flex; flex-direction: column; gap: 8px; }
+.bien2d-acciones button,
+.bien2d-lista button {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: 4px; cursor: pointer;
+  background: var(--panel2, #19191C); color: var(--txt, #F4F4F2); border: 1px solid var(--line, rgba(255,255,255,.08));
   font: 500 12.5px Figtree, sans-serif;
 }
-.bien2d-acciones button:hover { border-color: var(--accent, #F0450E); }
-.bien2d-acciones .bien2d-primario {
-  background: var(--accent, #F0450E); border-color: var(--accent, #F0450E); color: #fff;
+.bien2d-acciones button .ico,
+.bien2d-lista button .ico { flex: none; width: 18px; height: 18px; color: var(--mut, #98988F); }
+.bien2d-acciones button span,
+.bien2d-lista button span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bien2d-acciones button b,
+.bien2d-lista button b { font-weight: 600; color: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bien2d-acciones button small,
+.bien2d-lista button small { font-size: 11px; color: var(--mut, #98988F); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bien2d-acciones button:hover,
+.bien2d-lista button:hover { border-color: #33B5E8; }
+.bien2d-acciones .bien2d-primario { background: #F0450E; border-color: #F0450E; color: #fff; }
+.bien2d-acciones .bien2d-primario .ico,
+.bien2d-acciones .bien2d-primario small { color: rgba(255, 255, 255, .85); }
+.bien2d-acciones .bien2d-primario:hover { background: #ff5a22; border-color: #ff5a22; }
+.bien2d-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px;
+  max-height: 240px; overflow-y: auto; }
+.bien2d-lista button { padding: 7px 10px; background: transparent; border-color: transparent; }
+.bien2d-lista button:hover { background: var(--panel2, #19191C); border-color: rgba(51,181,232,.45); }
+.bien2d-lista button:hover .ico { color: #33B5E8; }
+.bien2d-pie {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 20px; background: var(--panel2, #19191C); border-top: 1px solid var(--line, rgba(255,255,255,.08));
 }
-.bien2d-acciones .bien2d-primario:hover { filter: brightness(1.08); }
+.bien2d-pie .bien2d-espera { margin: 0; }
 .bien2d-agente {
-  margin-top: 14px; padding: 4px 8px; border: 0; border-radius: 6px; cursor: pointer;
-  background: transparent; color: var(--mut, #8a93a6);
+  margin: 0; padding: 4px 6px; border: 0; border-radius: 4px; cursor: pointer;
+  background: transparent; color: var(--mut, #98988F);
   font: 400 11.5px Figtree, sans-serif; text-decoration: underline;
   text-decoration-color: rgba(255, 255, 255, .18); text-underline-offset: 3px;
 }
-.bien2d-agente:hover { color: var(--txt, #e9ebe8); }
+.bien2d-agente:hover { color: var(--txt, #F4F4F2); }
+/* sin recientes, la columna de empezar ocupa todo */
+.bien2d-grilla:has(.bien2d-recientes[hidden]) { grid-template-columns: 1fr; }
+.bien2d-grilla:has(.bien2d-recientes[hidden]) .bien2d-col { max-width: 380px; margin: 0 auto; width: 100%; }
+@media (max-width: 760px) {
+  .bien2d-grilla { grid-template-columns: 1fr; }
+  .bien2d-col + .bien2d-col { border-left: 0; border-top: 1px solid var(--line, rgba(255,255,255,.08)); }
+}
+@media (max-height: 600px) {
+  .bien2d-cabecera { padding: 10px 16px; }
+  .bien2d-col { padding: 10px 16px 12px; }
+  .bien2d-lista { max-height: 150px; }
+}
 
 /* EL RESCATE ANTE CAÍDA. Se muestra sólo cuando hay algo de verdad que
    recuperar, y se ve distinto de las dos acciones de arriba: no es «empezar»,
    es «no perder lo de ayer». */
 .bien2d-rescate {
-  margin: 16px auto 0; max-width: 360px; padding: 10px 12px;
+  margin: 12px 0 0; padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--accent, #F0450E) 45%, transparent);
   border-radius: 10px;
   background: color-mix(in srgb, var(--accent, #F0450E) 8%, transparent);

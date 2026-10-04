@@ -51,7 +51,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.1.2"
+LOW_VERSION = "3.2.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -1384,6 +1384,15 @@ class Api:
         s._push("ws", {"ws": s.ws, "tree": s._tree(), "branch": s._git_branch()})
         return {"path": str(outdir), "name": limpio + ".xml",
                 "frames": len(frames_png or []), "audio": bool(wav_b64)}
+
+    def recent_documents(s, limite=8):
+        """Los .low del proyecto, del mas nuevo al mas viejo: la portada los
+        ofrece para seguir donde se dejo. Sin proyecto abierto no hay lista (no
+        se adopta una carpeta solo para mirar). La lectura vive en recientes.py."""
+        if not s.ws:
+            return []
+        from recientes import documentos_recientes
+        return documentos_recientes(s.ws, IGNORE_DIRS, limite)
 
     def export_capacidades(s):
         """Que salidas de video andan en ESTA maquina: el dialogo de exportar lo

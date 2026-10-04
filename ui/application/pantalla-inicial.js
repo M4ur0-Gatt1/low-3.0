@@ -157,8 +157,23 @@
       quitarInvitacion();
       return true;
     }
-    if (vista) { vista.hidden = false; pintarInvitacion(); return true; }
+    if (vista) { vista.hidden = false; plegarLoDelDocumento(); pintarInvitacion(); return true; }
     return typeof global.designEntry === "function" ? global.designEntry() : false;
+  }
+
+  /* SIN DOCUMENTO, LA PORTADA QUEDA LIMPIA, como al arrancar. Medido en la app
+     real: al cerrar el último documento la línea de tiempo seguía abierta y
+     vacía —«8 cuadro(s)», «2/2» de un documento que ya no estaba— y el panel de
+     la X-sheet colgando. Al abrir o crear otro documento, el espacio de trabajo
+     las vuelve a encender (dzSceneOpen / dzEnsureAnimationWorkspace). */
+  function plegarLoDelDocumento() {
+    for (const sel of ["#dzTimeline", "#dzTlGrid", "#dzOnionPanel", "#dzLevelStrip"]) {
+      const n = document.querySelector(sel);
+      if (n) n.hidden = true;
+    }
+    try { if (typeof global.dzXsSetVisible === "function") global.dzXsSetVisible(false); } catch (_) { /* vista */ }
+    try { if (typeof global.dzAnimationDock === "function") global.dzAnimationDock(false); } catch (_) { /* vista */ }
+    try { global.LOW?.panels?.lineaDeTiempoPestania?.pintar?.(); } catch (_) { /* la pestaña es vista */ }
   }
 
   /** CAMBIAR DE PANTALLA CIERRA EL 3D, y esto no es por prolijidad.
@@ -237,24 +252,41 @@
     const caja = document.createElement("div");
     caja.id = ID_INVITACION;
     caja.className = "bien2d";
+    /* LA PORTADA ES EL ESTUDIO, NO UN EXPERIMENTO. Hasta la v3.1 la primera
+       pantalla promocionaba «Interpretar / Experimento 01» con un botón propio;
+       Mauro pidió que eso viva en el menú (Animación -> Interpretar el ritmo…)
+       como herramienta, y que la portada sea la de un programa de animación:
+       empezar, abrir, lo reciente. */
     caja.innerHTML = `<div class="bien2d-cuerpo">
-      <h2>LOW · Animación 2D</h2>
-      <p>Dibujo cuadro a cuadro, X-sheet, esqueletos, cámara y multiplano.</p>
-      <section class="rhythm-home"><small>INTERPRETAR / EXPERIMENTO 01</small><h3>Dibujá las poses. <br>Interpretá el tiempo.</h3><p>Un mismo dibujo puede flotar, pesar o golpear. Probá dos ritmos juntos y elegí el que cuenta tu historia.</p><div class="rhythm-home-score" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><button type="button" data-a="interpretar">Probar con una escena de ejemplo →</button></section>
-      <div class="bien2d-acciones">
-        <button type="button" data-a="nuevo" class="bien2d-primario" disabled>Nuevo documento</button>
-        <button type="button" data-a="abrir" disabled>Abrir documento…</button>
+      <header class="bien2d-cabecera">
+        <span class="bien2d-logo" aria-hidden="true">LOW</span>
+        <div><h2>LOW · Animación 2D</h2>
+        <p>Dibujo cuadro a cuadro, X-sheet, esqueletos, cámara y multiplano.</p></div>
+      </header>
+      <div class="bien2d-grilla">
+        <section class="bien2d-col">
+          <h3>Empezar</h3>
+          <div class="bien2d-acciones">
+            <button type="button" data-a="nuevo" class="bien2d-primario" disabled><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span><b>Nuevo documento</b><small>1920 × 1080 · 24 cuadros por segundo</small></span></button>
+            <button type="button" data-a="abrir" disabled><svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg><span><b>Abrir documento…</b><small>un archivo .low de la computadora</small></span></button>
+          </div>
+          <div class="bien2d-rescate" hidden>
+            <p></p>
+            <button type="button" data-a="rescate" disabled>Recuperar lo que quedó sin guardar</button>
+          </div>
+        </section>
+        <section class="bien2d-col bien2d-recientes" hidden>
+          <h3>Recientes</h3>
+          <ul class="bien2d-lista"></ul>
+        </section>
       </div>
-      <div class="bien2d-rescate" hidden>
-        <p></p>
-        <button type="button" data-a="rescate" disabled>Recuperar lo que quedó sin guardar</button>
-      </div>
-      <button type="button" data-a="agente" class="bien2d-agente">o ir a IA y redes</button>
-      <p class="bien2d-espera">Preparando LOW…</p>
+      <footer class="bien2d-pie">
+        <button type="button" data-a="agente" class="bien2d-agente">o ir a IA y redes</button>
+        <p class="bien2d-espera">Preparando LOW…</p>
+      </footer>
     </div>`;
     // Las dos acciones son las del menú Archivo, por su nombre: no hay un
     // segundo camino para crear ni para abrir.
-    caja.querySelector('[data-a="interpretar"]').onclick = () => global.lowInterpretar?.({sample:true});
     caja.querySelector('[data-a="nuevo"]').onclick = () => global.dzMenuAction?.("nuevo");
     caja.querySelector('[data-a="abrir"]').onclick = () => global.dzMenuAction?.("escena-abrir");
     caja.querySelector('[data-a="agente"]').onclick = dzIrAlAgente;
@@ -333,6 +365,40 @@
     if (!caja) return;
     caja.querySelectorAll("button[data-a]").forEach((b) => { b.disabled = false; b.hidden = false; });
     caja.querySelector(".bien2d-espera")?.remove();
+    cargarRecientes();
+  }
+
+  /* LO RECIENTE. Los .low del proyecto, del más nuevo al más viejo (el puente
+     los ordena por fecha de modificación). Un clic abre por el mismo camino que
+     «Abrir documento…», con su aviso de cambios sin guardar si hace falta. Sin
+     puente o sin documentos, la columna no aparece: una lista vacía con título
+     parece un error. */
+  async function cargarRecientes() {
+    const caja = document.querySelector("#" + ID_INVITACION);
+    const seccion = caja && caja.querySelector(".bien2d-recientes");
+    if (!seccion) return;
+    let lista = [];
+    try {
+      const a = typeof api !== "undefined" && api ? api : null;
+      const r = a && typeof a.recent_documents === "function" ? await a.recent_documents(8) : null;
+      lista = Array.isArray(r) ? r : [];
+    } catch (_) { lista = []; }
+    lista = lista.filter((d) => d && d.path);
+    if (!lista.length || !caja.isConnected) return;
+    const ul = seccion.querySelector(".bien2d-lista");
+    ul.textContent = "";
+    for (const d of lista.slice(0, 8)) {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.a = "reciente"; b.title = d.path;
+      b.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-film"/></svg><span><b></b><small></small></span>';
+      b.querySelector("b").textContent = String(d.name || soloElNombre(d.path)).replace(/\.low$/i, "");
+      const cuando = cuandoFue(Number(d.mtime) * 1000).replace(/^ · (de )?/, "");
+      b.querySelector("small").textContent = [d.folder, cuando].filter(Boolean).join(" · ");
+      b.onclick = () => global.dzSceneOpen?.(d.path);
+      li.appendChild(b); ul.appendChild(li);
+    }
+    seccion.hidden = false;
   }
 
   function quitarInvitacion() {

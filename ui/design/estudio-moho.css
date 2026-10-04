@@ -1,0 +1,114 @@
+/* ══ EL ESTUDIO 2D CON EL ESTILO DE MOHO, EN LA PALETA DE LOW ═════════════
+   Pedido de Mauro (oct-2026): que el estudio se parezca a Moho en el ESTILO y
+   la LÓGICA —no en los colores—. La paleta es la de LOW, tres colores, la del
+   rayo de Bowie: NEGRO de base, NARANJA y CELESTE.
+
+   De Moho 14 se toma la forma:
+   · herramientas como BALDOSAS con borde fino, en grilla, y la activa encendida;
+   · cada panel con su BARRA DE TÍTULO;
+   · la regla de cuadros como una BANDA propia, distinta de las filas;
+   · las exposiciones como BLOQUES, como las barras de claves de Moho;
+   · la hoja sobre una MESA lisa, sin damero, con sombra;
+   · campos numéricos enmarcados, que se leen de un vistazo.
+
+   Y la lógica de color de Moho, traducida a LOW: Moho usa UN color para «el
+   tiempo» (la regla, las claves, la capa elegida) y otro para «lo que estás
+   tocando». Acá el tiempo es CELESTE y lo que tocás es NARANJA.
+
+   Va en su propia hoja y al FINAL: sólo pinta, no cambia tamaños de lo que
+   las pruebas miden (riel, línea de tiempo, paneles). Sólo tema oscuro. */
+
+body:not(.light) #designView {
+  --low-celeste: #33B5E8;
+  --low-celeste-suave: rgba(51, 181, 232, .16);
+  --low-naranja: #F0450E;
+  --moho-borde: #050506;
+  --moho-baldosa: #1c1c20; --moho-baldosa-borde: rgba(255, 255, 255, .08);
+  --moho-barra: #19191c;
+}
+
+/* ── barras de arriba ─────────────────────────────────────────────────── */
+body:not(.light) #designView .dz-menubar,
+body:not(.light) #designView .dz-optionsbar,
+body:not(.light) #designView .dz-document-tabs { border-bottom: 1px solid var(--moho-borde); }
+body:not(.light) #designView .dz-dd { border-radius: 4px; box-shadow: 0 12px 30px rgba(0, 0, 0, .6); }
+body:not(.light) #designView .dz-ws-tab { border-radius: 3px; }
+body:not(.light) #designView .dz-ws-tab.active { box-shadow: inset 0 -2px 0 var(--low-naranja); }
+body:not(.light) #designView .dz-document-tab { border-radius: 4px 4px 0 0; }
+body:not(.light) #designView .dz-document-tab.active { box-shadow: inset 0 2px 0 var(--low-naranja); }
+
+/* campos numéricos enmarcados: el «Frame [40] of [60]» de Moho, en negro */
+body:not(.light) #designView .dz-toolopts input[type="number"],
+body:not(.light) #designView .dz-timeline .tl-field input {
+  background: #050506; color: var(--txt);
+  border: 1px solid rgba(255, 255, 255, .14); border-radius: 2px;
+  font-variant-numeric: tabular-nums;
+}
+body:not(.light) #designView .dz-toolopts input[type="number"]:focus,
+body:not(.light) #designView .dz-timeline .tl-field input:focus { border-color: var(--low-celeste); }
+
+/* ── el riel de herramientas: baldosas, como la caja de Moho ──────────── */
+body:not(.light) #designView .dz-tools { border-right: 1px solid var(--moho-borde); }
+body:not(.light) #designView .dz-tools .ibtn,
+body:not(.light) #designView .dz-tools-drawer .ibtn {
+  background: var(--moho-baldosa); border: 1px solid var(--moho-baldosa-borde);
+  border-radius: 3px;
+}
+body:not(.light) #designView .dz-tools .ibtn:hover,
+body:not(.light) #designView .dz-tools-drawer .ibtn:hover {
+  background: #26262b; border-color: rgba(255, 255, 255, .16);
+}
+/* la herramienta activa ENCENDIDA, no apenas teñida */
+body:not(.light) #designView .dz-tools .ibtn.active,
+body:not(.light) #designView .dz-tools-drawer .ibtn.active {
+  background: var(--low-naranja); border-color: var(--low-naranja); color: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5);
+}
+body:not(.light) #designView .dz-tools .dz-tools-more { background: transparent; border-color: transparent; }
+
+/* ── la mesa: lisa, la hoja manda ─────────────────────────────────────── */
+body:not(.light) #designView .dz-canvas,
+body:not(.light) #designView.dz-zen .dz-canvas { background: #08080a; background-image: none; }
+body:not(.light) #designView #dzCanvas > svg {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .05), 0 16px 44px rgba(0, 0, 0, .7);
+}
+
+/* ── paneles: barra de título, como en Moho ───────────────────────────── */
+body:not(.light) #designView .dz-op-head {
+  background: var(--moho-barra); border-bottom: 1px solid var(--moho-borde);
+}
+body:not(.light) #designView .dz-op-head .ico { color: var(--low-celeste); }
+body:not(.light) #designView .dz-inspector,
+body:not(.light) #designView .dz-animation-dock { border-left: 1px solid var(--moho-borde); }
+
+/* ── la línea de tiempo ───────────────────────────────────────────────── */
+body:not(.light) #designView .dz-tl-pestania,
+body:not(.light) #designView .dz-timeline { border-top: 1px solid var(--moho-borde); }
+/* la REGLA es una banda propia: el tiempo, en celeste */
+body:not(.light) #designView .tl2-ruler {
+  background: linear-gradient(var(--low-celeste-suave), var(--low-celeste-suave)), var(--moho-barra);
+  border-bottom: 1px solid rgba(51, 181, 232, .35);
+}
+body:not(.light) #designView .tl2-ruler .tl2-tick { color: #cdeaf7; }
+body:not(.light) #designView .tl2-ruler .tl2-tick.seg { border-left-color: rgba(51, 181, 232, .3); }
+body:not(.light) #designView .tl2-ruler .tl2-name { background: var(--moho-barra); }
+body:not(.light) #designView .tl2-row { border-bottom-color: rgba(255, 255, 255, .04); }
+/* la capa elegida, marcada en celeste como la de Moho en su color */
+body:not(.light) #designView .tl2-row.sel .tl2-name {
+  background: rgba(51, 181, 232, .12); box-shadow: inset 3px 0 0 var(--low-celeste);
+}
+/* las exposiciones como BLOQUES: donde empieza un dibujo, sólido; el hold, tenue */
+body:not(.light) #designView .tl2-cell.llena,
+body:not(.light) #designView .tl2-cell.hold { background: rgba(51, 181, 232, .12); }
+body:not(.light) #designView .tl2-cell.inicio {
+  background: rgba(51, 181, 232, .38); color: #fff; border-left-color: var(--low-celeste);
+}
+/* el cuadro actual: lo que estás tocando, en naranja */
+body:not(.light) #designView .tl2-tick.actual,
+body:not(.light) #designView .tl2-cell.actual { background: rgba(240, 69, 14, .32); }
+body:not(.light) #designView .tl2-cell.inicio.actual { background: rgba(240, 69, 14, .62); }
+body:not(.light) #designView .tl2-addlayer { border-radius: 3px; }
+
+/* ── abajo ────────────────────────────────────────────────────────────── */
+body:not(.light) #designView .dz-dock,
+body:not(.light) #designView .dz-statusbar { border-top: 1px solid var(--moho-borde); }
