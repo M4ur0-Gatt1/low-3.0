@@ -2697,6 +2697,8 @@ footer #ver { color: var(--mut); border-color: transparent; background: var(--pa
 .tl2-cell.hold::before { content: ""; width: 100%; height: 1px; background: rgba(255,255,255,.25); }
 .tl2-cell:hover { outline: 1px solid var(--accent, #F0450E); outline-offset: -1px; }
 .tl2-cell.rango { background: rgba(240,69,14,.14); box-shadow: inset 0 0 0 1px rgba(240,69,14,.48); }
+.tl2-cell.destino { box-shadow: inset 0 0 0 2px rgba(51,181,232,.85); }
+.tl2-marco { position: absolute; z-index: 6; pointer-events: none; border: 1px solid rgba(240,69,14,.9); background: rgba(240,69,14,.08); border-radius: 2px; }
 /* SUSTITUCIONES: el cambio de dibujo se lee fuerte; el sostenido, tenue. Sin
    distinguirlos no se ve cuánto dura cada dibujo, que es de lo que se trata. */
 .tl2-row.tl2-swap .tl2-name { color: #9ad1b0; }

@@ -130,6 +130,20 @@
       return true;
     },
 
+    /** CORRER un rango `desplazamiento` cuadros: el cuadro que se agarró queda
+     *  donde se soltó (arrastrar una selección). Como `move`, no destruye nada:
+     *  el bloque sale y vuelve a entrar, lo demás se corre. */
+    shift(layer, from, to, desplazamiento) {
+      if (layer.locked || !desplazamiento) return false;
+      const bloque = read(layer, from, to);
+      ops.remove(layer, from, to);
+      const d = Math.max(1, from + desplazamiento);
+      ops.insert(layer, d, bloque.length);
+      write(layer, d, bloque);
+      trim(layer);
+      return true;
+    },
+
     /** REPETIR el rango `veces` más (ciclos). */
     repeat(layer, from, to, veces = 1) {
       if (layer.locked || veces < 1) return false;

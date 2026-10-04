@@ -128,6 +128,7 @@
           if (!lv) continue;
           lv.drawings = item.drawings.map((d) => new animation.Drawing(d));
         }
+        if (snap.sel) doc.cellSelection = { ...snap.sel };   // mover: la selección vuelve con el bloque
         doc.touch(); doc.emit("cells"); doc.emit("level"); doc.emit("frame");
       };
       this.history.push({ label, domain: "anim", before, after,
@@ -907,6 +908,30 @@
       const after = this._snapshot(ids, []);
       if (JSON.stringify(before) === JSON.stringify(after)) return false;
       this._histRange("Insertar " + (r.to - r.from + 1) + " celdas", before, after);
+      this.touch(); this.emit("cells"); this.emit("frame");
+      return true;
+    }
+
+    /** MOVER una selección (o un hold) arrastrándola: todas sus capas se corren
+     *  `desplazamiento` cuadros y la selección la acompaña. Antes el arrastre
+     *  llevaba sólo el hold que estaba bajo el puntero y lo soltaba un bloque
+     *  antes de donde se soltó (medido en el LOW.exe 3.2.2: 1-2-3-4 quedaba
+     *  2-3-1-4). Un solo paso de historial. */
+    moveCellsInRange(sel, desplazamiento) {
+      const r = this._rangoSeleccion(sel);
+      if (!r || !r.capas.length || !desplazamiento) return false;
+      desplazamiento = Math.max(1 - r.from, desplazamiento);
+      if (!desplazamiento) return false;
+      const ids = r.capas.map((l) => l.id), before = this._snapshot(ids, []);
+      r.capas.forEach((ly) => animation.exposures.shift(ly, r.from, r.to, desplazamiento));
+      const after = this._snapshot(ids, []);
+      if (JSON.stringify(before) === JSON.stringify(after)) return false;
+      if (sel && this.cellSelection) {
+        this.cellSelection = { ...sel, from: r.from + desplazamiento, to: r.to + desplazamiento,
+          anchorFrame: (sel.anchorFrame != null ? sel.anchorFrame : r.from) + desplazamiento };
+        before.sel = { ...sel }; after.sel = { ...this.cellSelection };
+      }
+      this._histRange("Mover " + (r.to - r.from + 1) + (r.to === r.from ? " cuadro" : " cuadros"), before, after);
       this.touch(); this.emit("cells"); this.emit("frame");
       return true;
     }

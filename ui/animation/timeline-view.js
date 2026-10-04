@@ -567,15 +567,17 @@
             + (f === doc.frame ? " actual" : "");
           if (inicio) c.textContent = String(v);
           c.title = v == null ? `Frame ${f}` : `Frame ${f} · dibujo ${v}${hold ? " (sostenido)" : ""}`;
-          /* SELECCIONAR VARIOS CUADROS arrastrando, como en Harmony: apretar
-             sobre una celda y arrastrar marca un rectángulo, que cruza capas.
-             Arrastrar DESDE un bloque que ya está seleccionado lo mueve (lo de
-             siempre). Pedido de Mauro (oct-2026). */
-          c.onpointerdown = (e) => this._seleccionarArrastrando(e, ly.id, f, inicio);
+          /* SELECCIONAR VARIOS CUADROS con un CUADRO SELECTOR: arrastrar dibuja
+             el rectángulo y selecciona lo que toca, cruzando capas. Arrastrar
+             SIEMPRE selecciona; Shift/Ctrl suman a lo que ya había; Alt+arrastrar
+             mueve la selección. Antes, apretar sobre lo seleccionado lo movía y
+             al querer reseleccionar se desordenaba la escena (pedido de Mauro,
+             oct-2026: «que sea un cuadro selector, más natural»). */
+          c.onpointerdown = (e) => this._seleccionarArrastrando(e, ly.id, f);
           c.onclick = (e) => {
             if (this._recienArrastro) { this._recienArrastro = false; return; }   // el clic que cierra un arrastre no achica la selección
             const prior = doc.cellSelection;
-            if (e.shiftKey && prior) doc.selectCellRange(prior.anchorLayerId, prior.anchorFrame, ly.id, f);
+            if ((e.shiftKey || e.ctrlKey || e.metaKey) && prior) this._sumar(prior, ly.id, f, ly.id, f);
             else doc.selectCellRange(ly.id, f, ly.id, f);
             doc.selectLayer(ly.id); doc.goTo(f); this.render();
           };
@@ -590,25 +592,6 @@
                scrolleada, que es lo habitual en una escena larga). */
             const abrir = () => this._menuCeldas(e);
             if (fuera) requestAnimationFrame(() => requestAnimationFrame(abrir)); else abrir();
-          };
-          // arrastrar un bloque de exposición a otro frame
-          if (inicio) {
-            c.draggable = true;
-            c.ondragstart = (e) => {
-              if (!this._moverBloque) { e.preventDefault(); return; }   // si no se apretó sobre la selección, el gesto es SELECCIONAR
-              e.dataTransfer.setData("text/plain", JSON.stringify({
-                layerId: ly.id, from: ly.holdStart(f), largo: ly.holdLength(f) }));
-              e.dataTransfer.effectAllowed = "move";
-            };
-          }
-          c.ondragover = (e) => { e.preventDefault(); };
-          c.ondrop = (e) => {
-            e.preventDefault();
-            try {
-              const d = JSON.parse(e.dataTransfer.getData("text/plain"));
-              if (d.layerId !== ly.id) return;    // por ahora, dentro de la misma capa
-              doc.apply("move", d.from, d.from + d.largo - 1, f);
-            } catch (_) { /* soltaron cualquier cosa */ }
           };
           track.appendChild(c);
         }
@@ -685,40 +668,125 @@
         if (act && (global.LOW && global.LOW.core && global.LOW.core.scrollDentro)) global.LOW.core.scrollDentro(act, { limite: this.host });
       }
     }
-    /** Arrastrar sobre las celdas marca un rectángulo de selección. */
-    _seleccionarArrastrando(e, layerId, frame, inicio) {
+    /** La selección es un rectángulo: SUMAR es quedarse con el rectángulo
+     *  que abarca lo que había y lo nuevo (el ancla no cambia). */
+    _sumar(prior, l1, f1, l2, f2) {
+      const layers = this.doc.scene.layers, ix = (id) => layers.findIndex((l) => l.id === id);
+      const ls = [ix(prior.fromLayerId), ix(prior.toLayerId), ix(l1), ix(l2)].filter((i) => i >= 0);
+      const lo = Math.min(...ls), hi = Math.max(...ls);
+      const desde = Math.min(prior.from, f1, f2), hasta = Math.max(prior.to, f1, f2);
+      const s = this.doc.selectCellRange(layers[lo].id, desde, layers[hi].id, hasta);
+      if (s) { s.anchorLayerId = prior.anchorLayerId; s.anchorFrame = prior.anchorFrame; }
+      return s;
+    }
+    /** El CUADRO SELECTOR. Las medidas se toman en coordenadas del CONTENIDO
+     *  de la línea de tiempo (.tl2 es la que scrollea): el rectángulo y las
+     *  celdas se mueven juntos aunque se scrollee durante el arrastre. */
+    _seleccionarArrastrando(e, layerId, frame) {
       if (e.button !== 0) return;
-      const doc = this.doc;
-      this._moverBloque = !!(inicio && this._inSelection(layerId, frame));
-      if (this._moverBloque) return;            // el arrastre HTML5 mueve el bloque
-      const prior = doc.cellSelection;
-      const ancla = e.shiftKey && prior ? { l: prior.anchorLayerId, f: prior.anchorFrame } : { l: layerId, f: frame };
-      doc.selectCellRange(ancla.l, ancla.f, layerId, frame);
-      this._pintarSeleccion();
-      let ultimo = layerId + ":" + frame, movio = false;
-      const mover = (ev) => {
-        const el = document.elementFromPoint(ev.clientX, ev.clientY);
-        const cel = el && el.closest && el.closest(".tl2-cell[data-layer-id][data-frame]");
-        if (!cel || !this.host.contains(cel)) return;
-        const clave = cel.dataset.layerId + ":" + cel.dataset.frame;
-        if (clave === ultimo) return;
-        ultimo = clave; movio = true;
-        doc.selectCellRange(ancla.l, ancla.f, cel.dataset.layerId, Number(cel.dataset.frame));
+      const doc = this.doc, cont = this.host && this.host.querySelector(".tl2");
+      if (!cont) return;
+      if (e.altKey) return this._moverArrastrando(e, layerId, frame);
+      e.preventDefault();                       // que no arranque a seleccionar texto
+      const sumar = (e.shiftKey || e.ctrlKey || e.metaKey) && doc.cellSelection ? { ...doc.cellSelection } : null;
+      const punto = (ev) => { const r = cont.getBoundingClientRect(); return { x: ev.clientX - r.left + cont.scrollLeft, y: ev.clientY - r.top + cont.scrollTop }; };
+      const r0 = cont.getBoundingClientRect();
+      const enCont = (el) => { const r = el.getBoundingClientRect(); return { l: r.left - r0.left + cont.scrollLeft, r: r.right - r0.left + cont.scrollLeft, t: r.top - r0.top + cont.scrollTop, b: r.bottom - r0.top + cont.scrollTop }; };
+      // las filas (capa -> alto) y las columnas (cuadro -> ancho), una vez por arrastre
+      const filas = [], columnas = [];
+      cont.querySelectorAll(".tl2-row").forEach((fila) => {
+        const c1 = fila.querySelector(".tl2-cell[data-layer-id]");
+        if (!c1) return;
+        const m = enCont(c1);
+        filas.push({ id: c1.dataset.layerId, t: m.t, b: m.b });
+        if (!columnas.length) fila.querySelectorAll(".tl2-cell[data-layer-id]").forEach((c) => { const k = enCont(c); columnas.push({ f: Number(c.dataset.frame), l: k.l, r: k.r }); });
+      });
+      const ini = punto(e);
+      let marco = null, movio = false;
+      const seleccionar = (p) => {
+        const x1 = Math.min(ini.x, p.x), x2 = Math.max(ini.x, p.x), y1 = Math.min(ini.y, p.y), y2 = Math.max(ini.y, p.y);
+        const fs = filas.filter((q) => q.b > y1 && q.t < y2), cs = columnas.filter((q) => q.r > x1 && q.l < x2);
+        const la = fs.length ? fs[0].id : layerId, lb = fs.length ? fs[fs.length - 1].id : layerId;
+        const fa = cs.length ? cs[0].f : frame, fb = cs.length ? cs[cs.length - 1].f : frame;
+        if (sumar) this._sumar(sumar, la, fa, lb, fb);
+        else { const s = doc.selectCellRange(la, fa, lb, fb); if (s) { s.anchorLayerId = layerId; s.anchorFrame = frame; } }
         this._pintarSeleccion();
+        if (marco) Object.assign(marco.style, { left: x1 + "px", top: y1 + "px", width: (x2 - x1) + "px", height: (y2 - y1) + "px" });
+      };
+      if (sumar) this._sumar(sumar, layerId, frame, layerId, frame);
+      else doc.selectCellRange(layerId, frame, layerId, frame);
+      this._pintarSeleccion();
+      const mover = (ev) => {
+        const p = punto(ev);
+        if (!movio && Math.hypot(p.x - ini.x, p.y - ini.y) < 4) return;
+        if (!movio) {
+          movio = true;
+          if (getComputedStyle(cont).position === "static") cont.style.position = "relative";
+          marco = document.createElement("div"); marco.className = "tl2-marco";
+          cont.appendChild(marco);
+        }
+        // cerca del borde, la línea de tiempo se corre sola para seguir seleccionando
+        const r = cont.getBoundingClientRect();
+        if (ev.clientX > r.right - 24) cont.scrollLeft += 16; else if (ev.clientX < r.left + 24) cont.scrollLeft -= 16;
+        seleccionar(punto(ev));
       };
       const soltar = () => {
         document.removeEventListener("pointermove", mover);
         document.removeEventListener("pointerup", soltar);
-        if (movio) {
-          this._recienArrastro = true;
-          setTimeout(() => { this._recienArrastro = false; }, 0);
-          const s = doc.cellSelection;
-          if (s) { doc.selectLayer(s.anchorLayerId); doc.goTo(s.anchorFrame); }
-          if (this.status && s) this.status(this._medidaSeleccion() + " seleccionadas · clic derecho para las acciones");
-        }
+        document.removeEventListener("pointercancel", soltar);
+        if (marco) marco.remove();
+        if (!movio) return;                      // fue un clic: lo resuelve onclick
+        this._recienArrastro = true;
+        setTimeout(() => { this._recienArrastro = false; }, 0);
+        const s = doc.cellSelection;
+        if (s) { doc.selectLayer(s.anchorLayerId); doc.goTo(s.anchorFrame); }
+        if (this.status && s) this.status(this._medidaSeleccion() + " seleccionados · clic derecho para las acciones · Alt+arrastrar para mover");
       };
       document.addEventListener("pointermove", mover);
       document.addEventListener("pointerup", soltar);
+      document.addEventListener("pointercancel", soltar);
+    }
+    /** Alt+arrastrar MUEVE: la selección entera (todas sus capas), o el hold
+     *  que está bajo el puntero si no estaba seleccionado. El cuadro que se
+     *  agarró queda donde se suelta; mientras se arrastra se ve el destino. */
+    _moverArrastrando(e, layerId, frame) {
+      const doc = this.doc;
+      e.preventDefault();
+      if (!this._inSelection(layerId, frame) || !doc.cellSelection) {
+        const ly = doc.scene.layer(layerId);
+        if (!ly || ly.cellAt(frame) == null) return;
+        const desde = ly.holdStart(frame);
+        doc.selectCellRange(layerId, desde, layerId, desde + ly.holdLength(frame) - 1);
+        this._pintarSeleccion();
+      }
+      const sel = { ...doc.cellSelection };
+      let destino = frame;
+      const mover = (ev) => {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const cel = el && el.closest && el.closest(".tl2-cell[data-frame]");
+        if (!cel || !this.host.contains(cel)) return;
+        const f = Number(cel.dataset.frame);
+        if (f === destino) return;
+        destino = f;
+        const d = Math.max(1 - sel.from, destino - frame);
+        this.host.querySelectorAll(".tl2-cell[data-layer-id][data-frame]").forEach((c) => {
+          const fr = Number(c.dataset.frame);
+          c.classList.toggle("destino", d !== 0 && this._inSelection(c.dataset.layerId, fr - d));
+        });
+      };
+      const soltar = () => {
+        document.removeEventListener("pointermove", mover);
+        document.removeEventListener("pointerup", soltar);
+        document.removeEventListener("pointercancel", soltar);
+        this.host.querySelectorAll(".tl2-cell.destino").forEach((c) => c.classList.remove("destino"));
+        if (destino === frame) return;
+        this._recienArrastro = true;
+        setTimeout(() => { this._recienArrastro = false; }, 0);
+        if (doc.moveCellsInRange(sel, destino - frame) && this.status) this.status(this._medidaSeleccion() + " movidos");
+      };
+      document.addEventListener("pointermove", mover);
+      document.addEventListener("pointerup", soltar);
+      document.addEventListener("pointercancel", soltar);
     }
     /** Repinta SÓLO la marca de selección: rehacer toda la grilla en cada
      *  celda que cruza el arrastre sería trabajo de más. */
