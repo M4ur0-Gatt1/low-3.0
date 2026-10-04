@@ -3848,7 +3848,7 @@ function dzFromUser(x, y) {
    valores del papel cebolla no cambian" + trazos fantasma) */
 const DZ_UI_SEL = ".dz-onionpanel,.dz-zpanel,.dz-xsheet,.dz-tlgrid,.dz-disc," +
   ".dz-pendbg,.dz3d-gizmo,.dz3d-zbar,.dz3d-zhandle,.dz3d-rothandle,.dz-rulers," +
-  ".dz-selbox,.dz-cam,.dz-rig-overlay,.dz-mesh-overlay,#dzCam,.bien2d,.dz-warp";   // overlays de edición, bienvenida y jaula
+  ".dz-selbox,.dz-cam,.dz-rig-overlay,.dz-mesh-overlay,#dzCam,.bien2d,.dz-warp,#dzComposition3D";   // overlays de edición, bienvenida, jaula y Composición (capturar el puntero ahí le robaba el clic a su barra)
 function dzOnUiPanel(e) {
   return e.target && e.target.closest && e.target.closest(DZ_UI_SEL);
 }

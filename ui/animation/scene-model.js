@@ -1095,6 +1095,22 @@
     "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion",
     "hue", "saturation", "color", "luminosity"];
 
+  /** TONO / LUZ de una capa (como el Tone y el Highlight de Harmony): el dibujo
+   *  de la capa no se ve con sus colores, se usa como MATTE —una silueta— que
+   *  oscurece (sombra, multiplicar) o aclara (luz, trama) lo de abajo, con un
+   *  color, una intensidad y un borde suave. null = la capa se ve normal. */
+  const TONO_DEFECTO = {
+    sombra: { color: "#4b3f6b", amount: 0.55, soft: 0 },
+    luz: { color: "#fff3d6", amount: 0.6, soft: 0 },
+  };
+  function normalizeTone(t) {
+    if (!t || typeof t !== "object" || !TONO_DEFECTO[t.kind]) return null;
+    const d = TONO_DEFECTO[t.kind];
+    const color = /^#[0-9a-f]{6}$/i.test(String(t.color || "")) ? String(t.color).toLowerCase() : d.color;
+    const num = (v, a, b, def) => { const n = Number(v); return Number.isFinite(n) ? Math.max(a, Math.min(b, n)) : def; };
+    return { kind: t.kind, color, amount: num(t.amount, 0, 1, d.amount), soft: num(t.soft, 0, 200, d.soft) };
+  }
+
   class Layer {
     constructor(data = {}) {
       this.id = data.id || uid("ly");
@@ -1110,6 +1126,11 @@
       // Mesa de luz de ESTA capa: se ve lavada para calcar encima. Es de la
       // vista: no cambia el render.
       this.lightTable = !!data.lightTable;
+      // MÁSCARA DE RECORTE: se ve sólo donde hay dibujo en la capa de abajo
+      // que no está recortada (la base), como el clipping de Photoshop y el
+      // Cutter de Harmony. La de más atrás no puede recortarse: no tiene base.
+      this.clip = !!data.clip;
+      this.tone = normalizeTone(data.tone);
       this.cells = Array.isArray(data.cells) ? data.cells.slice() : [];
     }
     /** Celda en un frame (1-based): número de dibujo, o null si está vacía. */
@@ -1153,7 +1174,8 @@
     toJSON() {
       return { id: this.id, name: this.name, levelId: this.levelId, visible: this.visible,
                locked: this.locked, opacity: this.opacity, z: this.z, blend: this.blend,
-               lightTable: this.lightTable, cells: this.cells.slice() };
+               lightTable: this.lightTable, clip: this.clip, tone: this.tone ? { ...this.tone } : null,
+               cells: this.cells.slice() };
     }
   }
 
@@ -1942,6 +1964,8 @@
   animation.Level = Level;
   animation.Layer = Layer;
   animation.LAYER_BLENDS = LAYER_BLENDS;
+  animation.normalizeTone = normalizeTone;
+  animation.TONO_DEFECTO = TONO_DEFECTO;
   animation.Drawing = Drawing;
   animation.Palette = Palette;
   animation.Style = Style;

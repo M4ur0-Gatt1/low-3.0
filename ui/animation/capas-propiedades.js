@@ -83,6 +83,64 @@
     campo("Mesa de luz", luz);
 
     const idx = doc.scene.layers.indexOf(ly), n = doc.scene.layers.length;
+
+    /* MÁSCARA DE RECORTE y TONO/LUZ (como el Cutter y el Tone de Harmony):
+       la sombra se dibuja en su capa y oscurece SÓLO al personaje de abajo. */
+    const sep = document.createElement("h5"); sep.textContent = "Recorte y tono"; el.appendChild(sep);
+    const rec = document.createElement("input");
+    rec.type = "checkbox"; rec.checked = !!ly.clip; rec.dataset.capa = "recorte"; rec.disabled = idx <= 0;
+    rec.title = idx <= 0 ? "La capa de más atrás no tiene ninguna abajo con la que recortarse"
+      : "Se ve sólo donde hay dibujo en la capa de abajo (la base)";
+    rec.onchange = () => doc.setLayerProperty(ly.id, "clip", rec.checked, rec.checked ? "Recortar con la capa de abajo" : "Quitar recorte");
+    campo("Recortar con la de abajo", rec);
+
+    const to = document.createElement("select");
+    to.dataset.capa = "tono";
+    for (const [v, t] of [["", "Ninguno"], ["sombra", "Sombra (tono)"], ["luz", "Luz"]]) {
+      const o = document.createElement("option"); o.value = v; o.textContent = t; to.appendChild(o);
+    }
+    to.value = ly.tone ? ly.tone.kind : "";
+    to.title = "El dibujo de la capa se usa como silueta: oscurece (sombra) o aclara (luz) lo de abajo";
+    const reabrir = () => { const a = ancla; cerrar(); abrir(doc, ly.id, a); };
+    to.onchange = () => {
+      const kind = to.value;
+      const t = kind ? { ...((animation.TONO_DEFECTO || {})[kind] || {}), ...(ly.tone && ly.tone.kind === kind ? ly.tone : {}), kind } : null;
+      doc.setLayerProperty(ly.id, "tone", t, kind ? (kind === "luz" ? "Capa de luz" : "Capa de sombra") : "Quitar tono");
+      reabrir();
+    };
+    campo("Tono / luz", to);
+    if (ly.tone) {
+      const cambiar = (patch, etiqueta) => doc.setLayerProperty(ly.id, "tone", { ...ly.tone, ...patch }, etiqueta);
+      const co = document.createElement("input");
+      co.type = "color"; co.value = ly.tone.color; co.dataset.capa = "tono-color";
+      co.onchange = () => cambiar({ color: co.value }, "Color del tono");
+      campo("Color", co);
+      const am = document.createElement("input");
+      am.type = "range"; am.min = "0"; am.max = "100"; am.step = "1"; am.value = String(Math.round(ly.tone.amount * 100));
+      am.dataset.capa = "tono-intensidad";
+      const amv = document.createElement("span"); amv.textContent = am.value + "%";
+      am.oninput = () => { amv.textContent = am.value + "%"; };
+      am.onchange = () => cambiar({ amount: (+am.value) / 100 }, "Intensidad del tono");
+      campo("Intensidad", am, amv);
+      const su = document.createElement("input");
+      su.type = "range"; su.min = "0"; su.max = "60"; su.step = "1"; su.value = String(Math.round(ly.tone.soft));
+      su.dataset.capa = "tono-suave";
+      const suv = document.createElement("span"); suv.textContent = su.value + " px";
+      su.oninput = () => { suv.textContent = su.value + " px"; };
+      su.onchange = () => cambiar({ soft: +su.value }, "Borde suave del tono");
+      campo("Borde suave", su, suv);
+    }
+    const fila0 = document.createElement("div"); fila0.className = "fila";
+    for (const [kind, texto, titulo] of [["sombra", "＋ Sombra encima", "Una capa nueva, recortada con ésta, para dibujar las sombras"],
+      ["luz", "＋ Luz encima", "Una capa nueva, recortada con ésta, para dibujar las luces"]]) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = texto; b.title = titulo;
+      b.dataset.capa = "nueva-" + kind;
+      b.onclick = () => { const nueva = doc.addToneLayer(ly.id, kind); cerrar();
+        if (nueva && typeof global.dzSetStatus === "function") global.dzSetStatus(" Dibujá las " + (kind === "luz" ? "luces" : "sombras") + " en «" + nueva.name + "»: se ven sólo sobre «" + ly.name + "»"); };
+      fila0.appendChild(b);
+    }
+    el.appendChild(fila0);
+
     const fila = document.createElement("div"); fila.className = "fila";
     const boton = (texto, titulo, fn, clase) => {
       const b = document.createElement("button"); b.type = "button"; b.textContent = texto; b.title = titulo;
@@ -107,7 +165,7 @@
     }, "peligro").disabled = n <= 1;
     el.appendChild(fila2);
     const nota = document.createElement("small");
-    nota.textContent = "La mesa de luz es de la vista: al exportar la capa sale normal. Opacidad y fusión salen igual que se ven.";
+    nota.textContent = "La mesa de luz es de la vista: al exportar la capa sale normal. Opacidad, fusión, recorte y tono salen igual que se ven.";
     el.appendChild(nota);
 
     document.body.appendChild(el);

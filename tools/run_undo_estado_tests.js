@@ -196,6 +196,21 @@ contrato("reexponer un dibujo del nivel en una selección", (d) => {
   assert.deepEqual(capa(d, 0).cells.slice(8, 11), [2, 2, 2]);
   return n;
 }, { creaDibujos: false });
+// RECORTE Y TONO/LUZ (fase 6, oct-2026): propiedades de capa, un paso cada una
+contrato("recortar una capa con la de abajo", (d) => d.setLayerProperty(capa(d, 1).id, "clip", true), { creaDibujos: false });
+contrato("darle tono de sombra a una capa", (d) => {
+  const ok = d.setLayerProperty(capa(d, 1).id, "tone", { kind: "sombra", color: "#203040", amount: 0.4, soft: 6 });
+  assert.deepEqual(capa(d, 1).tone, { kind: "sombra", color: "#203040", amount: 0.4, soft: 6 });
+  return ok;
+}, { creaDibujos: false });
+contrato("un tono inválido no se guarda a medias", (d) => d.setLayerProperty(capa(d, 1).tone ? capa(d, 1).id : capa(d, 1).id, "tone", { kind: "neon" }), { sinCambio: true });
+contrato("«＋ Sombra encima»: capa nueva recortada con tono, en un paso", (d) => {
+  const base = capa(d, 0), ly = d.addToneLayer(base.id, "sombra");
+  assert.ok(ly && ly.clip && ly.tone && ly.tone.kind === "sombra", "la capa de sombra no está recortada con tono");
+  assert.equal(d.scene.layers.indexOf(ly), 1, "la capa de sombra no quedó justo encima de la base");
+  assert.equal(A.recorte ? A.recorte.baseDeRecorte(d.scene.layers, 1) : 0, 0);
+  return ly;
+}, { creaDibujos: false });
 contrato("timing en varias capas a la vez", (d) => d.applySelectedTiming("step", rango(d, 0, 1, 1, 6), 3), { creaDibujos: false });
 contrato("vaciar un rango de dos capas", (d) => d.clearCells(rango(d, 0, 1, 2, 5)), { creaDibujos: false });
 contrato("copiar y pegar exposiciones en la MISMA capa", (d) => d.pasteCells(d.readCells(rango(d, 0, 0, 1, 6)), capa(d, 0).id, 20), { creaDibujos: false });
@@ -270,6 +285,8 @@ prueba("guardar y abrir devuelve el mismo documento", () => {
   const doc = fixture();
   doc.apply("step", 1, 8, 2); doc.goTo(9); doc.writeDrawing(DIB(5)); doc.setPlaybackRange(1, 10);
   doc.setLayerProperty(capa(doc, 1).id, "blend", "multiply");
+  doc.addToneLayer(capa(doc, 0).id, "luz");                       // recorte y tono viajan en el archivo
+  doc.setLayerProperty(capa(doc, 2).id, "clip", true);
   // `savedAt` es la hora de guardado: se compara todo lo demás
   const sinHora = (o) => { const c = JSON.parse(JSON.stringify(o)); delete c.savedAt; return JSON.stringify(c); };
   const texto = JSON.stringify(doc.toJSON());

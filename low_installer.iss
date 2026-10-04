@@ -6,7 +6,7 @@
 ; (el workflow la deriva del tag). El default acá es solo para builds manuales
 ; y debe coincidir con LOW_VERSION en main.py.
 #ifndef AppVersion
-  #define AppVersion "3.2.4"
+  #define AppVersion "3.3.0"
 #endif
 #define AppExe "LOW.exe"
 #define AppExt ".low"

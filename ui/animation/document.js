@@ -225,14 +225,15 @@
 
     setLayerProperty(id, key, value, label) {
       const ly = this.scene.layer(id);
-      if (!ly || !["name", "visible", "locked", "opacity", "z", "blend", "lightTable"].includes(key)) return false;
+      if (!ly || !["name", "visible", "locked", "opacity", "z", "blend", "lightTable", "clip", "tone"].includes(key)) return false;
       // los valores se normalizan IGUAL que al cargar: si no, una fusión inválida
       // se vería en la sesión y desaparecería al reabrir
       if (key === "blend" && !animation.LAYER_BLENDS.includes(value)) return false;
       if (key === "opacity") value = Math.max(0, Math.min(1, Number(value) || 0));
-      if (key === "lightTable" || key === "visible" || key === "locked") value = !!value;
+      if (key === "lightTable" || key === "visible" || key === "locked" || key === "clip") value = !!value;
+      if (key === "tone") value = animation.normalizeTone(value);
       const before = ly[key];
-      if (before === value) return false;
+      if (before === value || (key === "tone" && JSON.stringify(before) === JSON.stringify(value))) return false;
       ly[key] = value; this.touch(); this.emit("layers");
       if (this.history) {
         const doc = this;
@@ -273,6 +274,30 @@
       const doc = this;
       this.history.push({ label, domain: "anim", before, after,
         apply: (_dir, value) => doc._setLayersState(value) });
+    }
+
+    /** Una capa de SOMBRA o de LUZ encima de `baseId`, ya recortada con ella:
+     *  se dibujan las formas de la sombra y oscurecen sólo al personaje. Un
+     *  solo paso de historial (crear, ubicar, recortar y darle el tono). */
+    addToneLayer(baseId, kind) {
+      const at = this.scene.layers.findIndex((l) => l.id === baseId);
+      const tone = animation.normalizeTone({ kind });
+      if (at < 0 || !tone) return null;
+      const base = this.scene.layers[at];
+      const before = this._layersSnapshot();
+      const nombre = base.name + (kind === "luz" ? " · luz" : " · sombra");
+      const lv = this.scene.addLevel(nombre);
+      const ly = new animation.Layer({ name: nombre, levelId: lv.id, clip: true, tone });
+      // encima de la base y de las que ya la recortan: el apilado sigue siendo el de la base
+      let donde = at + 1;
+      while (donde < this.scene.layers.length && this.scene.layers[donde].clip) donde++;
+      this.scene.layers.splice(donde, 0, ly);
+      this.layerId = ly.id;
+      const after = { ...this._layersSnapshot(), levels: [lv.toJSON()] };
+      before.dropLevels = [lv.id];
+      this.touch(); this.emit("layers"); this.emit("cells"); this.emit("frame");
+      this._pushLayersChange(kind === "luz" ? "Capa de luz" : "Capa de sombra", before, after);
+      return ly;
     }
 
     /** Mueve una capa a otro lugar del apilado. Índice 0 = la de más ATRÁS

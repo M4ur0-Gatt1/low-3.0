@@ -515,7 +515,10 @@
         lock.onclick = (e) => { e.stopPropagation(); doc.setLayerProperty(ly.id, "locked", !ly.locked,
           ly.locked ? "Desbloquear capa" : "Bloquear capa"); };
         const txt = document.createElement("span");
-        txt.textContent = ly.name;
+        // recortada: una flecha hacia la base, como en Photoshop; tono: su marca
+        const recortada = !!(animation.recorte && animation.recorte.baseDeRecorte(doc.scene.layers, doc.scene.layers.indexOf(ly)) >= 0);
+        txt.textContent = (recortada ? "↳ " : "") + (ly.tone ? (ly.tone.kind === "luz" ? "☀ " : "◐ ") : "") + ly.name;
+        if (recortada) txt.classList.add("tl2-recortada");
         cab.title = ly.name;          // compactada, el nombre vive en el tooltip
         // MESA DE LUZ de esta capa: se ve lavada para calcar encima (no cambia el render)
         const luz = document.createElement("button");
@@ -527,9 +530,9 @@
         luz.onclick = (e) => { e.stopPropagation(); doc.setLayerProperty(ly.id, "lightTable", !ly.lightTable,
           ly.lightTable ? "Apagar mesa de luz" : "Mesa de luz"); };
         const props = document.createElement("button");
-        props.className = "tl2-eye tl2-props" + ((ly.opacity != null && ly.opacity < 1) || (ly.blend && ly.blend !== "normal") ? " on" : "");
+        props.className = "tl2-eye tl2-props" + ((ly.opacity != null && ly.opacity < 1) || (ly.blend && ly.blend !== "normal") || ly.clip || ly.tone ? " on" : "");
         props.innerHTML = icon("i-mixer");
-        props.title = "Opacidad, modo de fusión y orden de la capa";
+        props.title = "Opacidad, fusión, recorte, tono/luz y orden de la capa";
         props.setAttribute("aria-label", props.title);
         props.onclick = (e) => { e.stopPropagation(); if (typeof global.dzCapaPropiedades === "function") global.dzCapaPropiedades(doc, ly.id, props); };
         cab.append(foldButton(ly.id), ojo, lock, luz, props, txt);

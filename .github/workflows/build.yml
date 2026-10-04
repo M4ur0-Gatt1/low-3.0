@@ -156,6 +156,8 @@ jobs:
           node tools/check_timeline_xsheet_coherentes_ui.js
           node tools/check_panel_separado_estilo_ui.js
           node tools/check_timeline_seleccion_ui.js
+          node tools/check_recorte_tono_ui.js
+          node tools/check_composicion_botones_ui.js
           node tools/check_trazo_calidad_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js

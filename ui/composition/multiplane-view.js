@@ -58,6 +58,11 @@
       this.root.querySelectorAll(".cmp3-inspector input[data-p]").forEach(input => {
         input.oninput = () => this.input(input, true);
         input.onchange = () => this.input(input);
+        // ENTER confirma. En un campo numérico el navegador no manda `change`
+        // con Enter, sólo al salir del campo: el plano se movía en la mesa pero
+        // el valor no llegaba al documento, y Ctrl+S sin salir del campo lo
+        // perdía (medido en la app, oct-2026). Salir del campo dispara el change.
+        input.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } };
       });
       this.root.querySelectorAll(".cmp3-inspector input[data-fx]").forEach(input => input.onchange = () => {
         if (!this.selected) return;
