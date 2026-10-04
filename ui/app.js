@@ -5366,6 +5366,7 @@ function dzDrawUp(e) {
   if (e && e.pointerId != null && e.pointerId !== DRAW_TRACK.pid
       && e.type !== "pointercancel" && e.type !== "lostpointercapture") return;
   _dzDiag("▲ up   id" + (e ? e.pointerId : "?") + " pts:" + (DRAW_TRACK ? DRAW_TRACK.pts.length : 0), "#F0450E");
+  if (e && e.type === "pointerup" && e.clientX != null && DRAW_TRACK.stabilizer) LOW.drawing.cerrarEnElPuntero?.(DRAW_TRACK.pts, dzToUser(e.clientX, e.clientY), e.timeStamp);   // el trazo termina DONDE se levantó el lápiz (ui/drawing/stabilization.js)
   _drawFinish();
 }
 /* ══ post-procesado del trazo (como OpenToonz al soltar el lápiz):
@@ -5413,9 +5414,9 @@ function dzRDP(pts, eps) {
 function dzRefineStroke(pts) {
   const amt = DZ.smooth === undefined ? 40 : DZ.smooth;   // 0-100
   if (amt <= 0 || pts.length < 4) return pts;
-  const win = Math.round(1 + amt / 30);                    // 1..4
+  const sigma = LOW.drawing.sigmaDeSuavizado ? LOW.drawing.sigmaDeSuavizado(amt, DZ.zoom) : 0;   // por DISTANCIA (ui/drawing/stabilization.js): la media de ±2 PUNTOS aplastaba los detalles chicos al 58 %
   const eps = (amt / 100) * 3.5 / (DZ.zoom || 1);          // en unidades de usuario
-  return dzRDP(dzMovingAvg(pts, win), eps);
+  return dzRDP(window.LOW?.drawing?.suavizarPorDistancia ? LOW.drawing.suavizarPorDistancia(pts, sigma) : dzMovingAvg(pts, 2), eps);
 }
 /* cinta de ancho variable para el pincel: UN solo path relleno cuyo contorno
    sigue la presión (como los outline strokes vectoriales de OpenToonz).
@@ -5464,19 +5465,9 @@ function dzBrushRibbon(pts, baseW, color) {
 
 /* suavizado Catmull-Rom convertido a bezier cúbicas: la curva pasa POR todos
    los puntos con continuidad C1 — trazos fieles y orgánicos */
-function dzSmoothPath(pts) {
-  const n = pts.length;
-  if (n < 3)
-    return `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)} L ${pts[n - 1][0].toFixed(1)} ${pts[n - 1][1].toFixed(1)}`;
-  let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
-  for (let i = 0; i < n - 1; i++) {
-    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n - 1, i + 2)];
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
-  }
-  return d;
-}
+/* la curva del trazo vive en el motor (ui/drawing/stroke-engine.js): ahí se le
+   puso tope a las manijas, que hacían retroceder la curva con tramos desparejos */
+function dzSmoothPath(pts) { return LOW.drawing.caminoSuave(pts); }
 
 /* ══ pluma vectorial profesional (flecha blanca de Illustrator / pluma de
    OpenToonz): clic = esquina · clic y ARRASTRAR = curva con manijas visibles ·
