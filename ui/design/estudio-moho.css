@@ -113,3 +113,7 @@ body:not(.light) #designView .tl2-addlayer { border-radius: 3px; }
 /* ── abajo ────────────────────────────────────────────────────────────── */
 body:not(.light) #designView .dz-dock,
 body:not(.light) #designView .dz-statusbar { border-top: 1px solid var(--moho-borde); }
+
+/* el menú del clic derecho de la línea de tiempo tiene ~16 acciones: en una
+   ventana baja (media pantalla) no puede salirse de la pantalla */
+.ctx-command-menu { max-height: calc(100vh - 16px); overflow-y: auto; }

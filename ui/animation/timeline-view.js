@@ -567,16 +567,35 @@
             + (f === doc.frame ? " actual" : "");
           if (inicio) c.textContent = String(v);
           c.title = v == null ? `Frame ${f}` : `Frame ${f} · dibujo ${v}${hold ? " (sostenido)" : ""}`;
+          /* SELECCIONAR VARIOS CUADROS arrastrando, como en Harmony: apretar
+             sobre una celda y arrastrar marca un rectángulo, que cruza capas.
+             Arrastrar DESDE un bloque que ya está seleccionado lo mueve (lo de
+             siempre). Pedido de Mauro (oct-2026). */
+          c.onpointerdown = (e) => this._seleccionarArrastrando(e, ly.id, f, inicio);
           c.onclick = (e) => {
+            if (this._recienArrastro) { this._recienArrastro = false; return; }   // el clic que cierra un arrastre no achica la selección
             const prior = doc.cellSelection;
             if (e.shiftKey && prior) doc.selectCellRange(prior.anchorLayerId, prior.anchorFrame, ly.id, f);
             else doc.selectCellRange(ly.id, f, ly.id, f);
             doc.selectLayer(ly.id); doc.goTo(f); this.render();
           };
+          // clic derecho: las acciones de cuadro sobre la selección
+          c.oncontextmenu = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const fuera = !this._inSelection(ly.id, f);
+            if (fuera) { doc.selectCellRange(ly.id, f, ly.id, f); doc.selectLayer(ly.id); doc.goTo(f); this.render(); }
+            /* Fuera de la selección, el menú se abre DESPUÉS del repintado: el
+               render restaura el scroll y el cursor se hace visible, y ese evento
+               de scroll cerraba el menú en el acto (medido con la línea de tiempo
+               scrolleada, que es lo habitual en una escena larga). */
+            const abrir = () => this._menuCeldas(e);
+            if (fuera) requestAnimationFrame(() => requestAnimationFrame(abrir)); else abrir();
+          };
           // arrastrar un bloque de exposición a otro frame
           if (inicio) {
             c.draggable = true;
             c.ondragstart = (e) => {
+              if (!this._moverBloque) { e.preventDefault(); return; }   // si no se apretó sobre la selección, el gesto es SELECCIONAR
               e.dataTransfer.setData("text/plain", JSON.stringify({
                 layerId: ly.id, from: ly.holdStart(f), largo: ly.holdLength(f) }));
               e.dataTransfer.effectAllowed = "move";
@@ -665,6 +684,91 @@
         const act = cont.querySelector(".tl2-cell.actual") || cont.querySelector(".tl2-tick.actual");
         if (act && (global.LOW && global.LOW.core && global.LOW.core.scrollDentro)) global.LOW.core.scrollDentro(act, { limite: this.host });
       }
+    }
+    /** Arrastrar sobre las celdas marca un rectángulo de selección. */
+    _seleccionarArrastrando(e, layerId, frame, inicio) {
+      if (e.button !== 0) return;
+      const doc = this.doc;
+      this._moverBloque = !!(inicio && this._inSelection(layerId, frame));
+      if (this._moverBloque) return;            // el arrastre HTML5 mueve el bloque
+      const prior = doc.cellSelection;
+      const ancla = e.shiftKey && prior ? { l: prior.anchorLayerId, f: prior.anchorFrame } : { l: layerId, f: frame };
+      doc.selectCellRange(ancla.l, ancla.f, layerId, frame);
+      this._pintarSeleccion();
+      let ultimo = layerId + ":" + frame, movio = false;
+      const mover = (ev) => {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const cel = el && el.closest && el.closest(".tl2-cell[data-layer-id][data-frame]");
+        if (!cel || !this.host.contains(cel)) return;
+        const clave = cel.dataset.layerId + ":" + cel.dataset.frame;
+        if (clave === ultimo) return;
+        ultimo = clave; movio = true;
+        doc.selectCellRange(ancla.l, ancla.f, cel.dataset.layerId, Number(cel.dataset.frame));
+        this._pintarSeleccion();
+      };
+      const soltar = () => {
+        document.removeEventListener("pointermove", mover);
+        document.removeEventListener("pointerup", soltar);
+        if (movio) {
+          this._recienArrastro = true;
+          setTimeout(() => { this._recienArrastro = false; }, 0);
+          const s = doc.cellSelection;
+          if (s) { doc.selectLayer(s.anchorLayerId); doc.goTo(s.anchorFrame); }
+          if (this.status && s) this.status(this._medidaSeleccion() + " seleccionadas · clic derecho para las acciones");
+        }
+      };
+      document.addEventListener("pointermove", mover);
+      document.addEventListener("pointerup", soltar);
+    }
+    /** Repinta SÓLO la marca de selección: rehacer toda la grilla en cada
+     *  celda que cruza el arrastre sería trabajo de más. */
+    _pintarSeleccion() {
+      if (!this.host) return;
+      this.host.querySelectorAll(".tl2-cell[data-layer-id][data-frame]").forEach((c) =>
+        c.classList.toggle("rango", this._inSelection(c.dataset.layerId, Number(c.dataset.frame))));
+    }
+    _medidaSeleccion() {
+      const s = this.doc && this.doc.cellSelection;
+      if (!s) return "";
+      const layers = this.doc.scene.layers;
+      const a = layers.findIndex((l) => l.id === s.fromLayerId), b = layers.findIndex((l) => l.id === s.toLayerId);
+      const capas = Math.abs(b - a) + 1, cuadros = s.to - s.from + 1;
+      return cuadros + (cuadros === 1 ? " cuadro" : " cuadros") + (capas > 1 ? " × " + capas + " capas" : "");
+    }
+    /** El menú del clic derecho: las acciones de cuadro sobre la selección.
+     *  Cada una es UNA operación del documento, con un solo paso de historial. */
+    _menuCeldas(e) {
+      const doc = this.doc, menu = global.showCtxMenu;
+      if (!doc || typeof menu !== "function") return;
+      const sel = doc.cellSelection || { fromLayerId: doc.layerId, toLayerId: doc.layerId,
+        anchorLayerId: doc.layerId, anchorFrame: doc.frame, from: doc.frame, to: doc.frame };
+      const cells = animation.shortcuts && animation.shortcuts.cells;
+      const avisar = (t) => { if (this.status && t) this.status(t); };
+      const largo = sel.to - sel.from + 1;
+      const hayCopia = !!(cells && cells.hayCopia && cells.hayCopia());
+      menu(e, [
+        { icon: "⧉", label: "Copiar " + this._medidaSeleccion(), shortcut: "Ctrl+C", action: () => { const r = cells && cells.copy(doc, sel); if (r) avisar(cells.medida(r) + " copiadas"); } },
+        { icon: "✂", label: "Cortar", shortcut: "Ctrl+X", action: () => cells && cells.cut(doc, sel) },
+        { icon: "⎘", label: "Reexponer lo copiado (comparte el dibujo)", shortcut: "Ctrl+V", disabled: !hayCopia,
+          action: () => { const r = cells && cells.paste(doc); avisar(r ? cells.medida(r) + " reexpuestas: en el mismo nivel comparten el dibujo" : "Copiá celdas antes de reexponer"); } },
+        "separator",
+        { icon: "⇥", label: "Rellenar los huecos con el dibujo anterior", action: () => doc.applySelectedTiming("autoexpose", sel) || avisar("No había huecos para rellenar") },
+        { icon: "＋", label: "Dibujo nuevo en cada celda vacía", action: () => { const n = doc.blankDrawingsInEmptyCells(sel); avisar(n ? n + " dibujos nuevos, listos para dibujar" : "No hay celdas vacías en la selección"); } },
+        { icon: "❐", label: "Duplicar los dibujos (copias independientes)", action: () => { const n = doc.duplicateDrawingsInRange(sel); avisar(n ? n + (n === 1 ? " dibujo duplicado" : " dibujos duplicados") + ": se pueden modificar sin tocar los originales" : "No hay dibujos en la selección"); } },
+        "separator",
+        { icon: "1", label: "Exponer en unos (1 cuadro por dibujo)", action: () => doc.applySelectedTiming("step", sel, 1) },
+        { icon: "2", label: "Exponer en dos", action: () => doc.applySelectedTiming("step", sel, 2) },
+        { icon: "3", label: "Exponer en tres", action: () => doc.applySelectedTiming("step", sel, 3) },
+        { icon: "≡", label: "Una celda por dibujo (sacar holds)", action: () => doc.applySelectedTiming("dedupe", sel) },
+        "separator",
+        { icon: "⟲", label: "Invertir el orden", action: () => doc.applySelectedTiming("reverse", sel) },
+        { icon: "↻", label: "Repetir el tramo", action: () => doc.applySelectedTiming("repeat", sel, 1) },
+        { icon: "⇄", label: "Ida y vuelta (ping-pong)", action: () => doc.applySelectedTiming("swing", sel) },
+        "separator",
+        { icon: "⊕", label: "Insertar " + largo + (largo === 1 ? " celda" : " celdas") + " en blanco antes", action: () => doc.insertCellsInRange(sel) },
+        { icon: "⌫", label: "Vaciar las celdas (los dibujos quedan en el nivel)", shortcut: "Supr", action: () => doc.clearCells(sel, "Vaciar rango") },
+        { icon: "⊖", label: "Quitar las celdas y correr lo que sigue", action: () => doc.applySelectedTiming("remove", sel) },
+      ]);
     }
     _inSelection(layerId, frame) {
       const s = this.doc && this.doc.cellSelection;

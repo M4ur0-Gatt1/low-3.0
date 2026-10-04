@@ -74,6 +74,8 @@
       return { fromLayerId: doc.layerId, toLayerId: doc.layerId, from: doc.frame, to: doc.frame };
     },
     medida(rango) { return rango ? `${rango.width} x ${rango.height} celdas` : ""; },
+    /** ¿Hay celdas copiadas? El menú del clic derecho apaga «Reexponer» si no. */
+    hayCopia() { return !!clip.range; },
   };
 
   function wire(getDoc, getPlayback, opciones) {

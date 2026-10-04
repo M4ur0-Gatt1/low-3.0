@@ -150,6 +150,29 @@ for (const [op, args] of [["step", [1, 8, 2]], ["each", [1, 8, 2]], ["stepChange
   ["clear", [2, 4]], ["remove", [2, 3]], ["move", [4, 6, 10]], ["repeat", [1, 3, 2]], ["reverse", [1, 8]],
   ["swing", [1, 8]], ["resetStep", [1, 8]], ["dedupe", [1, 8]], ["fillHandle", [1, 3, 12]]])
   contrato("timing «" + op + "»", (d) => d.apply(op, ...args), { creaDibujos: false });
+// operaciones de VARIOS CUADROS (menú contextual de la línea de tiempo, oct-2026)
+contrato("duplicar los dibujos de una selección (A A A B -> copias)", (d) => {
+  const lv = d.level, antes = lv.drawings.length, n = d.duplicateDrawingsInRange(rango(d, 0, 0, 1, 4));
+  // A A A B: dos dibujos distintos -> dos copias, y los holds comparten su copia
+  assert.equal(n, 2, "tenía que duplicar 2 dibujos (A y B), duplicó " + n);
+  assert.equal(lv.drawings.length, antes + 2);
+  const c = capa(d, 0).cells.slice(0, 4);
+  assert.ok(c[0] === c[1] && c[1] === c[2] && c[2] !== c[3] && ![1, 2].includes(c[0]), "las celdas no exponen las copias, o el hold dejó de compartir: " + c);
+  return n;
+});
+contrato("un dibujo nuevo en cada celda vacía de la selección", (d) => {
+  const n = d.blankDrawingsInEmptyCells(rango(d, 0, 1, 7, 10));
+  // Capa 1: F9,F10 vacías; Capa 2: F7..F10 vacías salvo F6 -> 2 + 4
+  assert.equal(n, 6, "tenía que crear 6 dibujos, creó " + n);
+  return n;
+});
+contrato("insertar celdas en blanco antes de la selección (2 capas)", (d) => {
+  const c1 = capa(d, 0).cells.slice(), ok = d.insertCellsInRange(rango(d, 0, 1, 2, 4));
+  // 3 celdas en blanco antes del F2, en las dos capas; lo de F2 en adelante se corre 3
+  const ahora = capa(d, 0).cells;
+  assert.ok(ahora[1] == null && ahora[2] == null && ahora[3] == null && ahora[4] === c1[1], "no insertó 3 celdas en blanco en F2: " + ahora);
+  return ok;
+}, { creaDibujos: false });
 contrato("timing en varias capas a la vez", (d) => d.applySelectedTiming("step", rango(d, 0, 1, 1, 6), 3), { creaDibujos: false });
 contrato("vaciar un rango de dos capas", (d) => d.clearCells(rango(d, 0, 1, 2, 5)), { creaDibujos: false });
 contrato("copiar y pegar exposiciones en la MISMA capa", (d) => d.pasteCells(d.readCells(rango(d, 0, 0, 1, 6)), capa(d, 0).id, 20), { creaDibujos: false });

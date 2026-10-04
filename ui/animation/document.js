@@ -886,6 +886,87 @@
       return drawing;
     }
 
+    /** Las capas (sin bloquear) y el tramo de cuadros de una selección. */
+    _rangoSeleccion(sel) {
+      const layers = this.scene.layers;
+      const s = sel || { fromLayerId: this.layerId, toLayerId: this.layerId, from: this.frame, to: this.frame };
+      const a = layers.findIndex((l) => l.id === s.fromLayerId), b = layers.findIndex((l) => l.id === s.toLayerId);
+      if (a < 0 || b < 0) return null;
+      const from = Math.max(1, Math.min(s.from, s.to)), to = Math.max(from, s.from, s.to);
+      return { capas: layers.slice(Math.min(a, b), Math.max(a, b) + 1).filter((l) => !l.locked), from, to };
+    }
+
+    /** INSERTAR celdas en blanco ANTES de la selección, tantas como cuadros
+     *  tiene, en todas sus capas: lo que seguía se corre. (applySelectedTiming
+     *  no sirve acá: pasa «desde, hasta» y `insert` espera «cuadro, cantidad».) */
+    insertCellsInRange(sel) {
+      const r = this._rangoSeleccion(sel);
+      if (!r || !r.capas.length) return false;
+      const ids = r.capas.map((l) => l.id), before = this._snapshot(ids, []);
+      r.capas.forEach((ly) => animation.exposures.insert(ly, r.from, r.to - r.from + 1));
+      const after = this._snapshot(ids, []);
+      if (JSON.stringify(before) === JSON.stringify(after)) return false;
+      this._histRange("Insertar " + (r.to - r.from + 1) + " celdas", before, after);
+      this.touch(); this.emit("cells"); this.emit("frame");
+      return true;
+    }
+
+    /** DUPLICAR los dibujos de una selección de varios cuadros: cada dibujo
+     *  expuesto en el tramo pasa a ser una COPIA independiente (número nuevo),
+     *  y las celdas del tramo la exponen. Los holds siguen compartiendo la copia:
+     *  A A B -> A' A' B'. Es lo que se hace para partir de unas poses y
+     *  modificarlas sin tocar las originales. Un solo paso de historial. */
+    duplicateDrawingsInRange(sel) {
+      const r = this._rangoSeleccion(sel);
+      if (!r || !r.capas.length) return 0;
+      const ids = r.capas.map((l) => l.id), niveles = [...new Set(r.capas.map((l) => l.levelId))];
+      const before = this._snapshot(ids, niveles);
+      let hechas = 0;
+      for (const ly of r.capas) {
+        const lv = this.scene.level(ly.levelId);
+        if (!lv) continue;
+        const copia = new Map();
+        for (let f = r.from; f <= r.to; f++) {
+          const n = ly.cellAt(f);
+          if (n == null) continue;
+          if (!copia.has(n)) {
+            const src = lv.byNumber(n);
+            if (!src) continue;
+            const d = lv.addDrawing(lv.nextNumber(), src.content || "");
+            copia.set(n, d.number); hechas++;
+          }
+          ly.setCell(f, copia.get(n));
+        }
+      }
+      if (!hechas) return 0;
+      this._histRange(hechas === 1 ? "Duplicar dibujo" : "Duplicar " + hechas + " dibujos", before, this._snapshot(ids, niveles));
+      this.touch(); this.emit("level"); this.emit("cells"); this.emit("frame");
+      return hechas;
+    }
+
+    /** Un DIBUJO NUEVO, vacío, en cada celda vacía de la selección: preparar
+     *  un tramo para dibujar cuadro a cuadro (straight ahead) sin crear los
+     *  dibujos de a uno. Las celdas con dibujo no se tocan. Un solo paso. */
+    blankDrawingsInEmptyCells(sel) {
+      const r = this._rangoSeleccion(sel);
+      if (!r || !r.capas.length) return 0;
+      const ids = r.capas.map((l) => l.id), niveles = [...new Set(r.capas.map((l) => l.levelId))];
+      const before = this._snapshot(ids, niveles);
+      let hechas = 0;
+      for (const ly of r.capas) {
+        const lv = this.scene.level(ly.levelId);
+        if (!lv) continue;
+        for (let f = r.from; f <= r.to; f++) {
+          if (ly.cellAt(f) != null) continue;
+          ly.setCell(f, lv.addDrawing(lv.nextNumber(), "").number); hechas++;
+        }
+      }
+      if (!hechas) return 0;
+      this._histRange(hechas === 1 ? "Dibujo nuevo en la celda vacía" : hechas + " dibujos nuevos en las celdas vacías", before, this._snapshot(ids, niveles));
+      this.touch(); this.emit("level"); this.emit("cells"); this.emit("frame");
+      return hechas;
+    }
+
     applySelectedTiming(op, selection, ...args) {
       const fn = animation.exposures[op];
       if (!fn) return false;

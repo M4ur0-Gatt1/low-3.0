@@ -154,6 +154,7 @@ jobs:
           node tools/check_exportar_sin_ffmpeg_ui.js
           node tools/check_timeline_xsheet_coherentes_ui.js
           node tools/check_panel_separado_estilo_ui.js
+          node tools/check_timeline_seleccion_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js
           node tools/check_paneles_plegables_ui.js
