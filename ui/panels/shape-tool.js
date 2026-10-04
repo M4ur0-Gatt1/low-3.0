@@ -382,7 +382,7 @@ function dzFormaPincelUI(menu) {
   const brushLabel = document.createElement('label'); brushLabel.className='dz-forma-relleno'; brushLabel.textContent='Pincel de las formas nuevas';
   const brushSelect=document.createElement('select');brushSelect.id='dzFormaBrushPreset';
   brushSelect.add(new Option('Usar el pincel activo',''));
-  for(const brush of LOW.drawing.brushes.all()) brushSelect.add(new Option(brush.name,brush.id));
+  brushSelect.insertAdjacentHTML('beforeend',LOW.drawing.opcionesDePinceles?LOW.drawing.opcionesDePinceles(null):'');   // por categoría
   brushSelect.value=DZ.formaBrushPreset||'';
   brushSelect.onchange=()=>{DZ.formaBrushPreset=brushSelect.value;};
   brushLabel.appendChild(brushSelect);menu.appendChild(brushLabel);

@@ -31,6 +31,19 @@
 
 /** La regla del motor, una sola vez y en un solo lugar: lo que no es raster es
  *  vector. Es la misma que aplica `normalizeBrush` puertas adentro. */
+/** IDs de las definiciones de un trazo (filtro, forma, gradiente, punta).
+ *  ÚNICOS EN TODO EL DOCUMENTO, no sólo en el dibujo abierto: `dzUniqueId`
+ *  sólo mira la hoja actual, así que dos dibujos —otro cuadro, otra capa—
+ *  numeraban igual (`brush_fx_1`). Al exportar o al mostrar otras capas en la
+ *  mesa, un trazo terminaba usando el filtro de OTRO: medido con el muestrario
+ *  de pinceles, el neón salía con rayas y los destellos, redondos. */
+function dzBrushIdUnico(base) {
+  const azar = (typeof crypto !== "undefined" && crypto.getRandomValues)
+    ? [...crypto.getRandomValues(new Uint32Array(2))].map((v) => v.toString(36)).join("")
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  return base + azar.slice(0, 10);
+}
+
 function dzBrushMotor(brush) {
   return brush && brush.engine === "raster" ? "raster" : "vector";
 }
@@ -67,7 +80,7 @@ function dzBrushRenderElement(points, color, opciones) {
     group.setAttribute("data-dab-count", renderedDabs.length); group.setAttribute("data-source-dab-count", dabs.length);
     if (brush.tipData) {
       const defs = document.createElementNS(SVGNS, "defs"), filter = document.createElementNS(SVGNS, "filter"), flood = document.createElementNS(SVGNS, "feFlood"), composite = document.createElementNS(SVGNS, "feComposite");
-      const filterId = dzUniqueId("brush_color_"), tipId = dzUniqueId("brush_tip_");
+      const filterId = dzBrushIdUnico("brush_color_"), tipId = dzBrushIdUnico("brush_tip_");
       filter.id = filterId; filter.setAttribute("x", "-50%"); filter.setAttribute("y", "-50%"); filter.setAttribute("width", "200%"); filter.setAttribute("height", "200%");
       flood.setAttribute("flood-color", color); flood.setAttribute("result", "brushColor");
       composite.setAttribute("in", "brushColor"); composite.setAttribute("in2", "SourceGraphic"); composite.setAttribute("operator", "in");
@@ -86,8 +99,32 @@ function dzBrushRenderElement(points, color, opciones) {
     // Una punta importada se colorea con un filtro sobre su propio mapa de
     // bits: ahí la dureza la trae la imagen y el gradiente no pinta nada.
     const suave = brush.tipData ? null : dzBrushBordeSuave(group, brush, color);
+    // FORMA del sello (pinceles de efectos): un solo camino en defs, cada sello lo reusa
+    const fx = window.LOW?.drawing?.efectos;
+    const forma = !brush.tipData && fx && dabs[0] && dabs[0].shape && dabs[0].shape !== "ellipse" ? fx.FORMAS[dabs[0].shape] : null;
+    let formaId = null;
+    if (forma) {
+      const defs = group.querySelector("defs") || group.insertBefore(document.createElementNS(SVGNS, "defs"), group.firstChild);
+      const camino = document.createElementNS(SVGNS, "path"); formaId = dzBrushIdUnico("brush_shape_");
+      camino.id = formaId; camino.setAttribute("d", forma); defs.appendChild(camino);
+      group.setAttribute("fill", color);
+    }
+    const filtroFx = !brush.tipData && fx ? fx.filtro({ ...brush, seed: brush.seed || 1 }, dzBrushIdUnico("brush_fx_")) : null;
+    if (filtroFx) {
+      const defs = group.querySelector("defs") || group.insertBefore(document.createElementNS(SVGNS, "defs"), group.firstChild);
+      defs.insertAdjacentHTML("beforeend", filtroFx);
+      group.setAttribute("filter", `url(#${defs.lastElementChild.id})`);
+    }
     renderedDabs.forEach((dab, index) => {
       let stamp;
+      const tono = dab.hue && fx ? fx.girarTono(color, dab.hue) : null;
+      if (formaId) {
+        stamp = document.createElementNS(SVGNS, "use"); stamp.setAttribute("href", `#${formaId}`);
+        stamp.setAttribute("transform", `translate(${dab.x.toFixed(2)} ${dab.y.toFixed(2)}) rotate(${(dab.angle || 0).toFixed(1)}) scale(${(dab.width / 2).toFixed(3)} ${(dab.height / 2).toFixed(3)})`);
+        if (tono) stamp.setAttribute("fill", tono);
+        stamp.setAttribute("opacity", Math.max(0, Math.min(1, dab.opacity)).toFixed(3));
+        group.appendChild(stamp); return;
+      }
       if (brush.tipData) {
         stamp = document.createElementNS(SVGNS, "use"); stamp.setAttribute("href", `#${group.dataset.tipId}`);
         stamp.setAttribute("x", dab.x - dab.width / 2); stamp.setAttribute("y", dab.y - dab.height / 2);
@@ -96,7 +133,7 @@ function dzBrushRenderElement(points, color, opciones) {
         stamp = document.createElementNS(SVGNS, "ellipse"); stamp.setAttribute("cx", dab.x); stamp.setAttribute("cy", dab.y);
         const grain = /charcoal|chalk|dry|pastel|spray/.test(brush.texture || "") ? .58 + ((index * 37) % 43) / 100 : 1;
         stamp.setAttribute("rx", dab.width * .5 * grain); stamp.setAttribute("ry", dab.height * .5 * grain);
-        stamp.setAttribute("fill", suave || color);
+        stamp.setAttribute("fill", (!suave && tono) || suave || color);
       }
       const grainOpacity = /charcoal|chalk|dry|pastel|spray/.test(brush.texture || "") ? .55 + ((index * 29) % 45) / 100 : 1;
       stamp.setAttribute("opacity", Math.max(0, Math.min(1, dab.opacity * grainOpacity)));
@@ -112,7 +149,22 @@ function dzBrushRenderElement(points, color, opciones) {
     // opacidad del elemento, que la usa el papel cebolla y la capa.
     const opacidad = Number(brush.opacity);
     if (Number.isFinite(opacidad) && opacidad < 1) path.setAttribute("fill-opacity", Math.max(0, opacidad).toFixed(3));
-    path.setAttribute("data-low", "brush"); path.setAttribute("data-brush-id", brush.id); return path;
+    path.setAttribute("data-low", "brush"); path.setAttribute("data-brush-id", brush.id);
+    const fx = window.LOW?.drawing?.efectos, fid = fx && dzBrushIdUnico("brush_fx_");
+    const def = fx ? fx.filtro({ ...brush, seed: brush.seed || 1 }, fid) : null;
+    if (!def) return path;
+    // TEXTURA o EFECTO: el trazo pasa a ser un grupo con su filtro adentro (viaja
+    // con el dibujo). El color va en el GRUPO y el camino lo hereda: la paleta
+    // (que pinta el elemento marcado) lo sigue recoloreando.
+    const grupo = document.createElementNS(SVGNS, "g");
+    grupo.setAttribute("data-low", "brush"); grupo.setAttribute("data-brush-id", brush.id);
+    grupo.setAttribute("data-low-fx", brush.texture || "glow");
+    grupo.setAttribute("fill", color);
+    if (path.hasAttribute("fill-opacity")) grupo.setAttribute("fill-opacity", path.getAttribute("fill-opacity"));
+    path.removeAttribute("fill"); path.removeAttribute("fill-opacity"); path.removeAttribute("data-low"); path.removeAttribute("data-brush-id");
+    const defs = document.createElementNS(SVGNS, "defs"); defs.innerHTML = def;
+    grupo.append(defs, path); grupo.setAttribute("filter", `url(#${fid})`);
+    return grupo;
   }
   return dzBrushRibbon(points, grosor, color);
 }
@@ -125,7 +177,7 @@ function dzBrushBordeSuave(group, brush, color) {
   if (!Number.isFinite(dureza) || dureza >= .995) return null;
   const defs = group.querySelector("defs") || group.insertBefore(document.createElementNS(SVGNS, "defs"), group.firstChild);
   const grad = document.createElementNS(SVGNS, "radialGradient");
-  grad.id = dzUniqueId("brush_soft_");
+  grad.id = dzBrushIdUnico("brush_soft_");
   const dentro = document.createElementNS(SVGNS, "stop");
   dentro.setAttribute("offset", Math.max(0, Math.min(.98, dureza)).toFixed(3));
   dentro.setAttribute("stop-color", color); dentro.setAttribute("stop-opacity", "1");

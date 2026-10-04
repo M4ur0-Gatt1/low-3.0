@@ -79,6 +79,17 @@ async function main() {
         firma:(n.getAttribute("d")||"")+"|"+(n.getAttribute("fill-opacity")||"")+"|"+n.innerHTML,
         caja:bb?{w:+bb.width.toFixed(2),h:+bb.height.toFixed(2)}:null}; };
 
+    /* ¿Cambió el trazo? Con TOLERANCIA (oct-2026). Dos cosas legítimas hacen
+       que el mismo gesto no dé el mismo texto: el filtro de presión es por
+       TIEMPO (ui/drawing/presion.js) y estos eventos sintéticos llegan con el
+       jitter del setTimeout, y los id de las definiciones de cada trazo son
+       únicos al azar (un trazo usaba el filtro de otro). Un parámetro que de
+       verdad actúa mueve el trazo unidades enteras; el jitter, milésimas. */
+    const distinto=(a,b)=>{ const sinId=t=>(t||"").replace(/brush_[a-z]+_[a-z0-9]+/g,"ID");
+      const A=sinId(a).split(/(-?\\d+\\.?\\d*(?:e-?\\d+)?)/), B=sinId(b).split(/(-?\\d+\\.?\\d*(?:e-?\\d+)?)/);
+      if(A.length!==B.length) return true;
+      for(let i=0;i<A.length;i++){ if(i%2){ if(Math.abs(+A[i]-+B[i])>.5) return true; } else if(A[i]!==B[i]) return true; }
+      return false; };
     // 1. Ningun pincel incorporado puede saltearse el motor.
     const incorporados=LOW.drawing.brushes.all().filter(b=>LOW.drawing.brushes.isBuiltin(b.id));
     const control=await trazoCon(LOW.drawing.brushes.get("clean-ink"),{});
@@ -93,7 +104,7 @@ async function main() {
     for(const [clave,min,max] of VIS){
       const av=await trazoCon(vector,{[clave]:min}), bv=await trazoCon(vector,{[clave]:max});
       const ar=await trazoCon(raster,{[clave]:min}), br=await trazoCon(raster,{[clave]:max});
-      tabla[clave]={vector:av.firma!==bv.firma, raster:ar.firma!==br.firma,
+      tabla[clave]={vector:distinto(av.firma,bv.firma), raster:distinto(ar.firma,br.firma),
         vacio:!!(av.vacio||bv.vacio||ar.vacio||br.vacio)};
     }
 
@@ -104,7 +115,7 @@ async function main() {
     dzBrushSelect(LOW.drawing.brushes.get("clean-ink"));
     DZ_BRUSH_STUDIO.selected=DZ.brushPreset; DZ_BRUSH_STUDIO.render(); await wait(250);
     const raiz=document.querySelector("#dzBrushStudio");
-    const apagados=[...raiz.querySelectorAll(".bst-controls input[disabled]")].map(i=>i.dataset.p).sort();
+    const apagados=[...raiz.querySelectorAll(".bst-controls input[disabled], .bst-controls select[disabled]")].map(i=>i.dataset.p).sort();
     const conMotivo=[...raiz.querySelectorAll(".bst-controls label.inerte")].every(l=>(l.title||"").length>30);
 
     DZ.brushPreset='clean-ink';DZ.anchoFijo=false;

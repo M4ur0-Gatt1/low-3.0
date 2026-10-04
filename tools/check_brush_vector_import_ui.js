@@ -49,7 +49,7 @@ async function main() {
     LOW.workspace.workspaces.activate("composite",dzWsAplicar); await wait(60);
     dzSetTool("brush"); dzBrushStudioOpen(); await wait(100);
     const studio=document.querySelector("#dzBrushStudio"),rect=studio.getBoundingClientRect(),studioState={visible:!studio.hidden&&getComputedStyle(studio).display!=="none"&&rect.width>300&&rect.height>300,workspace:LOW.workspace.workspaces.activeId,docked:document.querySelector("#dzInspector").classList.contains("brush-studio-open"),
-      cards:studio.querySelectorAll(".bst-brush").length,controls:studio.querySelectorAll(".bst-controls input").length,preview:studio.querySelector(".bst-preview svg").childElementCount};
+      cards:studio.querySelectorAll(".bst-brush").length,controls:studio.querySelectorAll(".bst-controls input").length,selects:studio.querySelectorAll(".bst-controls select").length,preview:studio.querySelector(".bst-preview svg").childElementCount};
     DZ_BRUSH_STUDIO.filter="all"; DZ_BRUSH_STUDIO.selected="animation-pencil"; DZ_BRUSH_STUDIO.render();
     const countBeforeEdit=LOW.drawing.brushes.all().length, sizeControl=studio.querySelector('[data-p="size"]'); sizeControl.value="17"; sizeControl.dispatchEvent(new Event("input",{bubbles:true}));
     studioState.customCreated=LOW.drawing.brushes.all().length===countBeforeEdit+1&&DZ.brushPreset.startsWith("custom-");
@@ -99,7 +99,7 @@ async function main() {
     throw Error("REGRESIÓN: el pincel no dibuja con el color de tinta configurado: " + JSON.stringify(pc));
   if (pc.colorDeRelleno && pc.computado === pc.colorDeRelleno && pc.esperado !== pc.colorDeRelleno)
     throw Error("REGRESIÓN: el pincel volvió a pintarse con el estilo Relleno: " + JSON.stringify(pc));
-  if (!value.studio?.visible || value.studio.workspace !== "drawing" || !value.studio.docked || !value.studio.cards || value.studio.controls !== 9 || !value.studio.preview || !value.studio.customCreated) throw Error("Brush Studio incompleto: " + JSON.stringify(value));
+  if (!value.studio?.visible || value.studio.workspace !== "drawing" || !value.studio.docked || !value.studio.cards || value.studio.controls !== 18 || value.studio.selects !== 2 || !value.studio.preview || !value.studio.customCreated) throw Error("Brush Studio incompleto: " + JSON.stringify(value));
   if (value.penLow !== 0 || value.penHigh !== 1 || value.mouse !== 1) throw Error("Calibración de tableta incorrecta: " + JSON.stringify(value));
   if (errors.length) throw Error(errors.join(" | "));
   console.log("E2E imports OK", JSON.stringify(value));

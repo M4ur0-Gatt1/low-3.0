@@ -6,6 +6,11 @@
   const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
   const lerp = (a, b, t) => a + (b - a) * t;
 
+  /** Formas de sello de los pinceles raster. «ellipse» es el sello redondo de
+   *  siempre; las otras son para los pinceles de EFECTOS (destellos, pasto,
+   *  confeti, hojas, rayado). */
+  const SHAPES = ["ellipse", "star", "blade", "leaf", "square", "line", "dot"];
+
   function normalizeBrush(input = {}) {
     const engine = input.engine === "raster" ? "raster" : "vector";
     return Object.freeze({
@@ -28,6 +33,19 @@
       roundness: clamp(input.roundness ?? 1, .05, 1),
       scatter: clamp(input.scatter ?? 0, 0, 2),
       texture: input.texture ? String(input.texture) : null,
+      textureStrength: clamp(input.textureStrength ?? .6, 0, 1),
+      textureScale: clamp(input.textureScale ?? 1, .2, 5),
+      // REMATE: el trazo arranca y termina en punta aunque la presión no baje
+      // (y con el mouse, que no tiene presión). Fracción de un largo de
+      // 6 veces el tamaño del pincel.
+      taperStart: clamp(input.taperStart ?? 0, 0, 1),
+      taperEnd: clamp(input.taperEnd ?? 0, 0, 1),
+      shape: SHAPES.includes(input.shape) ? input.shape : "ellipse",
+      sizeJitter: clamp(input.sizeJitter ?? 0, 0, 1),
+      angleJitter: clamp(input.angleJitter ?? 0, 0, 1),
+      opacityJitter: clamp(input.opacityJitter ?? 0, 0, 1),
+      hueJitter: clamp(input.hueJitter ?? 0, 0, 1),
+      glow: clamp(input.glow ?? 0, 0, 1),
       eraser: !!input.eraser,
       seed: (Number(input.seed) || 1) >>> 0
     });
@@ -83,6 +101,18 @@
     return result;
   }
 
+  /** El factor de ancho de cada muestra por los REMATES de inicio y fin: 1 en
+   *  el cuerpo, bajando a una punta fina en los extremos. Sin remates, null. */
+  function remates(samples, brush) {
+    if (!(brush.taperStart > 0 || brush.taperEnd > 0) || samples.length < 2) return null;
+    const s = [0];
+    for (let i = 1; i < samples.length; i++) s.push(s[i - 1] + Math.hypot(samples[i].x - samples[i - 1].x, samples[i].y - samples[i - 1].y));
+    const L = s[s.length - 1] || 1;
+    const li = Math.min(L / 2, brush.taperStart * brush.size * 6), lf = Math.min(L / 2, brush.taperEnd * brush.size * 6);
+    const curva = (t) => Math.sin(Math.max(0, Math.min(1, t)) * Math.PI / 2);
+    return s.map((d) => Math.max(.08, (li > 0 ? curva(d / li) : 1) * (lf > 0 ? curva((L - d) / lf) : 1)));
+  }
+
   /* DISPERSION EN VECTORIAL. En raster la dispersion corre cada sello por su
      cuenta; una cinta vectorial no tiene sellos, tiene un eje. Asi que la
      dispersion corre EL EJE: el trazo sale tembloroso en vez de limpio, que es
@@ -107,11 +137,12 @@
     const brush = normalizeBrush({ ...inputBrush, engine: "vector" });
     if (points.length < 2) return null;
     const samples = disperse(resample(points, Math.max(.35, brush.size * brush.spacing)), brush);
+    const remate = remates(samples, brush);
     const left = [], right = [];
     for (let i = 0; i < samples.length; i++) {
       const p = samples[i], prev = samples[Math.max(0, i - 1)], next = samples[Math.min(samples.length - 1, i + 1)];
       const dx = next.x - prev.x, dy = next.y - prev.y, length = Math.hypot(dx, dy) || 1;
-      const width = dynamics(p, brush, prev).width * .5;
+      const width = dynamics(p, brush, prev).width * .5 * (remate ? remate[i] : 1);
       const nx = -dy / length, ny = dx / length;
       left.push({ x: p.x + nx * width, y: p.y + ny * width });
       right.push({ x: p.x - nx * width, y: p.y - ny * width });
@@ -125,24 +156,32 @@
     if (!points.length) return [];
     const samples = resample(points, Math.max(.35, brush.size * brush.spacing));
     const random = seeded(brush.seed);
+    // la VARIACIÓN por sello va por otra secuencia: así los pinceles de
+    // siempre (sin variación) dejan exactamente los mismos sellos que antes
+    const azar = seeded((brush.seed ^ 0x9e3779b9) >>> 0 || 7);
+    const remate = remates(samples, brush);
     return samples.map((point, index) => {
       const previous = samples[Math.max(0, index - 1)];
       const value = dynamics(point, brush, previous);
       const direction = Math.atan2(point.y - previous.y, point.x - previous.x) * 180 / Math.PI;
       const scatter = brush.scatter * value.width;
+      const r1 = azar(), r2 = azar(), r3 = azar(), r4 = azar();
+      const width = value.width * (remate ? remate[index] : 1) * (1 - brush.sizeJitter * r1);
       return {
         x: point.x + (random() - .5) * scatter,
         y: point.y + (random() - .5) * scatter,
-        width: value.width,
-        height: value.width * brush.roundness,
-        opacity: value.opacity * brush.flow,
+        width,
+        height: width * brush.roundness,
+        opacity: value.opacity * brush.flow * (1 - brush.opacityJitter * r3),
         hardness: brush.hardness,
-        angle: brush.angle + (brush.angleFollowsStroke ? direction : 0),
+        angle: brush.angle + (brush.angleFollowsStroke ? direction : 0) + (r2 - .5) * 360 * brush.angleJitter,
+        hue: brush.hueJitter ? (r4 - .5) * 360 * brush.hueJitter : 0,
+        shape: brush.shape,
         texture: brush.texture,
         eraser: brush.eraser
       };
     });
   }
 
-  drawing.brushEngine = Object.freeze({ normalizeBrush, dynamics, resample, buildVectorOutline, buildRasterDabs });
+  drawing.brushEngine = Object.freeze({ normalizeBrush, dynamics, resample, buildVectorOutline, buildRasterDabs, remates, SHAPES });
 })(typeof window !== "undefined" ? window : globalThis);

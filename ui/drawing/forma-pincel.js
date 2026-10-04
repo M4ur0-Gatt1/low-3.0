@@ -229,7 +229,7 @@ function dzFormaPincelInspector(el, panel) {
     label.appendChild(input); box.appendChild(label); return input;
   };
   const select = document.createElement('select'); select.id = 'dzShapeBrush';
-  for (const brush of LOW.drawing.brushes.all()) select.add(new Option(brush.name, brush.id));
+  select.innerHTML = LOW.drawing.opcionesDePinceles ? LOW.drawing.opcionesDePinceles(null) : '';   // por categoría
   const selected = el.getAttribute('data-pincel');
   if (![...select.options].some(o => o.value === selected)) select.add(new Option('Pincel guardado en la forma', selected));
   select.value = selected;

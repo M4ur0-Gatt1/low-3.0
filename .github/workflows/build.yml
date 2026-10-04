@@ -38,6 +38,7 @@ jobs:
           node tools/run_2d_model_tests.js
           node tools/run_undo_estado_tests.js
           node tools/run_trazo_tests.js
+          node tools/run_pinceles_tests.js
           node tools/run_rhythm_tests.js
           node tools/run_safe_mode_tests.js
       - name: Modelos de composición, colaboración y storyboard
@@ -159,6 +160,7 @@ jobs:
           node tools/check_recorte_tono_ui.js
           node tools/check_composicion_botones_ui.js
           node tools/check_cebolla_al_abrir_ui.js
+          node tools/check_pinceles_ui.js
           node tools/check_trazo_calidad_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js

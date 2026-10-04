@@ -86,7 +86,10 @@
     g.innerHTML = content;
     if (typeof global.dzOnionStripPage === "function") global.dzOnionStripPage(g, viewBox);
     const piezas = new Map();
-    g.querySelectorAll("[id]").forEach((n) => { piezas.set(n.id, n); n.removeAttribute("id"); });
+    // los id de <defs> (filtros, gradientes, formas de los pinceles) se QUEDAN:
+    // sin ellos los trazos de otra capa perdían su textura, su forma y su dureza.
+    // El rig no busca piezas ahí adentro.
+    g.querySelectorAll("[id]").forEach((n) => { if (n.closest("defs")) return; piezas.set(n.id, n); n.removeAttribute("id"); });
     return { content, g, piezas, base: new Map() };
   }
 

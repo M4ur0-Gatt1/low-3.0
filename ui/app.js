@@ -5100,18 +5100,6 @@ function dzReleaseFocus() {
    OpenToonz usa un track continuo con presión por punto (TThickPoint);
    en la web la presión puede fluctuar frame a frame  media móvil.
    Aplica curva gamma de sensibilidad (OpenToonz V_BrushPressureSensitivity). ── */
-function dzSmoothPressure(pr, track) {
-  if (!track) return pr || 0.5;
-  if (!track._pbuf) track._pbuf = [];
-  const BUF = 5;
-  const clamped = Math.max(0.03, pr || 0.03);
-  track._pbuf.push(clamped);
-  if (track._pbuf.length > BUF) track._pbuf.shift();
-  let s = 0; for (let i = 0; i < track._pbuf.length; i++) s += track._pbuf[i];
-  const avg = s / track._pbuf.length;
-  const gamma = DZ.pressureGamma !== undefined ? DZ.pressureGamma : 0.85;
-  return Math.pow(avg, gamma);
-}
 
 function dzCurrentBrush() {
   return window.LOW?.drawing?.brushes?.get?.(DZ.brushPreset || "") || null;
@@ -5150,14 +5138,6 @@ function _otDevType(e) {
   return "mouse";
 }
 
-function _otPressure(e) {
-  if ((e.pointerType === "pen" || e.pointerType === "eraser") && e.pressure != null) {
-    const min = Math.max(0, Math.min(.95, DZ.pressureMin || 0));
-    const max = Math.max(min + .05, Math.min(1, DZ.pressureMax || 1));
-    return Math.max(0, Math.min(1, (e.pressure - min) / (max - min)));
-  }
-  return 1; // mouse: ancho completo; 0.5 es un valor sintético de Pointer Events
-}
 
 function _drawAddPoint(track, x, y, pr, meta = null) {
   const last = track.pts[track.pts.length - 1];
@@ -5170,7 +5150,7 @@ function _drawAddPoint(track, x, y, pr, meta = null) {
   const d2 = dx * dx + dy * dy;
   // Solo descartar puntos idénticos (mismo pixel). Todo lo demás se dibuja.
   if (d2 < 0.01) return false;
-  const smPr = dzSmoothPressure(pr, track);
+  track._horaMuestra = meta?.timeStamp ?? performance.now(); const smPr = dzSmoothPressure(pr, track);   // filtro por TIEMPO (ui/drawing/presion.js)
   
   // Detección de guías para líneas rectas (con Shift)
   if (track.shiftPressed && track.pts.length === 1) {
@@ -5273,7 +5253,7 @@ function _drawFinish() {
 function dzDrawRaw(e) {
   if (!DRAW_TRACK || e.pointerId !== DRAW_TRACK.pid) return;
   // Si hay track activo, SIEMPRE procesar (la presión puede ser 0 en el primer frame)
-  const pr = (e.pressure != null) ? e.pressure : _otPressure(e);
+  const pr = _otPressure(e);   // calibrada como el otro camino: leía e.pressure crudo (0,5 con el mouse, sin inicio/máximo)
   e.preventDefault();
   const p = dzToUser(e.clientX, e.clientY);
   _drawAddPoint(DRAW_TRACK, p.x, p.y, pr, e);
@@ -12007,8 +11987,8 @@ function dzToolOptsRender() {
     <span class="dz-artmodes" title="Plano de arte activo"><button id="toArtLine" class="${(DZ.artMode || "line") === "line" ? "on" : ""}" title="Dibujar contorno arriba">╱</button><button id="toArtColour" class="${DZ.artMode === "colour" ? "on" : ""}" title="Dibujar color debajo">●</button></span>`;
   if (["pencil", "brush", "pen"].includes(t)) {
     const presets = window.LOW?.drawing?.brushes?.all?.() || [];
-    const presetSelect = t !== "pen" && presets.length ? `<label>Pincel <select id="toBrushPreset" class="langsel">${presets.map(p =>
-      `<option value="${p.id}"${p.id === DZ.brushPreset ? " selected" : ""}>${p.name}</option>`).join("")}</select></label>` : "";
+    const presetSelect = t !== "pen" && presets.length ? `<label>Pincel <select id="toBrushPreset" class="langsel">${LOW.drawing.opcionesDePinceles(DZ.brushPreset)}</select></label>` : "";
+    // por CATEGORÍA (Lápices, Tintas, Pintura, Texturas, Efectos…): con 40 pinceles una lista plana no se recorre (ui/drawing/brushes.js)
     html += presetSelect + (t !== "pen" ? `<button class="ghost" id="toBrushStudio" title="Biblioteca, preview y dinámica de pinceles">Pinceles…</button>` : "") + `<label>Trazo <input type="color" id="toColor" value="${dzHex(DZ.drawColor) || "#1a1a1a"}"></label>
       <label>Grosor <input type="number" id="toW" min="1" max="120" value="${DZ.drawW || 6}" class="dz-win"></label>` +
       (t !== "pen" ? `<label>Suavizado <input type="range" id="toSmooth" min="0" max="100" value="${sm}"><span id="toSmoothLbl">${sm}</span></label>` : "") +
@@ -14087,7 +14067,7 @@ function dz3dAirDraw(e) {
   const p0 = dz3dScreenToPlane(el, e.clientX, e.clientY);
   if (!p0) return;
   const ptrack = {};
-  const pts = [[p0.x, p0.y, dzSmoothPressure(e.pressure || 0.5, ptrack)]];
+  const pts = [[p0.x, p0.y, dzSmoothPressure(_otPressure(e), Object.assign(ptrack, { _horaMuestra: e.timeStamp }))]];
   const drawColor = DZ.drawColor || (tool === "brush" ? "#E93D82" : "#F0450E");
   const drawW = DZ.drawW || 6;
   const live = document.createElementNS(SVGNS, "path");
@@ -14104,7 +14084,7 @@ function dz3dAirDraw(e) {
           ? ev.getCoalescedEvents() : [ev];
     for (const c of evs) {
       const p = dz3dScreenToPlane(el, c.clientX, c.clientY);
-      if (p) pts.push([p.x, p.y, dzSmoothPressure(c.pressure || 0.5, ptrack)]);
+      if (p) pts.push([p.x, p.y, dzSmoothPressure(_otPressure(c), Object.assign(ptrack, { _horaMuestra: c.timeStamp }))]);
     }
     live.setAttribute("d", "M " + pts.map(p => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L "));
   };
@@ -14376,7 +14356,7 @@ function dz3dWireCard(card, cs) {
       const p0 = dz3dScreenToPlane(el, e.clientX, e.clientY);
       if (!p0) return;
       const ptrack = {};                             // buffer de presión de ESTE trazo
-      const pts = [[p0.x, p0.y, dzSmoothPressure(e.pressure || 0.5, ptrack)]];
+      const pts = [[p0.x, p0.y, dzSmoothPressure(_otPressure(e), Object.assign(ptrack, { _horaMuestra: e.timeStamp }))]];
       const drawColor = DZ.drawColor || (tool === "pencil" ? "#F0450E" : tool === "pen" ? "#F0450E" : "#E93D82");
       const drawW = DZ.drawW || (tool === "pen" ? 2 : 6);
       const live = document.createElementNS(SVGNS, "path");
@@ -14395,7 +14375,7 @@ function dz3dWireCard(card, cs) {
           ? ev.getCoalescedEvents() : [ev];
         for (const c of evs) {
           const p = dz3dScreenToPlane(el, c.clientX, c.clientY);
-          if (p) pts.push([p.x, p.y, dzSmoothPressure(c.pressure || 0.5, ptrack)]);
+          if (p) pts.push([p.x, p.y, dzSmoothPressure(_otPressure(c), Object.assign(ptrack, { _horaMuestra: c.timeStamp }))]);
         }
         live.setAttribute("d", "M " + pts.map(p => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L "));
       };
