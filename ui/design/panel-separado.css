@@ -1,0 +1,84 @@
+/* ══ LA VENTANA SEPARADA SE VE COMO EL ESTUDIO ════════════════════════════
+   Reportado por Mauro (oct-2026): «cuando despego las herramientas en otras
+   pantallas, la otra ventana pierde el estilo; eso no debe pasar».
+
+   La causa: la ventana separada es OTRA página (animation_panel.html), con su
+   propio CSS escrito a mano: grises cálidos (#151514), un naranja (#df6c48) y
+   un celeste (#67aeb6) que no son los de LOW, Segoe en vez de Figtree, botones
+   píldora. Al despegar un panel cambiaba de aspecto.
+
+   Esta hoja se carga DESPUÉS de ese estilo y lo lleva al sistema del estudio:
+   la paleta de LOW —negro, naranja #F0450E, celeste #33B5E8— con los mismos
+   valores que app.css, la tipografía Figtree, y el estilo de Moho de la v3.2
+   (design/estudio-moho.css): baldosas, barra de título, la regla como banda
+   celeste, las exposiciones como bloques, el cuadro actual en naranja.
+   tools/check_panel_separado_estilo_ui.js compara la ventana con el estudio. */
+
+@font-face { font-family: 'Figtree'; src: url('../fonts/Figtree-VF.ttf') format('truetype'); font-weight: 300 900; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../fonts/JetBrainsMono-Regular.ttf') format('truetype'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../fonts/JetBrainsMono-Bold.ttf') format('truetype'); font-weight: 600 700; }
+
+:root {
+  /* los MISMOS valores que el estudio: las superficies cálidas de app.css
+     («LOW — sistema visual contemporáneo») y los colores de marca */
+  --bg: #151514; --panel: #1b1a19; --panel2: #232220; --surface-raised: #292825; --hover: #302f2c;
+  --line: rgba(255, 248, 235, .075); --txt: #eeeae2; --mut: #aaa59c;
+  --orange: #F0450E; --cyan: #33B5E8;
+  --low-naranja-suave: rgba(240, 69, 14, .16); --low-celeste-suave: rgba(51, 181, 232, .16);
+  --moho-borde: #0b0b0a; --moho-baldosa: var(--panel2); --moho-baldosa-borde: rgba(255, 248, 235, .09);
+  --range-track: rgba(238, 234, 226, .20); --range-thumb: #c9c5bc; --range-thumb-hover: #f0ece4;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--txt); font-family: 'Figtree', 'Segoe UI', system-ui, sans-serif; }
+
+/* la barra de título del panel, como las de Moho */
+.top { background: var(--panel2); border-bottom: 1px solid var(--moho-borde); }
+.brand { color: var(--orange); }
+.mode { color: var(--mut); }
+button { font-family: inherit; border-radius: 3px; }
+button:hover { background: var(--hover); color: var(--txt); }
+button.primary { background: var(--orange); color: #fff; border-color: var(--orange); }
+button.primary:hover { background: #FF5A22; }
+button.on, .commands button.on { background: var(--orange); border-color: var(--orange); color: #fff; }
+.field { border-color: rgba(255, 248, 235, .14); border-radius: 2px; background: #0e0e0d; }
+.field input { color: var(--txt); font-family: 'JetBrains Mono', Consolas, monospace; }
+.commands { background: var(--panel); border-bottom: 1px solid var(--moho-borde); }
+.commands button { border-radius: 3px; }
+.commands button:focus-visible { outline-color: var(--cyan); }
+
+/* ── herramientas: BALDOSAS, como la caja de Moho y el riel del estudio ── */
+.grid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px; padding: 8px; }
+.tool {
+  height: 40px; padding: 0; display: grid; place-items: center;
+  background: var(--moho-baldosa); border: 1px solid var(--moho-baldosa-borde);
+  border-radius: 3px; color: var(--txt);
+}
+.tool:hover { background: var(--hover); border-color: rgba(255, 248, 235, .16); }
+.tool.on { background: var(--orange); border-color: var(--orange); color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); }
+
+/* ── línea de tiempo y X-sheet: la regla es una banda, el tiempo es celeste ── */
+.viewport { background: var(--bg); }
+.head { background: linear-gradient(var(--low-celeste-suave), var(--low-celeste-suave)), var(--panel2);
+  border-bottom: 1px solid rgba(51, 181, 232, .35); }
+.head .label { background: var(--panel2); color: var(--txt); }
+.label { background: var(--panel); border-right-color: var(--moho-borde); border-bottom-color: rgba(255, 255, 255, .04); font-family: inherit; }
+.cell { border-right-color: rgba(255, 255, 255, .045); border-bottom-color: rgba(255, 255, 255, .045);
+  font-family: 'JetBrains Mono', Consolas, monospace; color: var(--mut); }
+.cell:hover { background: var(--hover); }
+.cell.start { background: rgba(51, 181, 232, .38); color: #fff; box-shadow: inset 2px 0 0 var(--cyan); }
+.cell.hold { background: rgba(51, 181, 232, .12); }
+.cell.hold::after { border-left-color: rgba(51, 181, 232, .55); }
+.cell.current { background: rgba(240, 69, 14, .32); color: #fff; box-shadow: inset 1px 0 var(--orange), inset -1px 0 var(--orange); }
+.cell.start.current { background: rgba(240, 69, 14, .62); }
+.cell.selected { outline-color: rgba(51, 181, 232, .7); background: rgba(51, 181, 232, .12); }
+.cell.key::before { color: var(--orange); }
+.cell.camera::after { color: var(--cyan); }
+
+/* ── listas (capas, dibujos del nivel) y fichas ─────────────────────────── */
+.lrow { border-bottom-color: rgba(255, 255, 255, .05); }
+.lrow:hover { background: var(--hover); }
+.lrow.sel { background: rgba(51, 181, 232, .12); box-shadow: inset 3px 0 0 var(--cyan); }
+.lrow input[type=range] { accent-color: var(--orange); }
+.drawing-card { background: var(--panel2); border-color: var(--line); border-radius: 4px; }
+.drawing-card.on, .drawing-card.selected { border-color: var(--orange); box-shadow: 0 0 0 1px rgba(240, 69, 14, .3) inset; }
+.levelstrip-head b { color: var(--txt); }

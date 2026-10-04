@@ -22,9 +22,10 @@ body:not(.light) #designView {
   --low-celeste: #33B5E8;
   --low-celeste-suave: rgba(51, 181, 232, .16);
   --low-naranja: #F0450E;
-  --moho-borde: #050506;
-  --moho-baldosa: #1c1c20; --moho-baldosa-borde: rgba(255, 255, 255, .08);
-  --moho-barra: #19191c;
+  /* superficies: las cálidas del sistema de LOW (app.css), no un gris nuevo */
+  --moho-borde: #0b0b0a;
+  --moho-baldosa: var(--panel2); --moho-baldosa-borde: rgba(255, 248, 235, .09);
+  --moho-barra: var(--panel2);
 }
 
 /* ── barras de arriba ─────────────────────────────────────────────────── */
@@ -40,8 +41,8 @@ body:not(.light) #designView .dz-document-tab.active { box-shadow: inset 0 2px 0
 /* campos numéricos enmarcados: el «Frame [40] of [60]» de Moho, en negro */
 body:not(.light) #designView .dz-toolopts input[type="number"],
 body:not(.light) #designView .dz-timeline .tl-field input {
-  background: #050506; color: var(--txt);
-  border: 1px solid rgba(255, 255, 255, .14); border-radius: 2px;
+  background: #0e0e0d; color: var(--txt);
+  border: 1px solid rgba(255, 248, 235, .14); border-radius: 2px;
   font-variant-numeric: tabular-nums;
 }
 body:not(.light) #designView .dz-toolopts input[type="number"]:focus,
@@ -56,7 +57,7 @@ body:not(.light) #designView .dz-tools-drawer .ibtn {
 }
 body:not(.light) #designView .dz-tools .ibtn:hover,
 body:not(.light) #designView .dz-tools-drawer .ibtn:hover {
-  background: #26262b; border-color: rgba(255, 255, 255, .16);
+  background: var(--surface-hover, #302f2c); border-color: rgba(255, 248, 235, .16);
 }
 /* la herramienta activa ENCENDIDA, no apenas teñida */
 body:not(.light) #designView .dz-tools .ibtn.active,
@@ -68,7 +69,7 @@ body:not(.light) #designView .dz-tools .dz-tools-more { background: transparent;
 
 /* ── la mesa: lisa, la hoja manda ─────────────────────────────────────── */
 body:not(.light) #designView .dz-canvas,
-body:not(.light) #designView.dz-zen .dz-canvas { background: #08080a; background-image: none; }
+body:not(.light) #designView.dz-zen .dz-canvas { background: #0e0e0d; background-image: none; }
 body:not(.light) #designView #dzCanvas > svg {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, .05), 0 16px 44px rgba(0, 0, 0, .7);
 }
