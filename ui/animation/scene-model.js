@@ -1241,6 +1241,7 @@
       this.levels = (data.levels || []).map((l) => new Level(l));
       this.layers = (data.layers || []).map((l) => new Layer(l));
       this.palettes = (data.palettes || []).map((p) => new Palette(p));
+      this.levels.forEach((l) => this.ensureLevelPalette(l));   // todo nivel NACE con su paleta (ver ensureLevelPalette)
       this.camera = clone(data.camera || { keys: {} });
       this.composition = compositionData(data.composition);
       this.storyboard = storyboardData(data.storyboard);
@@ -1328,7 +1329,32 @@
 
     addLevel(name, type) {
       const l = new Level({ name: name || `Nivel ${this.levels.length + 1}`, type });
-      this.levels.push(l); this.touch(); return l;
+      this.levels.push(l); this.ensureLevelPalette(l); this.touch(); return l;
+    }
+    /** La paleta de un nivel, que existe desde que el nivel NACE.
+     *
+     *  Antes la creaba el getter `LowDoc.palette` la primera vez que alguien la
+     *  LEÍA (el panel de color al pintarse): mirar modificaba la escena, sin
+     *  paso en el historial (lo encontró run_undo_estado_tests, oct-2026). Ahora
+     *  nace con el nivel —al construir la escena y en addLevel— y con ids
+     *  DETERMINISTAS derivados del nivel: abrir dos veces el mismo archivo viejo
+     *  sin paleta da exactamente el mismo documento, que es lo que necesita la
+     *  comparación del rescate (workspace/rescate-escena.js). */
+    ensureLevelPalette(level) {
+      if (!level) return null;
+      const actual = level.paletteId ? this.palette(level.paletteId) : null;
+      if (actual) return actual;
+      const id = "pl_" + level.id;
+      let p = this.palette(id);
+      if (!p) {
+        const semilla = (global.LOW && global.LOW.animation && global.LOW.animation.palette &&
+          global.LOW.animation.palette.SEMILLA) || [];
+        p = new Palette({ id, name: "Paleta del nivel",
+          styles: semilla.map(([nombre, color], i) => ({ id: id + "_" + (i + 1), index: i + 1, name: nombre, color })) });
+        this.palettes.push(p);
+      }
+      level.paletteId = id;
+      return p;
     }
     addLayer(levelId, name) {
       const l = new Layer({ levelId, name: name || `Capa ${this.layers.length + 1}` });

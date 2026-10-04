@@ -743,8 +743,10 @@
 
       const roundtrip = new Scene(JSON.parse(JSON.stringify(sc.toJSON())));
       ok("paleta y estilos se conservan al guardar/reabrir",
-        roundtrip.palettes.length === 1 &&
-        roundtrip.palette(sc.palettes[0].id).styles.length === 2);
+        // todo nivel nace con su paleta (Scene.ensureLevelPalette): se exige que
+        // vuelvan TODAS, no un número fijo
+        roundtrip.palettes.length === sc.palettes.length &&
+        roundtrip.palette(pal.id).styles.length === 2);
       ok("el vínculo nivel→paleta sobrevive",
         roundtrip.levelPalette(roundtrip.levels[0].id)?.id === pal.id);
 

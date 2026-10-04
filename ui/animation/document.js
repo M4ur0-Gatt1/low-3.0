@@ -253,11 +253,19 @@
       this.scene.layers = state.layers.map((l) => vivas.get(l.id) || new animation.Layer(l));
       for (const lv of state.levels || []) if (!this.scene.level(lv.id)) this.scene.levels.push(new animation.Level(lv));
       this.scene.levels = this.scene.levels.filter((lv) => !(state.dropLevels || []).includes(lv.id));
+      // las PALETAS viajan con las capas: cada nivel nace con la suya
+      // (Scene.ensureLevelPalette), así que deshacer «agregar capa» tiene que
+      // llevarse también la paleta de ese nivel, o queda huérfana en el archivo
+      if (Array.isArray(state.palettes)) {
+        const paletas = new Map(this.scene.palettes.map((p) => [p.id, p]));
+        this.scene.palettes = state.palettes.map((p) => paletas.get(p.id) || new animation.Palette(p));
+      }
       this.layerId = this.scene.layer(state.layerId) ? state.layerId : (this.scene.layers[0] ? this.scene.layers[0].id : null);
       this.touch(); this.emit("layers"); this.emit("cells"); this.emit("frame");
     }
     _layersSnapshot() {
-      return { layers: this.scene.layers.map((l) => l.toJSON()), layerId: this.layerId };
+      return { layers: this.scene.layers.map((l) => l.toJSON()), layerId: this.layerId,
+        palettes: this.scene.palettes.map((p) => p.toJSON()) };
     }
     _pushLayersChange(label, before, after) {
       if (!this.history) return;
@@ -484,6 +492,13 @@
       const id = layerId || this.layerId;
       const ly = this.scene.layer(id);
       const antes = ly ? ly.cells.slice() : null;
+      /* Exponer un número que el nivel no tiene CREA ese dibujo (scene.expose ->
+         addDrawing). El paso de historial tiene que guardar entonces la capa Y el
+         nivel: sólo con las celdas, deshacer dejaba el dibujo huérfano en el
+         nivel (lo encontró run_undo_estado_tests, oct-2026). */
+      const lv = ly ? this.scene.level(ly.levelId) : null;
+      const creaDibujo = !!(lv && drawingNumber != null && !lv.byNumber(Number(drawingNumber)));
+      const antesConNivel = creaDibujo ? this._snapshot([id], [lv.id]) : null;
       const ok = this.scene.expose(id, frame, drawingNumber);
       if (ok) {
         this.touch(); this.emit("cells");
@@ -494,7 +509,8 @@
         // dibujo del modelo, así que lo viejo se come a lo nuevo. Así se perdía
         // lo que uno pegaba con Ctrl+V en el cuadro donde ya estaba parado.
         if (id === this.layerId && frame === this.frame) this.emit("frame");
-        if (antes) this._histCells("Exponer dibujo", id, antes);
+        if (antesConNivel) { this.emit("level"); this._histRange("Exponer un dibujo nuevo", antesConNivel, this._snapshot([id], [lv.id])); }
+        else if (antes) this._histCells("Exponer dibujo", id, antes);
       }
       return ok;
     }
@@ -524,13 +540,8 @@
     get palette() {
       const ly = this.layer, lv = this.level;
       if (!ly || !lv) return null;
-      let pal = this.scene.levelPalette(lv.id);
-      if (!pal) {
-        pal = this.scene.addPalette("Paleta del nivel");
-        if (animation.palette) animation.palette.seed(pal);
-        this.scene.setLevelPalette(lv.id, pal.id);
-      }
-      return pal;
+      // la paleta nace con el nivel (Scene.ensureLevelPalette): leer no crea nada
+      return this.scene.levelPalette(lv.id) || this.scene.ensureLevelPalette(lv);
     }
 
     /** Cambia el color de un estilo. Recolorea, de una, todo lo que lo usa.
@@ -1013,13 +1024,17 @@
       this.touch(); this.emit("layers");
       if (this.history) {
         const doc = this, levelData = lv.toJSON(), layerData = ly.toJSON();
+        // el nivel nace con su paleta: deshacer se la lleva, rehacer la devuelve
+        const paletteData = lv.paletteId && this.scene.palette(lv.paletteId) ? this.scene.palette(lv.paletteId).toJSON() : null;
         this.history.push({ label: "Agregar capa", domain: "anim", before: null, after: layerData,
           apply: (dir) => {
             if (dir === "undo") {
               doc.scene.layers = doc.scene.layers.filter((x) => x.id !== layerData.id);
               doc.scene.levels = doc.scene.levels.filter((x) => x.id !== levelData.id);
+              if (paletteData) doc.scene.palettes = doc.scene.palettes.filter((x) => x.id !== paletteData.id);
               doc.layerId = doc.scene.layers[0] ? doc.scene.layers[0].id : null;
             } else {
+              if (paletteData && !doc.scene.palette(paletteData.id)) doc.scene.palettes.push(new animation.Palette(paletteData));
               if (!doc.scene.level(levelData.id)) doc.scene.levels.push(new animation.Level(levelData));
               if (!doc.scene.layer(layerData.id)) doc.scene.layers.push(new animation.Layer(layerData));
               doc.layerId = layerData.id;
