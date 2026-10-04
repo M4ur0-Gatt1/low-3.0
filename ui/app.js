@@ -775,7 +775,7 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
   $("#tlDel").onclick = dzDeleteFrameSelection;
   $("#tlOnion").onclick = () => {
     if (!DZ.anim) return;
-    DZ.anim.onion = !DZ.anim.onion;
+    DZ.anim.onion = !!$("#dzOnionPanel")?.hidden;   // manda lo que SE VE: la marca podía decir «abierto» con el panel oculto y el primer clic no hacía nada
     $("#tlOnion").classList.toggle("active", DZ.anim.onion);
     dzOnionPanelSet(DZ.anim.onion);
     dzOnionUpdate();
@@ -7666,7 +7666,7 @@ function dzHexToRgbF(hex) {
 }
 let ONION_RUN = 0;   // token anti-carrera: navegar rápido no duplica fantasmas
 async function dzOnionUpdate() {
-  const run = ++ONION_RUN;
+  const run = ++ONION_RUN; if (DZ.doc) return dzOnionRender();   // con documento de escena manda SU papel cebolla: este camino viejo borraba TODOS los fantasmas (los del documento también) y sólo pintaba los suyos; al abrir una escena dejaba la mesa sin cebolla (LOW 3.3.0)
   dzOnionClear();
   if (!DZ.anim || !DZ.anim.onion) return;
   const svg = $("#dzCanvas").querySelector(":scope > svg");
@@ -15884,10 +15884,10 @@ function dzDocUse(doc) {
   DZ.doc = doc; dzHojaDeDibujoAsegurar(doc.scene); DZ.dirty = !!doc.dirty; DZ.docPendiente = null;   // sin hoja de dibujo, el lienzo escribe en un overlay oculto y el commit siguiente VACIA el documento. Y lo «sin guardar» es el del DOCUMENTO: abrir desde la pantalla vacía arrastraba el DZ.dirty del lienzo anterior y cerrar preguntaba por cambios inexistentes
   if (!DZ.history) DZ.history = new LOW.core.HistoryManager({ limit: 180 });
   else DZ.history.clear();
-  doc.setHistory(DZ.history);
+  doc.setHistory(DZ.history); DZ.onionOn = true;   // papel cebolla PRENDIDO al abrir, como al crear: cerrar o cambiar de solapa lo apagaba y abrir desde Recientes/Abrir no lo volvía a prender, así que no andaba NADA (relativo, fijos, faders). Reporte de Mauro, LOW 3.3.0
   if (DZ.playback) DZ.playback.setDoc(doc);
   if (DZ.xsView) DZ.xsView.setDoc(doc);
-  if (DZ.tlView) DZ.tlView.setDoc(doc);
+  if (DZ.tlView) { DZ.tlView.setDoc(doc); DZ.tlView.onionEnabled = true; }
   if (DZ.lsView) DZ.lsView.setDoc(doc);
   if (DZ.colab) dzColabVigilar();
   doc.subscribe((d, motivo) => {
