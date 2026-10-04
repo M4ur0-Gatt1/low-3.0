@@ -912,6 +912,24 @@
       return true;
     }
 
+    /** REEXPONER un dibujo que ya existe en todas las celdas de la selección
+     *  (en las capas cuyo nivel tiene ese número). No crea dibujos: las celdas
+     *  comparten el del nivel. Un solo paso. Devuelve cuántas celdas cambió. */
+    exposeInRange(sel, number) {
+      const r = this._rangoSeleccion(sel);
+      if (!r || !r.capas.length) return 0;
+      const capas = r.capas.filter((ly) => { const lv = this.scene.level(ly.levelId); return lv && lv.byNumber(number); });
+      if (!capas.length) return 0;
+      const ids = capas.map((l) => l.id), before = this._snapshot(ids, []);
+      let n = 0;
+      for (const ly of capas) for (let f = r.from; f <= r.to; f++)
+        if (ly.cellAt(f) !== Number(number)) { ly.setCell(f, Number(number)); n++; }
+      if (!n) return 0;
+      this._histRange("Reexponer el dibujo " + number, before, this._snapshot(ids, []));
+      this.touch(); this.emit("cells"); this.emit("frame");
+      return n;
+    }
+
     /** MOVER una selección (o un hold) arrastrándola: todas sus capas se corren
      *  `desplazamiento` cuadros y la selección la acompaña. Antes el arrastre
      *  llevaba sólo el hold que estaba bajo el puntero y lo soltaba un bloque

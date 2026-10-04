@@ -189,6 +189,13 @@ contrato("mover una selección hacia atrás no la pasa del cuadro 1", (d) => {
   assert.deepEqual(capa(d, 0).cells.slice(0, 8), [2, 2, 2, 1, 1, 1, 3, 3], "el bloque no quedó al principio: " + capa(d, 0).cells);
   return ok;
 }, { creaDibujos: false });
+// el botón «Reexponer» (oct-2026): expone un dibujo existente en la selección, sin crear dibujos
+contrato("reexponer un dibujo del nivel en una selección", (d) => {
+  const n = d.exposeInRange(rango(d, 0, 0, 9, 11), 2);
+  assert.equal(n, 3, "tenía que cambiar 3 celdas, cambió " + n);
+  assert.deepEqual(capa(d, 0).cells.slice(8, 11), [2, 2, 2]);
+  return n;
+}, { creaDibujos: false });
 contrato("timing en varias capas a la vez", (d) => d.applySelectedTiming("step", rango(d, 0, 1, 1, 6), 3), { creaDibujos: false });
 contrato("vaciar un rango de dos capas", (d) => d.clearCells(rango(d, 0, 1, 2, 5)), { creaDibujos: false });
 contrato("copiar y pegar exposiciones en la MISMA capa", (d) => d.pasteCells(d.readCells(rango(d, 0, 0, 1, 6)), capa(d, 0).id, 20), { creaDibujos: false });

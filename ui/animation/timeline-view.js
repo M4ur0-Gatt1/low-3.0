@@ -228,10 +228,12 @@
         const r = cells && cells.copy(doc, selected());
         if (r && this.status) this.status(cells.medida(r) + " copiadas");
       });
-      button(clipboard, "i-paste", "Reexponer celdas copiadas: conserva el dibujo compartido dentro del mismo nivel", () => {
-        const r = cells && cells.paste(doc);
-        if (this.status) this.status(r ? cells.medida(r) + " reexpuestas; en el mismo nivel comparten dibujo" : "Copiá celdas antes de reexponer");
-      }, false, "Reexponer");
+      /* REEXPONER abre la lista de dibujos del nivel: se elige uno y queda
+         expuesto en la celda o en la selección, sin crear dibujos. Antes sólo
+         pegaba lo copiado y, sin copia, avisaba en la barra de estado: Mauro
+         (oct-2026) «el botón reexponer no hace nada o no sé cómo se usa». */
+      button(clipboard, "i-paste", "Reexponer: elegir un dibujo del nivel y exponerlo en la celda o en los cuadros seleccionados (no crea dibujos nuevos)",
+        (e) => this._menuReexponer(e), false, "Reexponer");
       const timing = group("Exposición");
       button(timing, "i-insert", "Insertar una celda antes del fotograma actual", () => doc.apply("insert", doc.frame, 1));
       button(timing, "i-eraser", "Vaciar las celdas sin borrar sus dibujos", () => doc.clearCells(selected(), "Vaciar rango"));
@@ -813,12 +815,14 @@
       const cells = animation.shortcuts && animation.shortcuts.cells;
       const avisar = (t) => { if (this.status && t) this.status(t); };
       const largo = sel.to - sel.from + 1;
+      const lugar = { clientX: e.clientX, clientY: e.clientY, preventDefault() {}, stopPropagation() {} };
       const hayCopia = !!(cells && cells.hayCopia && cells.hayCopia());
       menu(e, [
         { icon: "⧉", label: "Copiar " + this._medidaSeleccion(), shortcut: "Ctrl+C", action: () => { const r = cells && cells.copy(doc, sel); if (r) avisar(cells.medida(r) + " copiadas"); } },
         { icon: "✂", label: "Cortar", shortcut: "Ctrl+X", action: () => cells && cells.cut(doc, sel) },
         { icon: "⎘", label: "Reexponer lo copiado (comparte el dibujo)", shortcut: "Ctrl+V", disabled: !hayCopia,
           action: () => { const r = cells && cells.paste(doc); avisar(r ? cells.medida(r) + " reexpuestas: en el mismo nivel comparten el dibujo" : "Copiá celdas antes de reexponer"); } },
+        { icon: "▦", label: "Reexponer un dibujo del nivel…", action: () => requestAnimationFrame(() => this._menuReexponer(lugar)) },
         "separator",
         { icon: "⇥", label: "Rellenar los huecos con el dibujo anterior", action: () => doc.applySelectedTiming("autoexpose", sel) || avisar("No había huecos para rellenar") },
         { icon: "＋", label: "Dibujo nuevo en cada celda vacía", action: () => { const n = doc.blankDrawingsInEmptyCells(sel); avisar(n ? n + " dibujos nuevos, listos para dibujar" : "No hay celdas vacías en la selección"); } },
@@ -837,6 +841,36 @@
         { icon: "⌫", label: "Vaciar las celdas (los dibujos quedan en el nivel)", shortcut: "Supr", action: () => doc.clearCells(sel, "Vaciar rango") },
         { icon: "⊖", label: "Quitar las celdas y correr lo que sigue", action: () => doc.applySelectedTiming("remove", sel) },
       ]);
+    }
+    /** La lista de REEXPONER: los dibujos del nivel de la capa actual, con
+     *  su miniatura. Elegir uno lo expone en la selección (o la celda actual).
+     *  Si hay celdas copiadas, pegarlas va primero. */
+    _menuReexponer(e) {
+      const doc = this.doc, menu = global.showCtxMenu;
+      if (!doc || typeof menu !== "function") return;
+      const sel = doc.cellSelection || { fromLayerId: doc.layerId, toLayerId: doc.layerId,
+        anchorLayerId: doc.layerId, anchorFrame: doc.frame, from: doc.frame, to: doc.frame };
+      const ly = doc.scene.layer(sel.anchorLayerId) || doc.layer, lv = ly && doc.scene.level(ly.levelId);
+      const cells = animation.shortcuts && animation.shortcuts.cells;
+      const avisar = (t) => { if (this.status && t) this.status(t); };
+      const largo = sel.to - sel.from + 1, donde = largo === 1 ? "el cuadro " + sel.from : largo + " cuadros";
+      const W = doc.scene.width || 1920, H = doc.scene.height || 1080;
+      const items = [];
+      if (cells && cells.hayCopia && cells.hayCopia()) {
+        items.push({ icon: "⎘", label: "Pegar lo copiado acá (comparte el dibujo)", shortcut: "Ctrl+V",
+          action: () => { const r = cells.paste(doc); avisar(r ? cells.medida(r) + " reexpuestas" : ""); } }, "separator");
+      }
+      const dibujos = lv ? lv.drawings.slice().sort((a, b) => a.number - b.number) : [];
+      if (!dibujos.length) items.push({ icon: "", label: "El nivel todavía no tiene dibujos", disabled: true });
+      for (const d of dibujos) {
+        const usos = [];
+        for (let f = 1; f <= ly.cells.length && usos.length < 3; f++) if (ly.cellAt(f) === d.number && (f === 1 || ly.cellAt(f - 1) !== d.number)) usos.push(f);   // cellAt(0) devuelve el cuadro 1
+        const mini = '<svg class="tl2-mini" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet">' + (d.content || "") + "</svg>";
+        items.push({ icon: mini, label: "Dibujo " + d.number + (usos.length ? " · en F" + usos.join(", F") : " · sin exponer"),
+          action: () => { const n = doc.exposeInRange(sel, d.number); avisar(n ? "Dibujo " + d.number + " reexpuesto en " + donde : "El dibujo " + d.number + " ya estaba en " + donde); } });
+      }
+      const m = menu(e, items);
+      if (m) m.classList.add("tl2-reexponer");
     }
     _inSelection(layerId, frame) {
       const s = this.doc && this.doc.cellSelection;

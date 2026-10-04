@@ -158,6 +158,34 @@ async function main() {
     assert.equal(await estado(), s0, "un solo Ctrl+Z no deshizo el movimiento entero");
     assert.deepEqual(await ev(`[DZ.doc.cellSelection.from, DZ.doc.cellSelection.to]`), [1, 3], "después de Ctrl+Z la selección quedó donde había ido el bloque, sobre celdas vacías");
 
+    // ── 9. el botón REEXPONER: lista los dibujos del nivel y expone el elegido ──
+    // Mauro (oct-2026): «el botón reexponer no hace nada o no sé cómo se usa»:
+    // sin copia previa sólo avisaba en la barra de estado.
+    await arrastrar(0, 7, 0, 9);
+    const boton = await ev(`(()=>{ const b = [...document.querySelectorAll(".tl2-tools button")].find(x => /Reexponer/.test(x.textContent));
+      if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+    assert.ok(boton, "no está el botón «Reexponer» en la barra de la línea de tiempo");
+    await mouse("mouseMoved", boton.x, boton.y); await mouse("mousePressed", boton.x, boton.y, { buttons: 1, clickCount: 1 });
+    await mouse("mouseReleased", boton.x, boton.y, { buttons: 0, clickCount: 1 }); await wait(350);
+    const lista = await ev(`[...document.querySelectorAll(".ctx-command-menu .ctx-item")].map(b => [b.textContent.trim(), !!b.querySelector("svg.tl2-mini")])`);
+    assert.ok(["Dibujo 1", "Dibujo 2", "Dibujo 3"].every((t) => lista.some(([x, mini]) => x.startsWith(t) && mini)),
+      "«Reexponer» no muestra los dibujos del nivel con su miniatura: " + JSON.stringify(lista));
+    // Capa 1 = A A A B B C: el dibujo 1 está en F1 (el primer cuadro también cuenta)
+    assert.ok(lista.some(([x]) => (x === "Dibujo 1 · en F1" || x.startsWith("Dibujo 1 · en F1,"))), "la lista no dice dónde está expuesto el dibujo 1: " + JSON.stringify(lista));
+    const d9 = await ev(`DZ.doc.scene.levels.reduce((n, l) => n + l.drawings.length, 0)`), h9 = await ev(`DZ.doc.history.undoStack.length`);
+    await elegir("Dibujo 2");
+    const reexp = await ev(`({ c: DZ.doc.scene.layers[0].cells.slice(6, 9), d: DZ.doc.scene.levels.reduce((n, l) => n + l.drawings.length, 0), h: DZ.doc.history.undoStack.length })`);
+    assert.deepEqual(reexp.c, [2, 2, 2], "elegir «Dibujo 2» no lo expuso en F7..F9: " + JSON.stringify(reexp));
+    assert.equal(reexp.d, d9, "reexponer creó dibujos");
+    assert.equal(reexp.h - h9, 1, "reexponer dejó " + (reexp.h - h9) + " pasos en el historial");
+    await tecla("z", "KeyZ", 90, 2);
+    assert.equal(await estado(), s0, "Ctrl+Z después de reexponer el dibujo 2 no volvió exacto");
+    // y desde el clic derecho, el mismo selector
+    await clicDerecho(0, 8); await elegir("Reexponer un dibujo del nivel");
+    await wait(200);
+    assert.ok(await ev(`!!document.querySelector(".ctx-command-menu.tl2-reexponer")`), "el clic derecho no abre el selector de dibujos");
+    await tecla("Escape", "Escape", 27);
+
     const graves = errores.filter((e) => !/ResizeObserver/.test(String(e)));
     assert.deepEqual(graves.slice(0, 3), [], "hubo excepciones durante el recorrido");
     console.log("E2E selección de varios cuadros y clic derecho OK · " + items.length + " acciones en el menú");
