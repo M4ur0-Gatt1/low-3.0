@@ -50,7 +50,7 @@
 
   /** El <filter> de un pincel, o null si es liso y sin efecto. `brush` ya
    *  normalizado (o con sus campos crudos). */
-  function filtro(brush, id) {
+  function filtro(brush, id, caja) {
     const tex = brush && brush.texture, glow = +(brush && brush.glow) || 0;
     const grano = tex && GRANOS[tex], borde = tex && BORDES[tex];
     if (!grano && !borde && !(glow > 0)) return null;
@@ -88,13 +88,26 @@
     if (glow > 0) {
       // BRILLO: la tinta desenfocada debajo, dos veces (halo con cuerpo), y la
       // tinta nítida encima. Con `neon`, además un núcleo claro en el centro.
+      // un halo cercano con cuerpo y uno lejano y tenue (el «bloom»)
       const sd = Math.max(1, glow * size * .9);
-      pasos.push(`<feGaussianBlur in="${entrada}" stdDeviation="${n(sd, 2)}" result="halo"/>`);
+      pasos.push(`<feGaussianBlur in="${entrada}" stdDeviation="${n(sd, 2)}" result="halo"/>`,
+        `<feGaussianBlur in="${entrada}" stdDeviation="${n(sd * 2.6, 2)}" result="lejos"/>`,
+        `<feComponentTransfer in="lejos" result="bloom"><feFuncA type="linear" slope=".55"/></feComponentTransfer>`);
+      // NEÓN: el núcleo es una tinta CLARA del mismo color (no blanco puro) y
+      // angosto: el tubo encendido, no un caño blanco con borde
       const nucleo = brush.neon
-        ? [`<feMorphology in="${entrada}" operator="erode" radius="${n(Math.max(.4, size * .16), 2)}" result="fino"/>`,
-           `<feFlood flood-color="#ffffff" flood-opacity=".9" result="blanco"/>`,
-           `<feComposite in="blanco" in2="fino" operator="in" result="nucleo"/>`] : [];
-      pasos.push(...nucleo, `<feMerge><feMergeNode in="halo"/><feMergeNode in="halo"/><feMergeNode in="${entrada}"/>${brush.neon ? '<feMergeNode in="nucleo"/>' : ""}</feMerge>`);
+        ? [`<feMorphology in="${entrada}" operator="erode" radius="${n(Math.max(.4, size * .26), 2)}" result="fino"/>`,
+           `<feGaussianBlur in="fino" stdDeviation="${n(Math.max(.3, size * .05), 2)}" result="finoSuave"/>`,
+           `<feComponentTransfer in="finoSuave" result="nucleo"><feFuncR type="linear" slope=".25" intercept=".75"/><feFuncG type="linear" slope=".25" intercept=".75"/><feFuncB type="linear" slope=".25" intercept=".75"/></feComponentTransfer>`] : [];
+      pasos.push(...nucleo, `<feMerge><feMergeNode in="bloom"/><feMergeNode in="halo"/><feMergeNode in="halo"/><feMergeNode in="${entrada}"/>${brush.neon ? '<feMergeNode in="nucleo"/>' : ""}</feMerge>`);
+    }
+    // LA REGIÓN DEL FILTRO. En porcentaje de la caja del trazo, un trazo largo y
+    // angosto cortaba el halo con un borde recto (medido con «Brillo suave»).
+    // Si se conoce la caja, la región va en unidades del dibujo: la caja más
+    // lo que alcanza el halo (3 desvíos del desenfoque más ancho).
+    if (caja && caja.w > 0 && caja.h > 0) {
+      const alcance = glow > 0 ? 3 * Math.max(1, glow * size * .9) * 2.6 + size : borde ? size * 1.5 : size * .5;
+      return `<filter id="${id}" filterUnits="userSpaceOnUse" x="${n(caja.x - alcance, 1)}" y="${n(caja.y - alcance, 1)}" width="${n(caja.w + 2 * alcance, 1)}" height="${n(caja.h + 2 * alcance, 1)}" color-interpolation-filters="sRGB">${pasos.join("")}</filter>`;
     }
     const margen = glow > 0 ? 60 : borde ? 25 : 8;
     return `<filter id="${id}" x="-${margen}%" y="-${margen}%" width="${100 + 2 * margen}%" height="${100 + 2 * margen}%" color-interpolation-filters="sRGB">${pasos.join("")}</filter>`;
@@ -103,7 +116,7 @@
   /** Formas de sello, radio 1, centradas en 0,0. «Arriba» es -y. */
   const FORMAS = {
     star: "M0 -1 L.2 -.2 L1 0 L.2 .2 L0 1 L-.2 .2 L-1 0 L-.2 -.2 Z",
-    blade: "M-.16 1 Q-.08 .1 0 -1 Q.1 .1 .16 1 Z",
+    blade: "M-.24 1 Q-.12 .1 0 -1 Q.14 .1 .24 1 Z",
     leaf: "M0 -1 C.62 -.52 .62 .52 0 1 C-.62 .52 -.62 -.52 0 -1 Z",
     square: "M-1 -1 H1 V1 H-1 Z",
     line: "M-1 -.07 H1 V.07 H-1 Z",

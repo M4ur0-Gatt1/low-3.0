@@ -101,7 +101,12 @@ const url=process.argv[3]||'http://127.0.0.1:8791/ui/index.html?mock=1';
  console.log('Texto: sobrevive a un repintado del lienzo OK');
 
  await value(`(()=>{const testSvg=hoja();DZ.brushPreset='dry-brush';DZ.drawW=20;const brush=dzBrushFinalElement([[600,500,1],[700,500,1],[800,500,1]],'#111');brush.id='test-brush';const layer=document.createElementNS(testSvg.namespaceURI,'g');layer.setAttribute('data-low-art','line');layer.append(brush);testSvg.append(layer);dzDocCommit();dzBienvenida2DPintar();dzSetTool('select');})()`);
- const dab=await point('#test-brush ellipse');await click(dab);
+ // MAPA DE BITS (oct-2026): el trazo raster es una imagen con máscara. Se
+ // espera a que la imagen esté decodificada: hasta entonces el trazo todavía
+ // no se pintó y el clic cae en lo que hay debajo (las elipses de antes se
+ // pintaban en el acto)
+ await value('(async()=>{const i=document.querySelector("#test-brush image");if(i&&i.decode)await i.decode().catch(()=>0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));return 1;})()');
+ const dab=await point('#test-brush rect, #test-brush ellipse');await click(dab);
  if(!await value('DZ.sel?.id==="test-brush"'))throw Error('Seleccionó círculo interno '+JSON.stringify(await value('({selected:DZ.sel?.outerHTML?.slice(0,120),tool:DZ.tool,rect:document.querySelector("#test-brush").getBoundingClientRect().toJSON()})'))+' point '+JSON.stringify(dab));
  await abrirCajon('button[data-tool="handler"]');await button('button[data-tool="handler"]');
  if(await value('DZ.tool')!=='handler')throw Error('apretar la bomba no cambio de herramienta');

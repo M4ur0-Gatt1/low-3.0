@@ -84,15 +84,20 @@ async function main() {
       portable:made?.querySelectorAll('image[href^="data:image/png"]').length===1,filter:!!made?.querySelector('filter feComposite'),
       longStamps:longMade?.querySelectorAll('use').length,longSource:+(longMade?.getAttribute('data-source-dab-count')||0),longAssets:longMade?.querySelectorAll('image[href^="data:image/png"]').length,
       procedural:procedural?.querySelectorAll('ellipse').length,proceduralKind:procedural?.getAttribute('data-low'),studio:studioState,
+      // MAPA DE BITS (oct-2026, ui/drawing/pincel-bitmap.js): el raster se pinta en una imagen, no en elipses
+      proceduralBitmap:procedural?.getAttribute('data-low-bitmap')==='1'&&!!procedural?.querySelector('mask image'),
+      importedBitmap:made?.getAttribute('data-low-bitmap')==='1'&&!!made?.querySelector('image'),
+      longBitmap:longMade?.getAttribute('data-low-bitmap')==='1'&&longMade?.querySelectorAll('image').length===1,
       penLow:_otPressure({pointerType:'pen',pressure:.1}),penHigh:_otPressure({pointerType:'pen',pressure:.9}),mouse:_otPressure({pointerType:'mouse',pressure:.5})};
   })()`;
   const evaluated = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
   if (evaluated.exceptionDetails) throw Error(evaluated.exceptionDetails.exception?.description || evaluated.exceptionDetails.text);
   const value = evaluated.result.value;
   if (value.pieces !== 2 || !value.wrappers || !value.ids.includes("brazo") || !value.ids.includes("cabeza")) throw Error("SVG no se separó por objetos: " + JSON.stringify(value));
-  if (value.brushes !== 1 || value.selected !== "Tinta importada" || !value.stamps || !value.portable || !value.filter) throw Error("Pincel importado no produce stamps: " + JSON.stringify(value));
-  if (!value.procedural || value.proceduralKind !== "raster-brush") throw Error("Pincel raster incorporado volvió a cinta vectorial: " + JSON.stringify(value));
-  if (!value.longStamps || value.longStamps > 1600 || value.longSource <= value.longStamps || value.longAssets !== 1) throw Error("Trazo raster largo no está optimizado: " + JSON.stringify(value));
+  // un pincel importado deja sus marcas en el MAPA DE BITS, o en sellos mientras su punta no está decodificada
+  if (value.brushes !== 1 || value.selected !== "Tinta importada" || !((value.stamps && value.portable && value.filter) || value.importedBitmap)) throw Error("Pincel importado no produce marcas: " + JSON.stringify(value));
+  if (!value.proceduralBitmap || value.proceduralKind !== "raster-brush") throw Error("Pincel raster incorporado no pasa por el mapa de bits (o volvió a cinta vectorial): " + JSON.stringify(value));
+  if (!((value.longStamps && value.longStamps <= 1600 && value.longSource > value.longStamps && value.longAssets === 1) || value.longBitmap)) throw Error("Trazo raster largo no está optimizado: " + JSON.stringify(value));
   const pc = value.pincelColor;
   if (!pc?.hay) throw Error("REGRESIÓN: el pincel no dejó ningún trazo: " + JSON.stringify(pc));
   if (pc.computado !== pc.esperado || pc.etiquetaTinta !== pc.indiceTinta)

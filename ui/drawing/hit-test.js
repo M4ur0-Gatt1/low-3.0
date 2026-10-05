@@ -74,8 +74,43 @@ function dzHitPunto(svg, x, y) {
 
 /** ¿El punto cae en este nodo? Área si la forma es cerrada, trazo si es
  *  abierta, y caja si es texto o una imagen (no tienen geometría de relleno). */
+/* EL TRAZO DE MAPA DE BITS se toca donde tiene TINTA (oct-2026). Es un <rect>
+   con máscara (o una <image> a color): ni su relleno ni su contorno son el
+   dibujo, así que el clic no lo seleccionaba nunca. Se lee el alfa de la
+   imagen —ya decodificada para pintarla— en el punto, con la holgura del
+   resto. Mientras no se pueda leer, cuenta la caja. */
+const DZ_HIT_BITMAP = new WeakMap();
+function dzHitBitmap(g, punto, holguraUsuario) {
+  const img = g.querySelector("image");
+  if (!img) return false;
+  const bx = +img.getAttribute("x"), by = +img.getAttribute("y"), bw = +img.getAttribute("width"), bh = +img.getAttribute("height");
+  if (!(bw > 0 && bh > 0)) return false;
+  const h = holguraUsuario || 0;
+  if (punto.x < bx - h || punto.x > bx + bw + h || punto.y < by - h || punto.y > by + bh + h) return false;
+  let c = DZ_HIT_BITMAP.get(img);
+  if (!c) {
+    try {
+      const lado = 512, cw = bw >= bh ? lado : Math.max(1, Math.round(lado * bw / bh)), ch = bw >= bh ? Math.max(1, Math.round(lado * bh / bw)) : lado;
+      c = document.createElement("canvas"); c.width = cw; c.height = ch;
+      const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(img, 0, 0, cw, ch);
+      if (!x.getImageData(0, 0, cw, ch).data.some((v, i) => i % 4 === 3 && v)) return true;   // todavía sin decodificar: la caja
+      DZ_HIT_BITMAP.set(img, c);
+    } catch (_) { return true; }
+  }
+  const px = (punto.x - bx) / bw * c.width, py = (punto.y - by) / bh * c.height, r = Math.max(1, Math.ceil(h / bw * c.width));
+  const x0 = Math.max(0, Math.floor(px - r)), y0 = Math.max(0, Math.floor(py - r));
+  const w = Math.min(c.width, Math.ceil(px + r)) - x0, hh = Math.min(c.height, Math.ceil(py + r)) - y0;
+  if (w <= 0 || hh <= 0) return false;
+  const d = c.getContext("2d", { willReadFrequently: true }).getImageData(x0, y0, w, hh).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i] > 24) return true;
+  return false;
+}
+
 function dzHitTocado(nodo, punto, holguraUsuario) {
   const tag = (nodo.tagName || "").toLowerCase();
+  const padre = nodo.parentElement;
+  if (padre && padre.getAttribute && padre.getAttribute("data-low-bitmap") === "1" && (tag === "rect" || tag === "image"))
+    return dzHitBitmap(padre, punto, holguraUsuario);
   if (tag === "text" || tag === "image" || tag === "use" || tag === "foreignobject") {
     try {
       const b = nodo.getBBox();

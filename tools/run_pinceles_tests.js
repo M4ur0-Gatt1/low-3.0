@@ -98,7 +98,9 @@ prueba("la fuerza de textura en 0 deja la tinta entera", () => {
 prueba("brillo y neón", () => {
   const g = D.efectos.filtro({ size: 8, glow: .8 }, "g"), n = D.efectos.filtro({ size: 8, glow: .8, neon: true }, "n");
   assert.match(g, /feGaussianBlur/); assert.doesNotMatch(g, /feMorphology/);
-  assert.match(n, /flood-color="#ffffff"/, "el neón no tiene núcleo claro");
+  // el núcleo del neón: una tinta CLARA del mismo color (no blanco puro), angosta
+  assert.match(n, /operator="erode"/, "el neón no tiene núcleo angosto");
+  assert.match(n, /intercept="\.75"/, "el núcleo del neón no es una tinta clara del color");
 });
 prueba("girar el tono", () => {
   assert.equal(D.efectos.girarTono("#ff0000", 120), "#00ff00");

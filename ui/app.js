@@ -5170,7 +5170,7 @@ function _drawAddPoint(track, x, y, pr, meta = null) {
   }
   
   track.pts.push([x, y, smPr, meta?.tiltX || 0, meta?.tiltY || 0, meta?.twist || 0, meta?.timeStamp || performance.now()]);
-  if (track.mode !== "pencil") {
+  if (track.mode !== "pencil" && !(window.dzPincelVivo && window.dzPincelVivo(track))) {   // el pincel DE VERDAD mientras se dibuja (ui/drawing/pincel-vivo.js); si no, las rayitas
     const seg = document.createElementNS(SVGNS, "path");
     seg.setAttribute("d", `M ${last[0].toFixed(1)} ${last[1].toFixed(1)} L ${x.toFixed(1)} ${y.toFixed(1)}`);
     seg.setAttribute("stroke-width", Math.max(0.3, (DZ.drawW || 6) * 2 * smPr).toFixed(1));
@@ -5219,14 +5219,14 @@ function _drawBeginTrack(e, svg) {
 function _drawCancel(reason = "cancel") {
   const t = DRAW_TRACK; DRAW_TRACK = null;
   if (!t) return;
-  t.el?.remove();
+  t.el?.remove(); window.dzPincelVivoFin?.(t);
   _hideGuideLine();
   _dzDiag("× trazo cancelado: " + reason, "#F59E0B");
 }
 
 function _drawFinish() {
   if (!DRAW_TRACK) return;
-  const t = DRAW_TRACK; DRAW_TRACK = null;
+  const t = DRAW_TRACK; DRAW_TRACK = null; window.dzPincelVivoFin?.(t);   // la vista en vivo se va: queda el trazo final
   if (DZPointerController && t.gestureToken != null
       && !DZPointerController.finish(t.gestureToken, t.pid)) {
     t.el?.remove(); _hideGuideLine(); return;

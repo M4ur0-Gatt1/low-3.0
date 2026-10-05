@@ -98,14 +98,17 @@ async function main() {
       for (const b of LOW.drawing.brushes.all()) {
         let el = null, error = null; try { el = dzBrushRenderElement(pts, "#334455", { brush: b, size: Math.min(b.size || 6, 24) }); } catch (e) { error = e.message; }
         out.push({ id: b.id, ok: !!el, error, filtro: !!(el && el.querySelector && el.querySelector("filter feTurbulence")), brillo: !!(el && el.querySelector && el.querySelector("filter feGaussianBlur")),
-          formas: el ? el.querySelectorAll("use").length : 0, textura: b.texture || null, glow: b.glow || 0, shape: b.shape || null });
+          formas: el ? el.querySelectorAll("use").length : 0, textura: b.texture || null, glow: b.glow || 0, shape: b.shape || null,
+          raster: b.engine === "raster", borde: !!(LOW.drawing.efectos.BORDES[b.texture]), bitmap: !!(el && el.getAttribute && el.getAttribute("data-low-bitmap") === "1") });
       } return out; })()`);
     assert.ok(todos.length >= 40, "hay " + todos.length + " pinceles");
     for (const b of todos) {
       assert.ok(b.ok, b.id + " no dibuja nada" + (b.error ? ": " + b.error : ""));
-      if (b.textura && b.textura !== "pixel") assert.ok(b.filtro, b.id + ": declara textura «" + b.textura + "» y no lleva grano");
+      // raster: el MAPA DE BITS (punta, grano); vectorial y bordes: filtro SVG
+      if (b.raster && b.textura !== "pixel" && !b.id.includes("eraser")) assert.ok(b.bitmap, b.id + ": es raster y no pasa por el mapa de bits");
+      if (b.textura && b.textura !== "pixel" && (!b.raster || b.borde)) assert.ok(b.filtro, b.id + ": declara textura «" + b.textura + "» y no lleva su filtro");
       if (b.glow) assert.ok(b.brillo, b.id + ": declara brillo y no brilla");
-      if (b.shape && b.shape !== "ellipse") assert.ok(b.formas > 0, b.id + ": declara forma «" + b.shape + "» y pinta sellos redondos");
+      if (b.shape && b.shape !== "ellipse") assert.ok(b.bitmap || b.formas > 0, b.id + ": declara forma «" + b.shape + "» y no la pinta");
     }
 
     // ── 3. el grano en los píxeles ──────────────────────────────────────────

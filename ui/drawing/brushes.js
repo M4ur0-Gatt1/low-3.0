@@ -44,12 +44,12 @@
     ["stipple", "Puntillismo", { cat: "textura", engine: "raster", size: 5, opacity: .9, flow: 1, pressureSize: .4, spacing: 1.4, scatter: 1.6, sizeJitter: .6, shape: "dot", hardness: 1 }],
     ["texture-spray", "Spray de textura", { cat: "textura", engine: "raster", size: 46, opacity: .34, flow: .26, pressureOpacity: .45, scatter: .8, spacing: .12, hardness: .55, texture: "spray", textureStrength: .7 }],
     // ── EFECTOS ──
-    ["neon", "Neón", { cat: "efecto", engine: "vector", size: 6, opacity: 1, pressureSize: .3, smoothing: .55, glow: .9, neon: true }],
-    ["soft-glow", "Brillo suave", { cat: "efecto", engine: "vector", size: 10, opacity: .9, pressureSize: .6, smoothing: .45, glow: .6, taperStart: .2, taperEnd: .4 }],
-    ["sparkles", "Destellos", { cat: "efecto", engine: "raster", size: 26, opacity: .95, flow: 1, pressureSize: .5, spacing: 1.1, scatter: 1.4, sizeJitter: .75, angleJitter: .25, opacityJitter: .4, angleFollowsStroke: false, shape: "star", hardness: 1, glow: .25 }],
+    ["neon", "Neón", { cat: "efecto", engine: "vector", color: "#33B5E8", size: 6, opacity: 1, pressureSize: .3, smoothing: .55, glow: .9, neon: true }],
+    ["soft-glow", "Brillo suave", { cat: "efecto", engine: "vector", color: "#ffb347", size: 10, opacity: .9, pressureSize: .6, smoothing: .45, glow: .6, taperStart: .2, taperEnd: .4 }],
+    ["sparkles", "Destellos", { cat: "efecto", engine: "raster", color: "#f2c230", size: 26, opacity: .95, flow: 1, pressureSize: .5, spacing: 1.1, scatter: 1.4, sizeJitter: .75, angleJitter: .25, opacityJitter: .4, angleFollowsStroke: false, shape: "star", hardness: 1, glow: .25 }],
     ["confetti", "Confeti", { cat: "efecto", engine: "raster", size: 10, opacity: 1, flow: 1, color: "#F0450E", spacing: 1.2, scatter: 2, sizeJitter: .5, angleJitter: 1, hueJitter: 1, angleFollowsStroke: false, shape: "square", roundness: .6, hardness: 1 }],
-    ["grass", "Pasto", { cat: "efecto", engine: "raster", size: 30, opacity: .95, flow: 1, spacing: .22, scatter: .5, sizeJitter: .55, angleJitter: .12, hueJitter: .06, angleFollowsStroke: false, shape: "blade", hardness: 1 }],
-    ["leaves", "Hojas", { cat: "efecto", engine: "raster", size: 22, opacity: .95, flow: 1, spacing: .7, scatter: 1.2, sizeJitter: .5, angleJitter: 1, hueJitter: .12, angleFollowsStroke: false, shape: "leaf", roundness: .7, hardness: 1 }],
+    ["grass", "Pasto", { cat: "efecto", engine: "raster", color: "#3f8f3a", size: 30, opacity: .95, flow: 1, spacing: .1, scatter: .5, sizeJitter: .55, angleJitter: .12, hueJitter: .06, angleFollowsStroke: false, shape: "blade", hardness: 1 }],
+    ["leaves", "Hojas", { cat: "efecto", engine: "raster", color: "#4a8f3c", size: 22, opacity: .95, flow: 1, spacing: .7, scatter: 1.2, sizeJitter: .5, angleJitter: 1, hueJitter: .12, angleFollowsStroke: false, shape: "leaf", roundness: .7, hardness: 1 }],
     ["smoke", "Humo", { cat: "efecto", engine: "raster", size: 60, opacity: .14, flow: .3, spacing: .1, scatter: .4, sizeJitter: .4, hardness: .02, texture: "wet", textureStrength: .9 }],
     ["hatching", "Rayado", { cat: "efecto", engine: "raster", size: 22, opacity: .85, flow: 1, pressureSize: .5, spacing: .28, sizeJitter: .15, angle: -45, angleFollowsStroke: false, shape: "line", hardness: 1 }],
     // ── BORRADORES ──

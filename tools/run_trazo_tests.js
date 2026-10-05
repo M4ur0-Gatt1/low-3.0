@@ -72,6 +72,30 @@ prueba("suavizar por distancia: los extremos no se mueven", () => {
   assert.equal(out.length, pts.length);
 });
 
+// «el trazo no sigue la mano» (oct-2026): una V simplificada a 3 puntos salía como una U
+prueba("una V aguda queda en punta (no se vuelve U)", () => {
+  const V = [[0, 0], [60, 120], [120, 0]];
+  const m = muestrear(D.caminoSuave(V), 60);
+  // distancia de cada punto de la curva a los dos lados de la V
+  const seg = (p, u, v) => { const dx = v[0] - u[0], dy = v[1] - u[1], t = Math.max(0, Math.min(1, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / (dx * dx + dy * dy))); return Math.hypot(p[0] - u[0] - t * dx, p[1] - u[1] - t * dy); };
+  const desvio = Math.max(...m.map((p) => Math.min(seg(p, V[0], V[1]), seg(p, V[1], V[2]))));
+  assert.ok(desvio < .5, "la V se redondea: el trazo se separa " + desvio.toFixed(2) + " del recorrido del lápiz");
+  assert.ok(m.some((p) => Math.hypot(p[0] - 60, p[1] - 120) < .2), "la curva no llega a la punta de la V");
+});
+prueba("el pincel sigue la misma curva: pasa por los puntos, respeta la esquina y lleva la presión", () => {
+  const V = [[0, 0, .2], [60, 120, .8], [120, 0, .4]];
+  const c = D.puntosDeCurva(V, 2);
+  assert.ok(c.length > 100, "muy pocos puntos: " + c.length);
+  assert.ok(c.some((p) => p[0] === 60 && p[1] === 120 && p[2] === .8), "no pasa por la punta con su presión");
+  assert.deepEqual(c[0], V[0]); assert.deepEqual(c.at(-1), V[2]);
+  const medio = c[Math.floor(c.length / 4)];
+  assert.ok(medio[2] > .2 && medio[2] < .8, "la presión no se interpola: " + medio[2]);
+  // una curva suave no se convierte en polígono: un semicírculo muestreado queda redondo
+  const semi = []; for (let i = 0; i <= 8; i++) { const a = i / 8 * Math.PI; semi.push([100 + 100 * Math.cos(a), 100 + 100 * Math.sin(a), .5]); }
+  const r = D.puntosDeCurva(semi, 2).map((p) => Math.hypot(p[0] - 100, p[1] - 100));
+  assert.ok(Math.max(...r.map((x) => Math.abs(x - 100))) < 1.5, "el semicírculo muestreado tiene facetas: radio " + Math.min(...r).toFixed(1) + ".." + Math.max(...r).toFixed(1));
+});
+
 prueba("el trazo termina donde se levantó el lápiz", () => {
   const pts = [[0, 0, .6, 0, 0, 0, 1], [90, 0, .6, 0, 0, 0, 2]];   // el estabilizador quedó en 90; el lápiz se levantó en 100
   assert.equal(D.cerrarEnElPuntero(pts, { x: 100, y: 0 }, 3), true);

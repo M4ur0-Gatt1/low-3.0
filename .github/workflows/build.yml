@@ -161,6 +161,7 @@ jobs:
           node tools/check_composicion_botones_ui.js
           node tools/check_cebolla_al_abrir_ui.js
           node tools/check_pinceles_ui.js
+          node tools/check_pincel_vivo_ui.js
           node tools/check_trazo_calidad_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js

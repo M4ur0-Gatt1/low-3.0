@@ -61,13 +61,29 @@ function dzBrushRenderElement(points, color, opciones) {
   const preset = opciones?.brush || fijo || dzCurrentBrush(), engine = window.LOW?.drawing?.brushEngine;
   const grosor = (opciones && opciones.size) || DZ.drawW || 6;
   if (!preset || !engine) return dzBrushRibbon(points, grosor, color);
-  const samples = points.map(p => ({ x: p[0], y: p[1], pressure: p[2],
+  // el pincel sigue la CURVA del trazo (con sus esquinas), no rectas entre los
+  // puntos simplificados: un paso de ~1/6 del grosor, nunca menos de media unidad
+  const curva = window.LOW?.drawing?.puntosDeCurva ? LOW.drawing.puntosDeCurva(points, Math.max(.5, grosor / 6)) : points;
+  const samples = curva.map(p => ({ x: p[0], y: p[1], pressure: p[2],
     tiltX: p[3] || 0, tiltY: p[4] || 0, twist: p[5] || 0, time: p[6] || 0 }));
   const fixed = opciones?.fixedWidth ?? (!opciones && !!DZ.anchoFijo);
   const brush = { ...preset, size: grosor, ...(fixed ? {pressureSize:0, tiltSize:0, velocitySize:0} : {}) };
   if (dzBrushMotor(brush) === "raster") {
     const dabs = engine.buildRasterDabs(samples, brush);
     if (!dabs.length) return null;
+    // EL MAPA DE BITS (ui/drawing/pincel-bitmap.js): punta de verdad, tinta que
+    // se acumula y grano fijo en la hoja. En el mapa va el GRANO; lo de BORDE
+    // (acuarela, húmedo, áspero) y el BRILLO siguen como filtro SVG encima.
+    const bm = window.LOW?.drawing?.bitmap, efx = window.LOW?.drawing?.efectos;
+    if (bm && !brush.eraser && brush.texture !== "pixel") {
+      const soloBorde = { ...brush, seed: brush.seed || 1, texture: efx && efx.BORDES[brush.texture] ? brush.texture : null };
+      let caja = null;
+      if (dabs.length) { const xs = dabs.map(d => d.x), ys = dabs.map(d => d.y), m = Math.max(...dabs.map(d => d.width));
+        caja = { x: Math.min(...xs) - m, y: Math.min(...ys) - m, w: Math.max(...xs) - Math.min(...xs) + 2 * m, h: Math.max(...ys) - Math.min(...ys) + 2 * m }; }
+      const fxDef = efx ? efx.filtro(soloBorde, dzBrushIdUnico("brush_fx_"), caja) : null;
+      const el = bm.render(dabs, { ...brush, seed: brush.seed || 1 }, color, { fx: fxDef });
+      if (el) return el;
+    }
     // Un trazo largo no puede convertirse en decenas de miles de nodos SVG.
     // Conservamos una muestra uniforme (incluidos ambos extremos) y dejamos el
     // conteo original como diagnóstico. 1600 dabs mantiene detalle a zoom de
@@ -151,7 +167,12 @@ function dzBrushRenderElement(points, color, opciones) {
     if (Number.isFinite(opacidad) && opacidad < 1) path.setAttribute("fill-opacity", Math.max(0, opacidad).toFixed(3));
     path.setAttribute("data-low", "brush"); path.setAttribute("data-brush-id", brush.id);
     const fx = window.LOW?.drawing?.efectos, fid = fx && dzBrushIdUnico("brush_fx_");
-    const def = fx ? fx.filtro({ ...brush, seed: brush.seed || 1 }, fid) : null;
+    let caja = null;
+    if (outline.samples && outline.samples.length) {
+      const xs = outline.samples.map(p => p.x), ys = outline.samples.map(p => p.y), m = grosor;
+      caja = { x: Math.min(...xs) - m, y: Math.min(...ys) - m, w: Math.max(...xs) - Math.min(...xs) + 2 * m, h: Math.max(...ys) - Math.min(...ys) + 2 * m };
+    }
+    const def = fx ? fx.filtro({ ...brush, seed: brush.seed || 1 }, fid, caja) : null;
     if (!def) return path;
     // TEXTURA o EFECTO: el trazo pasa a ser un grupo con su filtro adentro (viaja
     // con el dibujo). El color va en el GRUPO y el camino lo hereda: la paleta
