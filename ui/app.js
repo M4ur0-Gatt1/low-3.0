@@ -6899,7 +6899,7 @@ async function dzAnimToggle() {
     $("#dzLevelStrip").hidden = true;
     $("#dzTlGrid").hidden = true;   // el grid de capas vive con la timeline
     dzAnimationDock(false);
-    if (DZ.camMode) { DZ.camMode = false; $("#dzCamBtn").classList.remove("active"); $("#dzCam").hidden = true; $("#tlCamKey").hidden = true; }
+    if (DZ.camMode) { dzCamToggle(); $("#dzCam").hidden = true; }   // apagar el modo ENTERO: dejaba la herramienta en «camera» y el encuadre agarrable, y un arrastre clavaba la cámara sin avisar
     return;
   }
   if (!DZ.path && !DZ.doc) return sysMsg("Abrí o creá un documento primero («Nuevo documento», 🖋, o un .svg del árbol).");
@@ -11860,7 +11860,7 @@ async function dzWindowPanelSet(id, show) {
   } else if (id === "fn") {
     dzFnSetVisible(show);
   } else if (id === "camera") {
-    if (show !== !node.hidden) dzCamToggle();
+    if (show !== !!DZ.camMode) dzCamToggle();   // contra el MODO, no contra el div: la guía también lo muestra y la orden quedaba invertida
   } else if (id === "code") {
     if (show !== !node.hidden) dzToggleCode();
   } else node.hidden = !show;

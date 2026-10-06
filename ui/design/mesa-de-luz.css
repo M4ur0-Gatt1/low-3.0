@@ -37,7 +37,9 @@
 
 /* EL DIAL: el disco en chico, siempre a mano */
 .mesa-dial {
-  position: absolute; right: 14px; bottom: 14px; z-index: 4;
+  /* debajo del encuadre de cámara (z 4): en modo cámara su esquina de zoom
+     caía abajo a la derecha y el dial la tapaba */
+  position: absolute; right: 14px; bottom: 14px; z-index: 3;
   width: 84px; height: 84px; border-radius: 50%;
   cursor: grab; user-select: none; touch-action: none;
   background: #151413;

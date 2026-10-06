@@ -62,7 +62,10 @@ async function main() {
     const r = await send("Runtime.evaluate", { expression: // Esperar por CONDICION: mas abajo el recorrido usa LOW.workspace.workspaces,
     // que se monta despues de las funciones sueltas. Bajo carga la prueba llegaba
     // antes y moria con «Cannot read properties of undefined (reading 'activate')».
-    'typeof dzDocInit==="function" && typeof dzSerialize==="function" && !!api && !!window.LOW?.workspace?.workspaces', returnByValue: true });
+    // readyState «complete»: dzDocInit existe antes de que carguen los scripts
+    // de después de app.js (canvas-content.js trae dzCanvasInner); llamarlo
+    // antes daba «dzCanvasInner is not defined» de a ratos
+    'document.readyState==="complete" && typeof dzCanvasInner==="function" && typeof dzDocInit==="function" && typeof dzSerialize==="function" && !!api && !!window.LOW?.workspace?.workspaces', returnByValue: true });
     if (r.result?.value) break; await new Promise(r => setTimeout(r, 250));
   }
 

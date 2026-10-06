@@ -74,7 +74,8 @@ async function main() {
     // ── Escena con las TRES cosas, y el audio DESPLAZADO a proposito.
     const DESFASE=2;
     sc.camera=sc.camera||{keys:{}};
-    sc.camera.keys={2:{x:0,y:0,zoom:1}, 8:{x:120,y:-40,zoom:1.25}, 15:{x:0,y:0,zoom:1}};
+    const W=sc.width, H=sc.height;   // claves con la forma REAL {cx, cy, w, rot}; antes {x, y, zoom}, que no existe
+    sc.camera.keys={2:{cx:W/2,cy:H/2,w:W,rot:0}, 8:{cx:W/2+120,cy:H/2-40,w:W/1.25,rot:0}, 15:{cx:W/2,cy:H/2,w:W,rot:0}};
     const picos=Array.from({length:20},(_,i)=>Math.min(1,(i%5)/4));
     if(LOW.animation.AudioTrack){
       doc.audio=new LOW.animation.AudioTrack(doc);
@@ -162,6 +163,8 @@ async function main() {
     mal("los rombos de cámara no coinciden con las claves de la escena", v.camara);
   if (!/[Cc]lave de cámara/.test(v.camara.tituloDeUna))
     mal("una clave de cámara no se explica al pasar el mouse", v.camara);
+  if (!/zoom 125 %/.test(v.camara.tituloDeUna))
+    mal("la leyenda de la clave de cámara no dice el zoom (leía campos que no existen)", v.camara);
   if (/^Clave/.test(v.camara.tituloDeUnaSin))
     mal("un cuadro SIN clave dice que tiene una", v.camara);
 

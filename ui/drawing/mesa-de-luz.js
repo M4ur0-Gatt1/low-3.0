@@ -334,12 +334,14 @@
         try { pintar(); } catch (err) { console.warn("[mesa] no se pudo pintar", err); }
         return r;
       };
+      Object.assign(envuelto, zoom);     // las marcas de otros envoltorios viajan con la función
       envuelto.__mesa = true;
       global.dzApplyZoom = envuelto;
     }
     const ajustar = global.dzFitView;
     if (typeof ajustar === "function" && !ajustar.__mesa) {
       const envuelto = ajustarConMesa(ajustar);
+      Object.assign(envuelto, ajustar);
       envuelto.__mesa = true;
       global.dzFitView = envuelto;
       // el botón de la barra guardó la función vieja en su onclick

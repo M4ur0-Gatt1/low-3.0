@@ -145,6 +145,19 @@ async function main() {
     dzUndo(); await wait(500);
     const trasUndo={claves:Object.keys(dzCamKeys()).length};
 
+    // ── 7b. LA RUEDA: un gesto = UNA clave y UN paso. Cada muesca era una
+    //    clave y un paso de deshacer: girar la rueda para mirar llenaba la
+    //    cámara de claves (oct-2026, «se me movió la cámara y no sé cómo»)
+    const pasosR0=DZ.history?DZ.history.undoStack.length:0, clavesR0=Object.keys(dzCamKeys()).length;
+    { const r=vista.getBoundingClientRect();
+      for(let m=0;m<5;m++){ vista.dispatchEvent(new WheelEvent("wheel",{bubbles:true,cancelable:true,deltaY:-100,
+        clientX:r.x+r.width/2,clientY:r.y+r.height/2})); await wait(40); } }
+    const ruedaEnCurso=(DZ.history?DZ.history.undoStack.length:0)-pasosR0;
+    await wait(700);
+    const rueda={enCurso:ruedaEnCurso, pasos:(DZ.history?DZ.history.undoStack.length:0)-pasosR0,
+      claves:Object.keys(dzCamKeys()).length-clavesR0};
+    if (rueda.pasos) { dzUndo(); await wait(300); }
+
     // -- 9. EL INSPECTOR: escribir un valor tiene que MOVER el plano.
     //    Reporte: «ahi no se pueden cambiar los valores, no hace nada ahi».
     //    Medido, la causa: los campos solo escuchaban change, que en un
@@ -187,7 +200,7 @@ async function main() {
     }
 
     return {rotulo,mover,noElegido,profundidades,camara,paralaje,sinAutokey,
-      conAutokey,trasUndo,inspector,errs:errs.slice(0,3)};
+      conAutokey,trasUndo,rueda,inspector,errs:errs.slice(0,3)};
   })()`;
 
   const result = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
@@ -229,6 +242,8 @@ async function main() {
   if (v.conAutokey.claves < 1) mal("con Auto-key no queda clave de cámara", v.conAutokey);
   if (v.conAutokey.pasos !== 1)
     mal("la clave de cámara no es UN paso de historial", v.conAutokey);
+  if (v.rueda.pasos !== 1 || v.rueda.claves > 1 || v.rueda.enCurso !== 0)
+    mal("cinco muescas de rueda con Auto-key no son UNA clave y UN paso al soltar", v.rueda);
   if (v.trasUndo.claves !== v.sinAutokey.claves)
     mal("Ctrl+Z no saca la clave de cámara", { trasUndo: v.trasUndo, antes: v.sinAutokey });
 

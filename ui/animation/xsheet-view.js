@@ -200,10 +200,12 @@
       const rombo = document.createElement("i");
       rombo.className = "xs2-camkey";
       c.appendChild(rombo);
-      const z = Number(k.zoom); const partes = [];
-      if (Number.isFinite(z) && Math.abs(z - 1) > 1e-3) partes.push("zoom " + z.toFixed(2));
-      if (Number.isFinite(Number(k.x)) || Number.isFinite(Number(k.y)))
-        partes.push("x " + Math.round(Number(k.x) || 0) + " · y " + Math.round(Number(k.y) || 0));
+      // la clave real es {cx, cy, w, rot} (ui/animation/camara-2d.js); la
+      // leyenda leía {x, y, zoom}, que no existen, y nunca decía nada
+      const partes = [], ancho = Number(this.doc.scene.width) || 0;
+      if (Number.isFinite(Number(k.cx))) partes.push("x " + Math.round(k.cx) + " · y " + Math.round(Number(k.cy) || 0));
+      if (ancho && Number(k.w) > 0) partes.push("zoom " + Math.round(ancho / k.w * 100) + " %");
+      if (Number(k.rot)) partes.push("giro " + Math.round(k.rot * 10) / 10 + "°");
       c.title = "Clave de cámara en el cuadro " + f + (partes.length ? " — " + partes.join(" · ") : "");
       return c;
     }

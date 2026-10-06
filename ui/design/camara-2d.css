@@ -1,0 +1,76 @@
+/* LA CÁMARA 2D QUE SE ENTIENDE. Ver ui/animation/camara-2d.js. */
+
+/* el recorrido: debajo del encuadre (z 4), encima de la hoja, sin puntero */
+.cam2d-recorrido { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; }
+.cam2d-recorrido[hidden] { display: none; }
+
+/* ver por la cámara: lo de afuera del encuadre se oscurece */
+#dzCanvas.ver-por-camara .dz-cam { box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 0 0 200vmax rgba(8, 8, 8, .8); }
+
+/* EL PANEL, arriba del inspector mientras el modo cámara está prendido */
+.cam2d {
+  margin: 0 0 10px; padding: 10px 10px 8px;
+  border: 1px solid color-mix(in srgb, #F0450E 45%, var(--line, #2a2a2a));
+  border-radius: 6px; background: var(--panel2, #19191C);
+  font: 400 11.5px/1.4 Figtree, sans-serif; color: var(--txt, #e9ebe8);
+}
+.cam2d[hidden] { display: none; }
+.cam2d-cab { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 2px 8px; margin-bottom: 8px; }
+.cam2d-cab b { font-weight: 700; font-size: 12.5px; }
+.cam2d-estado { color: var(--mut, #98988F); font: 600 10px 'JetBrains Mono', monospace; }
+.cam2d-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.cam2d-campos label { display: flex; align-items: center; gap: 5px; color: var(--mut, #98988F); }
+.cam2d-campos input { width: 100%; min-width: 0; }
+.cam2d-campos i { font-style: normal; }
+.cam2d input[type="number"], .cam2d select {
+  background: var(--panel, #131315); color: var(--txt, #e9ebe8);
+  border: 1px solid var(--line, #2a2a2a); border-radius: 4px; padding: 3px 5px;
+  font: 500 11.5px 'JetBrains Mono', monospace;
+}
+.cam2d-fila { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; flex-wrap: wrap; }
+.cam2d-curva { display: flex; align-items: center; gap: 5px; color: var(--mut, #98988F); }
+.cam2d button {
+  padding: 4px 8px; border-radius: 4px; cursor: pointer;
+  background: var(--panel, #131315); color: var(--txt, #e9ebe8);
+  border: 1px solid var(--line, #2a2a2a); font: 500 11px Figtree, sans-serif;
+}
+.cam2d button:hover { border-color: #33B5E8; }
+.cam2d .cam2d-clave { border-color: #F0450E; }
+.cam2d h4 {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  margin: 10px 0 6px; color: var(--mut, #98988F);
+  font: 700 9.5px/1.2 Figtree, sans-serif; letter-spacing: .1em; text-transform: uppercase;
+}
+.cam2d h4 { flex-wrap: wrap; }
+.cam2d h4 small { font: 400 10.5px Figtree, sans-serif; letter-spacing: 0; text-transform: none; }
+.cam2d h4 input { width: 46px; }
+.cam2d-movs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.cam2d-movs button { text-align: center; }
+.cam2d-movs [data-a="encuadrar"], .cam2d-movs [data-a="completo"], .cam2d-movs [data-a="temblor"] { grid-column: span 1; }
+.cam2d-ver { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; color: var(--txt, #e9ebe8); }
+.cam2d-ver label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.cam2d .cam2d-chico { padding: 2px 6px; font-size: 10px; text-transform: none; letter-spacing: 0; }
+.cam2d-lista { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+/* dos renglones: el cuadro y la curva arriba, los valores abajo (en el ancho
+   del inspector, 220 px, en uno solo se cortaban) */
+.cam2d-lista li {
+  display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "f curva x" "dato dato dato";
+  align-items: center; column-gap: 6px;
+  padding: 3px 4px 3px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent;
+}
+.cam2d-lista li b { grid-area: f; }
+.cam2d-lista li em { grid-area: curva; }
+.cam2d-lista li button { grid-area: x; }
+.cam2d-lista li span { grid-area: dato; }
+.cam2d-lista li:hover { border-color: rgba(51, 181, 232, .45); }
+.cam2d-lista li.actual { background: color-mix(in srgb, #F0450E 14%, transparent); }
+.cam2d-lista li b { color: #F0450E; font: 700 10.5px 'JetBrains Mono', monospace; }
+.cam2d-lista li span { color: var(--txt, #e9ebe8); font: 400 10.5px 'JetBrains Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cam2d-lista li em { color: #33B5E8; font: italic 400 10px Figtree, sans-serif; white-space: nowrap; }
+.cam2d-lista li button { padding: 0 5px; border: 0; background: transparent; color: var(--mut, #98988F); }
+.cam2d-lista li button:hover { color: #F0450E; }
+.cam2d-lista .cam2d-vacia { display: block; cursor: default; color: var(--mut, #98988F); }
+.cam2d-ayuda { margin: 8px 0 0; color: var(--mut, #98988F); font-size: 10.5px; }
+
+/* la barra de opciones de la cámara: X e Y de 4 cifras se cortaban («192») */
+#dzToolOpts #toCamX, #dzToolOpts #toCamY { width: 64px; }

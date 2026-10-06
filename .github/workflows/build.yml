@@ -165,6 +165,7 @@ jobs:
           node tools/check_pincel_vivo_ui.js
           node tools/check_bibliotecas_ui.js
           node tools/check_mesa_animacion_ui.js
+          node tools/check_camara_2d_ui.js
           node tools/check_trazo_calidad_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js

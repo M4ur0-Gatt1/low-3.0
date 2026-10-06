@@ -108,8 +108,12 @@ function dzCmpCamRueda(evento) {
   const w = Math.max(vb[2] * 0.05, Math.min(vb[2] * 3, cam.w * factor));
   DZ_CMP_CAM = { ...cam, w };
   dzCmpCamRender();
-  if (DZ.compositionAutoKey) dzCmpCamClave("Dolly de cámara");
-  else dzSetStatus("Dolly: " + Math.round(vb[2] / w * 100) + "% del ancho de la hoja");
+  // UNA clave por GESTO de rueda, no por muesca: cada muesca era una clave y
+  // un paso de deshacer, y girar la rueda para mirar dejaba la cámara llena
+  // de claves que nadie pidió (oct-2026, «se me movió la cámara»)
+  clearTimeout(dzCmpCamRueda.reloj);
+  if (DZ.compositionAutoKey) dzCmpCamRueda.reloj = setTimeout(() => dzCmpCamClave("Dolly de cámara"), 350);
+  dzSetStatus("Dolly: " + Math.round(vb[2] / w * 100) + "% del ancho de la hoja" + (DZ.compositionAutoKey ? " · auto-key: deja clave al soltar la rueda" : ""));
 }
 
 /** Deja clave de cámara en el cuadro actual, en UN paso de historial. */
