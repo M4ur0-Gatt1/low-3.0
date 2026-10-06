@@ -123,6 +123,31 @@ async function main() {
     await tecla("z", "KeyZ", 90, 2);
     assert.deepEqual(await puntosDe("#recta"), antes, "Ctrl+Z no vuelve el trazo exacto");
 
+    // ── 2b. CON LÁPIZ: la presión que cae al levantar no devuelve el trazo ──
+    //    Reporte de Mauro con la tableta (3.10.0): «algunas modificaciones se
+    //    vuelven a la posición anterior». El agarre se escalaba por la presión
+    //    de cada muestra y al levantar el lápiz (presión → 0) volvía (y=402).
+    const pen = (type, x, y, force, extra = {}) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", pointerType: "pen", force, ...extra });
+    const base2 = await puntosDe("#recta"), mp = await pantalla(900, 400);
+    await pen("mouseMoved", mp[0], mp[1], 0); await pen("mousePressed", mp[0], mp[1], .7, { buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 12; i++) { await pen("mouseMoved", mp[0], mp[1] + i * 5, .7, { buttons: 1 }); await wait(16); }
+    for (const f of [.4, .2, .08, .02]) { await pen("mouseMoved", mp[0], mp[1] + 60, f, { buttons: 1 }); await wait(16); }
+    await pen("mouseReleased", mp[0], mp[1] + 60, 0, { buttons: 0, clickCount: 1 }); await wait(500);
+    const conLapiz = Math.round(Math.max(...(await puntosDe("#recta")).map((p) => p[1])));
+    assert.ok(conLapiz > 470, "con lápiz, al levantar (presión → 0) el trazo agarrado vuelve a su lugar: y máx " + conLapiz);
+    await ev(`(()=>{ document.activeElement?.blur?.(); return true; })()`);
+    await tecla("z", "KeyZ", 90, 2);
+    assert.deepEqual(await puntosDe("#recta"), base2, "Ctrl+Z no deshace el agarre con lápiz");
+
+    // ── 2c. el círculo del pincel, centrado en la punta (estaba desfasado) ──
+    for (const [x, y] of [[mp[0] - 120, mp[1] - 40], [mp[0] + 200, mp[1] + 90]]) {
+      await mouse("mouseMoved", x - 4, y - 4); await mouse("mouseMoved", x, y); await wait(80);
+      const c = await ev(`(()=>{ const c = document.querySelector(".esc-circulo"); if (!c || c.hidden) return null; const r = c.getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2, enElLienzo: !!c.closest("#dzCanvas"), pos: getComputedStyle(c).position }; })()`);
+      assert.ok(c && Math.abs(c.x - x) <= 1 && Math.abs(c.y - y) <= 1, "el círculo del pincel no está centrado en el puntero: " + JSON.stringify({ c, puntero: [x, y] }));
+      assert.ok(!c.enElLienzo && c.pos === "fixed", "el círculo vive dentro del lienzo: cualquier scroll o corrimiento lo desfasa");
+    }
+
     // ── 3. redibujar un tramo con un arco encima ─────────────────────────────
     assert.equal(await elegirModo("redibujar"), "redibujar");
     const r0 = await pantalla(650, 400), r1 = await pantalla(950, 400);

@@ -181,7 +181,13 @@
         for (const gr of st.grupos) {
           const [lx, ly] = deltaLocal(st.m, gr.espejo ? -totx : totx, toty);   // el espejo invierte la x de pantalla (el eje es vertical)
           const base = pts ? { ...gr.g, base: pts } : gr.g;
-          pts = g.modo === "agarrar" ? N.agarrarMover(base, [lx, ly], Math.min(1, k * 2)) : N.curvarMover(base, [lx, ly], Math.min(1, k * 2));
+          /* AGARRAR Y CURVAR SIGUEN AL LÁPIZ ENTERO, sin presión ni fuerza.
+             Reporte de Mauro con la tableta (3.10.0): «algunas modificaciones
+             se vuelven a la posición anterior». Medido: el agarre se escalaba
+             por la presión de CADA muestra; al levantar el lápiz la presión cae
+             a casi 0 y el trazo volvía a su lugar justo al final (y=402 en vez
+             de ~500). Como en Blender, lo agarrado va adonde va la mano. */
+          pts = g.modo === "agarrar" ? N.agarrarMover(base, [lx, ly], 1) : N.curvarMover(base, [lx, ly], 1);
         }
         st.pts = pts; g.tocados.add(st);
       }
@@ -273,33 +279,45 @@
 
   /* ── LO QUE SE VE: el círculo del pincel y la guía de Redibujar ────────── */
   let circulo = null, lienzoGuia = null;
+  /* EN COORDENADAS DE PANTALLA, fuera del lienzo. Reporte de Mauro con la
+     tableta (3.10.0): «está desfasado el círculo de tamaño de la cruz». El
+     círculo vivía DENTRO de #dzCanvas y se ubicaba restando la caja del
+     lienzo: cualquier scroll, transformación o corrimiento del lienzo o de sus
+     padres lo corría respecto del puntero. Fijo en el <body>, en clientX/Y,
+     queda exactamente donde está la punta del lápiz. */
+  function dentroDelLienzo(e) {
+    const cv = $q("#dzCanvas"); if (!cv) return false;
+    const r = cv.getBoundingClientRect();
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  }
   function pintarCirculo(e) {
-    const cv = $q("#dzCanvas"), dz = D();
-    if (!cv || !dz) return;
-    if (dz.tool !== TOOL || dz.spaceDown) { if (circulo) circulo.hidden = true; return; }
+    const dz = D();
+    if (!dz) return;
+    if (dz.tool !== TOOL || dz.spaceDown || (!gesto && !dentroDelLienzo(e))) { if (circulo) circulo.hidden = true; return; }
     if (!circulo || !circulo.isConnected) {
       circulo = doc.createElement("div"); circulo.className = "esc-circulo"; circulo.setAttribute("aria-hidden", "true");
-      cv.appendChild(circulo);
+      doc.body.appendChild(circulo);
     }
-    const r = cv.getBoundingClientRect(), R = radioDe(presionDe(e));
+    const R = radioDe(presionDe(e));
     circulo.hidden = false;
     circulo.dataset.modo = gesto ? gesto.modo : modoDe(e);
-    Object.assign(circulo.style, { left: (e.clientX - r.left - R) + "px", top: (e.clientY - r.top - R) + "px", width: 2 * R + "px", height: 2 * R + "px" });
+    Object.assign(circulo.style, { left: (e.clientX - R) + "px", top: (e.clientY - R) + "px", width: 2 * R + "px", height: 2 * R + "px" });
   }
   function pintarGuia() {
-    const cv = $q("#dzCanvas");
-    if (!cv || !gesto) return;
+    if (!gesto) return;
     if (!lienzoGuia || !lienzoGuia.isConnected) {
       lienzoGuia = doc.createElement("canvas"); lienzoGuia.className = "esc-guia"; lienzoGuia.setAttribute("aria-hidden", "true");
-      cv.appendChild(lienzoGuia);
+      doc.body.appendChild(lienzoGuia);
     }
-    const dpr = global.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight, r = cv.getBoundingClientRect();
-    if (lienzoGuia.width !== Math.round(W * dpr)) { lienzoGuia.width = Math.round(W * dpr); lienzoGuia.height = Math.round(H * dpr); lienzoGuia.style.width = W + "px"; lienzoGuia.style.height = H + "px"; }
+    const dpr = global.devicePixelRatio || 1, W = global.innerWidth, H = global.innerHeight;
+    if (lienzoGuia.width !== Math.round(W * dpr) || lienzoGuia.height !== Math.round(H * dpr)) {
+      lienzoGuia.width = Math.round(W * dpr); lienzoGuia.height = Math.round(H * dpr); lienzoGuia.style.width = W + "px"; lienzoGuia.style.height = H + "px";
+    }
     lienzoGuia.hidden = false;
     const g = lienzoGuia.getContext("2d");
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
     g.strokeStyle = "#33B5E8"; g.lineWidth = 2; g.lineCap = g.lineJoin = "round"; g.setLineDash([6, 4]);
-    g.beginPath(); gesto.guia.forEach(([x, y], i) => (i ? g.lineTo(x - r.left, y - r.top) : g.moveTo(x - r.left, y - r.top))); g.stroke();
+    g.beginPath(); gesto.guia.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
   }
   function borrarGuia() { if (lienzoGuia) lienzoGuia.hidden = true; }
 

@@ -509,13 +509,13 @@ nav:has(> [data-filter]) { flex-wrap: wrap; }
    de Redibujar. Divs y un <canvas>, nunca un <svg> dentro del lienzo: pasaría
    por dibujo (ver ui/drawing/mesa-de-luz.js). */
 .esc-circulo {
-  position: absolute; z-index: 6; pointer-events: none; border-radius: 50%;
+  position: fixed; z-index: 3500; pointer-events: none; border-radius: 50%;
   border: 1.5px solid rgba(240, 69, 14, .9); box-shadow: 0 0 0 1px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .35);
 }
 .esc-circulo[hidden] { display: none; }
 .esc-circulo[data-modo="suavizar"], .esc-circulo[data-modo="relajar"], .esc-circulo[data-modo="enderezar"] { border-color: rgba(51, 181, 232, .95); }
 .esc-circulo[data-modo="redibujar"] { border-style: dashed; border-color: rgba(51, 181, 232, .95); }
-.esc-guia { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; }
+.esc-guia { position: fixed; left: 0; top: 0; z-index: 3500; pointer-events: none; }
 .esc-guia[hidden] { display: none; }
 .esc-opciones { display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 0; }
 .esc-opciones label { display: inline-flex; align-items: center; gap: 4px; }
