@@ -80,9 +80,6 @@
   text-decoration-color: rgba(255, 255, 255, .18); text-underline-offset: 3px;
 }
 .bien2d-agente:hover { color: var(--txt, #F4F4F2); }
-/* sin recientes, la columna de empezar ocupa todo */
-.bien2d-grilla:has(.bien2d-recientes[hidden]) { grid-template-columns: 1fr; }
-.bien2d-grilla:has(.bien2d-recientes[hidden]) .bien2d-col { max-width: 380px; margin: 0 auto; width: 100%; }
 @media (max-width: 760px) {
   .bien2d-grilla { grid-template-columns: 1fr; }
   .bien2d-col + .bien2d-col { border-left: 0; border-top: 1px solid var(--line, rgba(255,255,255,.08)); }
@@ -163,4 +160,86 @@
 @media (prefers-reduced-motion: no-preference) {
   .bien2d { animation: bien2dEntra .2s ease-out both; }
   @keyframes bien2dEntra { from { opacity: 0; } }
+}
+
+/* ══ LA PORTADA CON LA FILOSOFÍA DE LOW (v3.7) ══════════════════════════════
+   Pedido de Mauro: «al abrir el módulo 2D se ve algo impersonal, una
+   descripción muy básica; tiene que reflejar más la filosofía del software».
+   LOW se llama como el disco de Bowie de 1977, y es generalista como él: la
+   portada lo dice, con el rayo partido de la marca, el lado A y el lado B, y
+   la hoja apoyada en el disco iluminado de la mesa de animación. */
+.bien2d {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 210, .07), transparent 62%),
+    repeating-linear-gradient(97deg, rgba(255, 255, 255, .012) 0 2px, transparent 2px 9px),
+    #100f0e;
+  overflow: auto;
+}
+/* el disco de la mesa, detrás de la tarjeta: la hoja apoyada en el disco, y
+   un giro al entrar, como un disco que arranca */
+.bien2d-mesa {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: .9;
+}
+.bien2d-mesa-gira {
+  position: absolute; left: 50%; top: 50%; margin: calc(min(118vmin, 1100px) / -2) 0 0 calc(min(118vmin, 1100px) / -2);
+  width: min(118vmin, 1100px); height: min(118vmin, 1100px);
+  background: no-repeat center / 100% 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* UN GIRO AL ENTRAR, no uno eterno. Girando siempre, el SVG grande se
+     volvía a pintar en cada cuadro: con render por software (y en una compu
+     modesta) se comía el procesador con la portada quieta, y medido en la
+     puerta atrasaba a las pruebas de tiempo que corrían después. */
+  .bien2d-mesa .bien2d-mesa-gira { animation: bien2dGira 1.8s cubic-bezier(.2, .7, .2, 1) both; }
+  @keyframes bien2dGira { from { transform: rotate(-40deg); } to { transform: rotate(0deg); } }
+}
+.bien2d-cuerpo { position: relative; width: min(760px, 100%); }
+/* QUE NO SE CORTE ARRIBA. Medido en la app real (1366×705, con un rescate y
+   recientes): la tarjeta era más alta que el área y, centrada con place-items,
+   lo que sobraba ARRIBA no se podía alcanzar con el scroll — no se veía ni la
+   marca ni el lema. Arriba de todo + márgenes automáticos: centra cuando cabe
+   y, cuando no, empieza por el encabezado. */
+.bien2d { align-items: start; }
+.bien2d > .bien2d-cuerpo { margin-block: auto; }
+.bien2d-ladob .bien2d-lista { max-height: 196px; }
+/* la franja del rayo: naranja y celeste, partidos al medio como en la marca */
+.bien2d-cuerpo::before {
+  content: ""; display: block; height: 3px;
+  background: linear-gradient(90deg, #F0450E 50%, #33B5E8 50%);
+}
+.bien2d-cabecera { gap: 18px; padding: 18px 22px 14px; }
+.bien2d-marca {
+  flex: none; display: inline-flex; align-items: center;
+  font: 900 38px/1 Figtree, sans-serif; letter-spacing: 1px; color: #fff;
+}
+.bien2d-marca svg { width: 26px; height: 40px; margin: 0 -1px; }
+.bien2d h2 { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--mut, #98988F); margin-bottom: 4px; }
+.bien2d .bien2d-cabecera .bien2d-lema {
+  margin: 0; color: var(--txt, #F4F4F2);
+  font: italic 500 18px/1.25 Figtree, sans-serif; letter-spacing: -.005em;
+}
+.bien2d-manifiesto {
+  padding: 12px 22px 14px; border-bottom: 1px solid var(--line, rgba(255,255,255,.08));
+  columns: 2 300px; column-gap: 26px;
+}
+.bien2d-manifiesto p {
+  margin: 0 0 8px; break-inside: avoid;
+  color: var(--mut, #A9A9A0); font: 400 12.5px/1.6 Figtree, sans-serif;
+}
+.bien2d-manifiesto p:last-child { margin-bottom: 0; }
+.bien2d-manifiesto b { color: var(--txt, #F4F4F2); font-weight: 600; }
+.bien2d h3 { display: flex; align-items: center; gap: 8px; }
+.bien2d h3 span {
+  padding: 3px 6px 2px; border-radius: 3px; color: #fff; background: #F0450E;
+  font: 700 9px/1 'JetBrains Mono', monospace; letter-spacing: .08em;
+}
+.bien2d-ladob h3 span { background: #33B5E8; color: #0b0b0c; }
+.bien2d-ladob .bien2d-recientes { margin-top: 10px; }
+.bien2d-ladob .bien2d-acciones button:hover { border-color: #33B5E8; }
+@media (max-height: 600px) {
+  .bien2d-manifiesto { padding: 8px 16px 10px; }
+  .bien2d-manifiesto p { font-size: 11.5px; line-height: 1.5; }
+  .bien2d .bien2d-cabecera .bien2d-lema { font-size: 16px; }
+  .bien2d-marca { font-size: 30px; }
+  .bien2d-marca svg { width: 21px; height: 32px; }
 }

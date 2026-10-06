@@ -1,0 +1,63 @@
+/* LA MESA DE ANIMACIÓN. Ver ui/drawing/mesa-de-luz.js.
+   El tablero oscuro de LOW (negro), el disco de vidrio iluminado desde abajo, el
+   aro de metal graduado, la regla de pernos y el índice naranja de la mesa. */
+
+.mesa-luz {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  /* el tablero: negro cálido, con la luz del disco derramándose alrededor */
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 210, .07), transparent 62%),
+    repeating-linear-gradient(97deg, rgba(255, 255, 255, .012) 0 2px, transparent 2px 9px),
+    #100f0e;
+}
+.mesa-luz[hidden] { display: none; }
+.mesa-disco {
+  position: absolute; left: 50%; top: 50%;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 18px 60px rgba(0, 0, 0, .55),
+    0 0 120px rgba(255, 232, 200, .06);
+  will-change: transform;
+}
+/* el disco se pinta como imagen de fondo (ver mesa-de-luz.js: un <svg> dentro
+   de #dzCanvas se hacía pasar por parte del dibujo) */
+.mesa-disco { background: no-repeat center / 100% 100%; }
+/* sólo el aro se agarra: un div recortado a la corona; el vidrio deja pasar
+   el puntero al lienzo */
+.mesa-luz .mesa-aro { position: absolute; inset: 0; pointer-events: auto; cursor: grab; }
+.mesa-disco.agarrado .mesa-aro { cursor: grabbing; }
+
+/* el índice de la mesa: no gira, marca dónde está el cero del disco */
+.mesa-indice { position: absolute; left: 50%; top: 50%; }
+.mesa-indice i {
+  display: block; width: 0; height: 0;
+  border-left: 7px solid transparent; border-right: 7px solid transparent;
+  border-top: 10px solid #F0450E;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
+}
+
+/* EL DIAL: el disco en chico, siempre a mano */
+.mesa-dial {
+  position: absolute; right: 14px; bottom: 14px; z-index: 4;
+  width: 84px; height: 84px; border-radius: 50%;
+  cursor: grab; user-select: none; touch-action: none;
+  background: #151413;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .05);
+  opacity: .82; transition: opacity .15s;
+}
+.mesa-dial:hover, .mesa-dial.agarrado, .mesa-dial.girada { opacity: 1; }
+.mesa-dial.agarrado { cursor: grabbing; }
+.mesa-dial[hidden] { display: none; }
+.mesa-dial > i { position: absolute; pointer-events: none; }
+.mesa-dial-giro { inset: 0; background: no-repeat center / 100% 100%; }
+.mesa-dial-indice {
+  left: 50%; top: 0; width: 0; height: 0; transform: translateX(-50%);
+  border-left: 4.5px solid transparent; border-right: 4.5px solid transparent;
+  border-top: 8px solid #F0450E;
+}
+.mesa-dial-grados {
+  /* abajo, sobre el vidrio y lejos de la hojita: encima de ella no se leía */
+  position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; pointer-events: none;
+  font: 700 9.5px/1 'JetBrains Mono', ui-monospace, monospace; color: #33B5E8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+}
+.mesa-dial.girada .mesa-dial-grados { color: #F0450E; }

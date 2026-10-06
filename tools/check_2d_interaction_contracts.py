@@ -56,7 +56,8 @@ escape = function_body("dzEscapeActive", "dzApplyZoom")
 resize = function_body("dzHandleDown", "dzDeleteSelected")
 camera = APP[APP.index("function dzCamDrag("):APP.index("function dzKeyToggle(")]
 timeline_scrub = APP[APP.index('$("#tlFrames").addEventListener'):APP.index("// herramientas de dibujo")]
-disc = APP[APP.index("function dzDiscToggle("):APP.index("DZ.anim = null")]
+# la mesa giratoria salió de app.js a su módulo (v3.7.0)
+disc = (ROOT / "ui" / "drawing" / "mesa-de-luz.js").read_text(encoding="utf-8")
 wheel = APP[APP.index('$("#dzCanvas").addEventListener("wheel"'):APP.index(
     '$("#dzCanvas").addEventListener("contextmenu"')]
 rig_mode = function_body("dzRigSetMode", "dzRigEnterTest")

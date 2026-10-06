@@ -257,27 +257,42 @@
        Mauro pidió que eso viva en el menú (Animación -> Interpretar el ritmo…)
        como herramienta, y que la portada sea la de un programa de animación:
        empezar, abrir, lo reciente. */
-    caja.innerHTML = `<div class="bien2d-cuerpo">
+    /* LA FILOSOFÍA, A LA VISTA (v3.7). Mauro: «al abrir el módulo de animación
+       se ve algo impersonal, una descripción muy básica; tiene que reflejar más
+       la filosofía del software». LOW se llama así por el disco de Bowie y por
+       su capacidad generalista, multifacética: la portada lo cuenta en dos
+       párrafos, con el rayo partido de la marca, el lado A (empezar) y el lado
+       B (seguir), sobre el disco iluminado de la mesa de animación. */
+    caja.innerHTML = `<div class="bien2d-mesa" aria-hidden="true"></div>
+    <div class="bien2d-cuerpo">
       <header class="bien2d-cabecera">
-        <span class="bien2d-logo" aria-hidden="true">LOW</span>
-        <div><h2>LOW · Animación 2D</h2>
-        <p>Dibujo cuadro a cuadro, X-sheet, esqueletos, cámara y multiplano.</p></div>
+        <span class="bien2d-marca" aria-hidden="true">L<svg viewBox="3 0 18 24"><defs><linearGradient id="lowBoltBien2d" x1="0" y1="0" x2="1" y2="0"><stop offset="50%" stop-color="#F0450E"/><stop offset="50%" stop-color="#33B5E8"/></linearGradient></defs><path d="M13 2 L4 14 L10 14 L8 22 L20 9 L13 9 Z" fill="url(#lowBoltBien2d)"/></svg>W</span>
+        <div><h2>Estudio de animación 2D</h2>
+        <p class="bien2d-lema">Un lado de canciones, un lado de paisajes.</p></div>
       </header>
+      <div class="bien2d-manifiesto">
+        <p>LOW se llama como el disco que David Bowie publicó en 1977, grabado entre Francia y Berlín: un lado de canciones, otro de paisajes instrumentales y, en la tapa, un fotograma de cine. Lo hizo alguien que era músico, actor, mimo y pintor a la vez.</p>
+        <p>Este estudio sale de esa idea: <b>no elegir un solo oficio.</b> Dibujás, animás cuadro a cuadro, armás esqueletos, filmás con cámara multiplano y pasás al 3D sin cambiar de programa.</p>
+      </div>
       <div class="bien2d-grilla">
         <section class="bien2d-col">
-          <h3>Empezar</h3>
+          <h3><span>Lado A</span> Empezar</h3>
           <div class="bien2d-acciones">
             <button type="button" data-a="nuevo" class="bien2d-primario" disabled><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span><b>Nuevo documento</b><small>1920 × 1080 · 24 cuadros por segundo</small></span></button>
-            <button type="button" data-a="abrir" disabled><svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg><span><b>Abrir documento…</b><small>un archivo .low de la computadora</small></span></button>
           </div>
           <div class="bien2d-rescate" hidden>
             <p></p>
             <button type="button" data-a="rescate" disabled>Recuperar lo que quedó sin guardar</button>
           </div>
         </section>
-        <section class="bien2d-col bien2d-recientes" hidden>
-          <h3>Recientes</h3>
-          <ul class="bien2d-lista"></ul>
+        <section class="bien2d-col bien2d-ladob">
+          <h3><span>Lado B</span> Seguir</h3>
+          <div class="bien2d-acciones">
+            <button type="button" data-a="abrir" disabled><svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg><span><b>Abrir documento…</b><small>un archivo .low de la computadora</small></span></button>
+          </div>
+          <div class="bien2d-recientes" hidden>
+            <ul class="bien2d-lista"></ul>
+          </div>
         </section>
       </div>
       <footer class="bien2d-pie">
@@ -320,6 +335,16 @@
         // ya no pasa por ahí, y el botón creaba una escena VACÍA.
         boton.onclick = () => global.dzEscenaRescatar?.(rescate.identidad);
       }
+    }
+    // el disco de la mesa detrás de la tarjeta: el mismo dibujo que el de la
+    // mesa de trabajo (ui/drawing/mesa-de-luz.js), con un giro al entrar
+    const fondo = caja.querySelector(".bien2d-mesa");
+    // como imagen de fondo: un <svg> dentro de #dzCanvas pasaría por dibujo
+    if (fondo && global.LOW_MESA?.discoImagen) {
+      const gira = document.createElement("i");
+      gira.className = "bien2d-mesa-gira";
+      gira.style.backgroundImage = global.LOW_MESA.discoImagen(440, 500, { id: "b", fuente: 20, trazo: 1.8, mitad: 520 });
+      fondo.appendChild(gira);
     }
     lienzo.appendChild(caja);
     vigilar();

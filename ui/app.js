@@ -6878,51 +6878,7 @@ function dzMagnetUp(e) {
    libremente la vista del lienzo.
    ═══════════════════════════════════════════════════════════════════════ */
 
-function dzDiscToggle() {
-  let disc = $("#dzDisc");
-  if (disc) { disc.hidden = !disc.hidden; return; }
-  disc = document.createElement("div");
-  disc.id = "dzDisc"; disc.className = "dz-disc";
-  disc.innerHTML = '<div class="dz-disc-notch" id="dzDiscNotch"></div>' +
-    '<div class="dz-disc-inner"></div>' +
-    '<div class="dz-disc-dial" id="dzDiscDial">0°</div>' +
-    '<div class="dz-disc-peg"><div></div><div></div><div></div></div>';
-  disc.title = "Mesa giratoria: arrastrá para rotar la vista · Shift: de a 15°";
-  $("#dzCanvas").appendChild(disc);
-
-  let startAngle = 0, startRot = 0;
-  disc.addEventListener("pointerdown", (e) => {
-    e.preventDefault(); e.stopPropagation();
-    const pointerId = e.pointerId;
-    const rect = disc.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-    startAngle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
-    startRot = DZ.viewRot || 0;
-    const move = (ev) => {
-      if (ev.pointerId !== pointerId) return;
-      const angle = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI;
-      let delta = angle - startAngle;
-      if (ev.shiftKey) delta = Math.round(delta / 15) * 15;
-      DZ.viewRot = (startRot + delta) % 360;
-      dzApplyZoom();
-      // rotar la muesca visual
-      const notch = $("#dzDiscNotch");
-      if (notch) notch.style.transform = `rotate(${DZ.viewRot}deg)`;
-      const dial = $("#dzDiscDial");
-      if (dial) dial.textContent = Math.round(DZ.viewRot) + "°";
-    };
-    const up = (ev) => {
-      if (ev.pointerId !== pointerId) return;
-      document.removeEventListener("pointermove", move);
-      document.removeEventListener("pointerup", up);
-      document.removeEventListener("pointercancel", up);
-    };
-    document.addEventListener("pointermove", move);
-    document.addEventListener("pointerup", up);
-    document.addEventListener("pointercancel", up);
-  });
-  dzSetStatus(" Mesa giratoria activa — arrastrá el disco para girar la vista");
-}
+function dzDiscToggle() { return window.LOW_MESA?.alternar(); }   // la mesa de animación vive en ui/drawing/mesa-de-luz.js
 
 /* ══ animación: línea de tiempo + papel cebolla (cuadros _f001.svg…) ══ */
 DZ.anim = null;   // {frames:[rutas], idx, playing, onion, cache:{}}
@@ -7804,7 +7760,7 @@ function dzCamOverlay() {
   const pw = Math.hypot(e2.x - e1.x, e2.y - e1.y), ph = Math.hypot(t2.x - t1.x, t2.y - t1.y);
   box.style.width = pw + "px"; box.style.height = ph + "px";
   box.style.left = (c.x - pw / 2) + "px"; box.style.top = (c.y - ph / 2) + "px";
-  box.style.transform = `rotate(${cam.rot || 0}deg)`;
+  box.style.transform = `rotate(${(cam.rot || 0) + (DZ.viewRot || 0)}deg)`;   // la cámara está en el dibujo: gira con la hoja (mesa giratoria)
   const num = dzCamFrame();
   $("#dzCamTag").textContent = "Cámara 2D · F" + String(num).padStart(3, "0") +
     (dzCamKeys()[num] ? " · CLAVE" : " · interpolada");
@@ -11798,9 +11754,9 @@ function dzMenuAction(act) {
     agrupar: () => dzGroupSel(false), desagrupar: () => dzGroupSel(true),
     preferencias: dzPrefsModal, atajos: dzPrefsModal, "config-reset": dzConfigResetModal, "safe-mode": dzEnterSafeMode, pendebug: dzPenDebugToggle,
     zoomin: () => dzZoom(0.15), zoomout: () => dzZoom(-0.15),
-    zoom100: () => dzRunAction("zoom100"), fit: dzFitView,
+    zoom100: () => dzRunAction("zoom100"), fit: () => dzFitView(),
     rotl: () => dzRotView(-15), rotr: () => dzRotView(15),
-    enderezar: () => { DZ.viewRot = 0; dzApplyZoom(); },
+    enderezar: () => (window.LOW_MESA ? LOW_MESA.enderezar() : (DZ.viewRot = 0, dzApplyZoom())), mesa: () => dzDiscToggle(),
     diorama: dzZPanelToggle, profundidad: dzZPanelToggle,
     cebolla: dzOnionPanelToggle, deformar: () => window.dzWarpAlternar?.(), "camara-guia": dzCamGuiaAlternar,
     xsheet: dzXsToggle, codigo: dzToggleCode,

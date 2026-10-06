@@ -1973,39 +1973,7 @@ body:not(.light) .dz3d-coords { color: #F4F4F2; }
 .dz-pendbg-h { padding: 6px 9px; background: var(--cyansoft); color: #fff; font-weight: 700; }
 #dzPenDbgLog { padding: 6px 9px; overflow-y: auto; line-height: 1.5; white-space: pre; color: #d8d8d2; }
 
-/* ── Mesa giratoria (disco de animación): dial para rotar la vista ── */
-.dz-disc {
-  position: absolute; bottom: 50%; right: 10px; z-index: 35;
-  width: 80px; height: 80px; border-radius: 50%;
-  background: var(--panel2); border: 2px solid var(--line);
-  display: flex; align-items: center; justify-content: center;
-  cursor: grab; user-select: none; transition: opacity .15s;
-  box-shadow: 0 4px 16px rgba(0,0,0,.35);
-}
-.dz-disc:active { cursor: grabbing; }
-.dz-disc[hidden] { display: none; }
-.dz-disc-inner {
-  width: 14px; height: 14px; border-radius: 50%;
-  background: var(--line); border: 2px solid var(--mut);
-  flex: none;
-}
-.dz-disc-dial {
-  position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
-  font: 600 9px 'JetBrains Mono', monospace; color: var(--mut);
-  pointer-events: none;
-}
-.dz-disc-notch {
-  position: absolute; top: 8px; left: 50%; width: 3px; height: 10px;
-  background: var(--red); border-radius: 99px; margin-left: -1.5px; pointer-events: none;
-  transform-origin: 50% 32px; /* rota con js */
-}
-.dz-disc-peg {
-  position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 5px; pointer-events: none;
-}
-.dz-disc-peg div {
-  width: 7px; height: 12px; background: var(--faint); border-radius: 2px 2px 0 0;
-}
+/* La mesa giratoria (disco de animación) vive en ui/design/mesa-de-luz.css */
 
 /* ═══════════════════════════════════════════════════════════════════════
    CAPA DE PULIDO (v3.22.11) — el software se siente ÁGIL y MODERNO.
