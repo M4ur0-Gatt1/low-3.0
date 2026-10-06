@@ -57,7 +57,7 @@ async function main() {
   await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 90; i++) {
-    if (await ev('typeof openDesign==="function" && typeof dzSelect==="function" && !!api').catch(() => false)) break;
+    if (await ev('document.readyState==="complete"&&typeof openDesign==="function" && typeof dzSelect==="function" && !!api').catch(() => false)) break;
     await w(400);
   }
 

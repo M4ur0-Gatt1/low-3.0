@@ -47,7 +47,7 @@ async function main() {
   await send("Emulation.setDeviceMetricsOverride", { width: 1000, height: 560, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 90; i++) {
-    const listo = await ev('typeof dzMenuAction==="function" && !!api && !!window.LOW?.workspace?.workspaces').catch(() => false);
+    const listo = await ev('document.readyState==="complete"&&typeof dzMenuAction==="function" && !!api && !!window.LOW?.workspace?.workspaces').catch(() => false);
     if (listo === true) break;
     await w(400);
   }
@@ -96,7 +96,7 @@ async function main() {
   await ev(`(()=>{ try{ localStorage.setItem("low.workspace.active","animation"); }catch(e){} return true; })()`);
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 90; i++) {
-    const listo = await ev('typeof dzMenuAction==="function" && !!api && !!window.LOW?.workspace?.workspaces').catch(() => false);
+    const listo = await ev('document.readyState==="complete"&&typeof dzMenuAction==="function" && !!api && !!window.LOW?.workspace?.workspaces').catch(() => false);
     if (listo === true) break;
     await w(400);
   }

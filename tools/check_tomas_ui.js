@@ -48,7 +48,7 @@ async function main() {
     await send("Network.setCacheDisabled", { cacheDisabled: true });
     await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
     await send("Page.navigate", { url });
-    for (let i = 0; i < 120; i++) { if (await ev('typeof lowInterpretar==="function"&&typeof api!=="undefined"&&!!api&&typeof dzDocumentNew==="function"').catch(() => false)) break; await wait(200); }
+    for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&typeof lowInterpretar==="function"&&typeof api!=="undefined"&&!!api&&typeof dzDocumentNew==="function"').catch(() => false)) break; await wait(200); }
     await ev(`(async()=>{await dzDocumentNew();if(typeof closeL3d==='function')closeL3d();const s=document.getElementById('lowSplash');if(s)s.remove();
       await new Promise(r=>setTimeout(r,700));dzDocCommit();  // el documento nuevo termina de volcar su lienzo: eso no es de la demo
       window.__antes=JSON.stringify(DZ.doc.scene.toJSON());lowInterpretar({sample:true});})()`);

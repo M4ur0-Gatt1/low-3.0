@@ -7,7 +7,7 @@ const pageUrl=process.argv[3]||'http://127.0.0.1:8791/ui/index.html?mock=1';
  const send=(method,params={})=>new Promise(r=>{jobs.set(++id,r);ws.send(JSON.stringify({id,method,params}))});
  const ev=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.result.exceptionDetails)throw Error(JSON.stringify(r.result.exceptionDetails));return r.result.result.value};
  await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});await send('Page.enable');await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await send('Page.navigate',{url:pageUrl});
- for(let i=0;i<100;i++){if(await ev('typeof api!=="undefined" && !!api && typeof dzDocumentNew==="function"'))break;await new Promise(r=>setTimeout(r,100));}
+ for(let i=0;i<100;i++){if(await ev('document.readyState==="complete"&&typeof api!=="undefined" && !!api && typeof dzDocumentNew==="function"'))break;await new Promise(r=>setTimeout(r,100));}
  await ev('(async()=>{await dzDocumentNew();if(typeof closeL3d==="function")closeL3d();await dzEnsureAnimationWorkspace();})()');await new Promise(r=>setTimeout(r,700));
  const check=(v,m)=>{if(!v)throw Error(m)};
  // Interpretar vive en el menú Animación (v3.2): se abre como lo abre un usuario.

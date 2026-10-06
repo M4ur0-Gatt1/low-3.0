@@ -14,7 +14,7 @@ async function main(){
   try{
     await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});
     await send('Emulation.setDeviceMetricsOverride',{width:1366,height:900,deviceScaleFactor:1,mobile:false});await send('Page.navigate',{url});
-    for(let i=0;i<100;i++){if(await ev('typeof dzSbMount==="function"&&typeof api!=="undefined"&&!!api'))break;await wait(150);}
+    for(let i=0;i<100;i++){if(await ev('document.readyState==="complete"&&typeof dzSbMount==="function"&&typeof api!=="undefined"&&!!api'))break;await wait(150);}
     await ev(`(async()=>{localStorage.clear();await openDesign('mock.svg');await dzDocInit();closeL3d();await dzSbMount();})()`);await wait(600);
     await click(button('Agregar un panel al final'));
     assert.equal(await ev("document.querySelector('[data-sb=create]').disabled"),true);

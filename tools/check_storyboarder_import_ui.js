@@ -40,7 +40,7 @@ async function main() {
     await send("Network.setCacheDisabled", { cacheDisabled: true });
     await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
     await send("Page.navigate", { url });
-    for (let i = 0; i < 100; i++) { if (await ev('typeof dzSbMount==="function"&&typeof api!=="undefined"&&!!api')) break; await wait(150); }
+    for (let i = 0; i < 100; i++) { if (await ev('document.readyState==="complete"&&typeof dzSbMount==="function"&&typeof api!=="undefined"&&!!api')) break; await wait(150); }
     await ev(`(async()=>{localStorage.clear();await openDesign('mock.svg');await dzDocInit();closeL3d();await dzSbMount();})()`);
     await wait(500);
     assert.equal(await ev("!!document.querySelector('[data-sb=import-storyboarder]')"), true, "falta el botón Importar Storyboarder");

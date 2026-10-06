@@ -15,7 +15,7 @@ async function main() {
   };
   const send=(method,params={})=>new Promise((resolve,reject)=>{const n=++id,t=setTimeout(()=>{pending.delete(n);reject(Error("CDP sin respuesta: "+method));},30000);pending.set(n,{resolve:v=>{clearTimeout(t);resolve(v);},reject:e=>{clearTimeout(t);reject(e);}});ws.send(JSON.stringify({id:n,method,params}));});
   await send("Page.enable");await send("Runtime.enable");await send("Network.enable");await send("Network.setCacheDisabled",{cacheDisabled:true});await send("Page.navigate",{url:pageUrl});
-  for(let i=0;i<60;i++){const r=await send("Runtime.evaluate",{expression:'typeof openDesign==="function"&&!!LOW.animation?.PaletteView&&typeof api!=="undefined"&&!!api',returnByValue:true});if(r.result?.value)break;await new Promise(r=>setTimeout(r,250));}
+  for(let i=0;i<60;i++){const r=await send("Runtime.evaluate",{expression:'document.readyState==="complete"&&typeof openDesign==="function"&&!!LOW.animation?.PaletteView&&typeof api!=="undefined"&&!!api',returnByValue:true});if(r.result?.value)break;await new Promise(r=>setTimeout(r,250));}
   const expression=`(async()=>{
     await openDesign("C:\\\\mock\\\\color-studio.svg"); await dzDocInit();
     LOW.workspace.workspaces.activate("color",dzWsAplicar); await new Promise(r=>setTimeout(r,180));

@@ -42,7 +42,7 @@ async function main() {
     await send("Network.setCacheDisabled", { cacheDisabled: true });
     await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
     await send("Page.navigate", { url });
-    for (let i = 0; i < 120; i++) { if (await ev('typeof openDesign==="function"&&typeof api!=="undefined"&&!!api').catch(() => false)) break; await wait(300); }
+    for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&typeof openDesign==="function"&&typeof api!=="undefined"&&!!api').catch(() => false)) break; await wait(300); }
     await ev(`(async()=>{try{localStorage.clear()}catch(e){};await openDesign('mock.svg');await dzDocInit();
       if(typeof closeL3d==='function')closeL3d();const s=document.getElementById('lowSplash');if(s)s.remove();
       document.getElementById('dzTlPestania').click();await new Promise(r=>setTimeout(r,700));})()`);

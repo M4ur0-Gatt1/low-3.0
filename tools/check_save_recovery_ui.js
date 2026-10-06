@@ -28,7 +28,7 @@ async function main() {
   await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 60; i++) {
-    const ready = await send("Runtime.evaluate", { expression: 'typeof openDesign==="function" && typeof dzSave==="function" && !!api', returnByValue: true });
+    const ready = await send("Runtime.evaluate", { expression: 'document.readyState==="complete"&&typeof openDesign==="function" && typeof dzSave==="function" && !!api', returnByValue: true });
     if (ready.result?.value) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }

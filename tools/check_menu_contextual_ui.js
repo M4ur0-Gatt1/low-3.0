@@ -52,7 +52,7 @@ async function main() {
   await send("Emulation.setFocusEmulationEnabled", { enabled: true });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 90; i++) {
-    const listo = await ev('typeof showCtxMenu==="function" && typeof closeCtxMenu==="function"').catch(() => false);
+    const listo = await ev('document.readyState==="complete"&&typeof showCtxMenu==="function" && typeof closeCtxMenu==="function"').catch(() => false);
     if (listo === true) break;
     await w(400);
   }

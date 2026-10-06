@@ -39,6 +39,7 @@ jobs:
           node tools/run_undo_estado_tests.js
           node tools/run_trazo_tests.js
           node tools/run_pinceles_tests.js
+          node tools/run_esculpir_tests.js
           node tools/run_rhythm_tests.js
           node tools/run_safe_mode_tests.js
       - name: Modelos de composición, colaboración y storyboard
@@ -169,6 +170,7 @@ jobs:
           node tools/check_pincel_suave_ui.js
           node tools/check_mover_cuadros_ui.js
           node tools/check_mano_ui.js
+          node tools/check_esculpir_ui.js
           node tools/check_trazo_calidad_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js

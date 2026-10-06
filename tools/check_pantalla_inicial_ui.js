@@ -92,7 +92,7 @@ async function main() {
   ` });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 60; i++) {
-    const r = await send("Runtime.evaluate", { expression: 'typeof dzPantallaInicial==="function" && !!api', returnByValue: true });
+    const r = await send("Runtime.evaluate", { expression: 'document.readyState==="complete"&&typeof dzPantallaInicial==="function" && !!api', returnByValue: true });
     if (r.result?.value) break; await new Promise(r => setTimeout(r, 250));
   }
 

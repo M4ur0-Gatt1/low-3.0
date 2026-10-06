@@ -68,7 +68,7 @@ async function main() {
   await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 140; i++) {
-    if (await ev('typeof openDesign==="function" && !!api').catch(() => false)) break; await w(400);
+    if (await ev('document.readyState==="complete"&&typeof openDesign==="function" && !!api').catch(() => false)) break; await w(400);
   }
   await ev(`(async()=>{
     const wait = ms => new Promise(x=>setTimeout(x,ms));

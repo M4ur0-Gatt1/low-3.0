@@ -57,7 +57,7 @@ async function main() {
   await send("Page.navigate", { url: pageUrl });
 
   for (let i = 0; i < 90; i++) {
-    if (await ev('typeof openDesign==="function" && !!api').catch(() => false)) break;
+    if (await ev('document.readyState==="complete"&&typeof openDesign==="function" && !!api').catch(() => false)) break;
     await w(400);
   }
 

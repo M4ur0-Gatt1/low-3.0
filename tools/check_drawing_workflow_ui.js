@@ -63,7 +63,7 @@ const url=process.argv[3]||'http://127.0.0.1:8791/ui/index.html?mock=1';
  const key=async key=>{await send('Input.dispatchKeyEvent',{type:'keyDown',key,code:key});await send('Input.dispatchKeyEvent',{type:'keyUp',key,code:key});};
  try{
  await send('Page.enable');await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});await send('Emulation.setDeviceMetricsOverride',{width:1366,height:900,deviceScaleFactor:1,mobile:false});await send('Emulation.setFocusEmulationEnabled',{enabled:true});await send('Page.navigate',{url});
- for(let i=0;i<80;i++){if(await value('typeof api!=="undefined"&&!!api&&typeof dzTextToolStart==="function"'))break;await wait(150);}
+ for(let i=0;i<80;i++){if(await value('document.readyState==="complete"&&typeof api!=="undefined"&&!!api&&typeof dzTextToolStart==="function"'))break;await wait(150);}
  await value(`(async()=>{await openDesign('mock.svg');await dzDocInit();closeL3d();LOW.workspace.workspaces.activate('drawing',dzWsAplicar);window.hoja=()=>document.querySelector('#dzCanvas > svg');hoja().innerHTML='';dzDocCommit();})()`);
  await abrirTexto(await screen(600,300));
  await send('Input.insertText',{text:'Texto editable'});

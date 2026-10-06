@@ -2752,7 +2752,7 @@ function dzToolsBarInit(rail, primarias) {
   const more = document.createElement("button");
   more.className = "ibtn dz-tools-more"; more.id = "dzToolsMore";
   more.textContent = "⋯";
-  more.title = "Más herramientas: vectores, pivote, espejo, imagen, cámara, esqueleto y escenario";
+  more.title = "Más herramientas: vectores, esculpir trazos, pivote, espejo, imagen, cámara, esqueleto y escenario";
   more.setAttribute("aria-haspopup", "true");
   rail.appendChild(more);
   more.onclick = (event) => {

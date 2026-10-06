@@ -46,7 +46,7 @@ async function main() {
   await send("Network.setCacheDisabled", { cacheDisabled: true });
   await send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
-  for (let i = 0; i < 60; i++) { if (await ev('typeof dzVersionSync==="function" && typeof dzOnionPanelToggle==="function" && !!api')) break; await dormir(250); }
+  for (let i = 0; i < 60; i++) { if (await ev('document.readyState==="complete"&&typeof dzVersionSync==="function" && typeof dzOnionPanelToggle==="function" && !!api')) break; await dormir(250); }
 
   const base = await ev(`(async()=>{ const w=ms=>new Promise(r=>setTimeout(r,ms));
     try{localStorage.clear()}catch(e){}

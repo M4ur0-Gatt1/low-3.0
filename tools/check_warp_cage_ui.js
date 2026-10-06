@@ -49,7 +49,7 @@ async function main() {
   await send("Emulation.setDeviceMetricsOverride", { width: 1500, height: 900, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 80; i++) {
-    const r = await send("Runtime.evaluate", { expression: 'typeof dzWarpEntrar==="function" && !!api', returnByValue: true });
+    const r = await send("Runtime.evaluate", { expression: 'document.readyState==="complete"&&typeof dzWarpEntrar==="function" && !!api', returnByValue: true });
     if (r.result?.value) break; await new Promise(r => setTimeout(r, 250));
   }
 

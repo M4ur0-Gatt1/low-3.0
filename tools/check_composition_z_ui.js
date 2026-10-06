@@ -46,7 +46,7 @@ async function main() {
   await send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 60; i++) {
-    const r = await send("Runtime.evaluate", { expression: 'typeof dzCompositionAplicar==="function" && typeof dzOnionScrollFoto==="function" && !!api', returnByValue: true });
+    const r = await send("Runtime.evaluate", { expression: 'document.readyState==="complete"&&typeof dzCompositionAplicar==="function" && typeof dzOnionScrollFoto==="function" && !!api', returnByValue: true });
     if (r.result?.value) break; await new Promise(r => setTimeout(r, 250));
   }
 

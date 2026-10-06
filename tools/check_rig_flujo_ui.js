@@ -56,7 +56,7 @@ async function main() {
   await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 90; i++) {
-    const listo = await ev('typeof dzRigEjemplo==="function" && typeof dzRigRepartirDibujo==="function" && !!api').catch(() => false);
+    const listo = await ev('document.readyState==="complete"&&typeof dzRigEjemplo==="function" && typeof dzRigRepartirDibujo==="function" && !!api').catch(() => false);
     if (listo === true) break;
     await w(400);
   }

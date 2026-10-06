@@ -43,7 +43,7 @@ async function main() {
     await send("Network.setCacheDisabled", { cacheDisabled: true });
     await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
     await send("Page.navigate", { url });
-    for (let i = 0; i < 120; i++) { if (await ev('typeof dzDocumentNew==="function"&&typeof api!=="undefined"&&!!api').catch(() => false)) break; await wait(250); }
+    for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&typeof dzDocumentNew==="function"&&typeof api!=="undefined"&&!!api').catch(() => false)) break; await wait(250); }
     await ev(`(async()=>{await dzDocumentNew();if(typeof closeL3d==='function')closeL3d();const s=document.getElementById('lowSplash');if(s)s.remove();
       if(typeof dzEnsureAnimationWorkspace==='function')await dzEnsureAnimationWorkspace();await new Promise(r=>setTimeout(r,700));dzDocCommit();
       const d=DZ.doc;d.writeDrawing('<g data-low-art="line"><circle cx="500" cy="500" r="120" fill="none" stroke="#111" stroke-width="20"/></g>');
