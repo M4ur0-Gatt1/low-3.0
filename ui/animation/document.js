@@ -1166,8 +1166,10 @@
       return null;
     }
 
-    addLayer(nombre) {
-      const lv = this.scene.addLevel(nombre || `Nivel ${this.scene.levels.length + 1}`);
+    /** Una capa nueva con su nivel. `tipo` es el del NIVEL: "vector" (por
+     *  omisión) o "raster" (capa de mapa de bits, ui/drawing/capa-bitmap.js). */
+    addLayer(nombre, tipo) {
+      const lv = this.scene.addLevel(nombre || `Nivel ${this.scene.levels.length + 1}`, tipo);
       const ly = this.scene.addLayer(lv.id, nombre || `Capa ${this.scene.layers.length + 1}`);
       this.layerId = ly.id;
       this.touch(); this.emit("layers");

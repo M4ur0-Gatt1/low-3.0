@@ -534,3 +534,16 @@ nav:has(> [data-filter]) { flex-wrap: wrap; }
   border: 1px solid var(--line, #2a2a2a); box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
 }
 .esc-mas-panel label { white-space: nowrap; }
+
+/* CAPAS DE MAPA DE BITS (ui/drawing/capa-bitmap.js) */
+.bmp-chip {
+  display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 99px; white-space: nowrap;
+  background: color-mix(in srgb, #33B5E8 22%, transparent); color: #33B5E8; border: 1px solid rgba(51, 181, 232, .5);
+  font: 700 9.5px/1.2 'JetBrains Mono', monospace; letter-spacing: .04em;
+}
+.bmp-opciones { display: inline-flex; align-items: center; gap: 8px; }
+.bmp-opciones label { display: inline-flex; align-items: center; gap: 4px; }
+.bmp-opciones input[type="range"] { width: 80px; }
+.bmp-opciones b { min-width: 22px; font: 600 10px 'JetBrains Mono', monospace; }
+.tl2-name.tl2-bits { box-shadow: inset 2px 0 0 #33B5E8; }
+.tl2-addbits { margin-left: 3px; }

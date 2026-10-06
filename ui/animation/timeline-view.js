@@ -295,7 +295,14 @@
       mas.title = "Nueva capa de animación (una columna más en la X-sheet)";
       mas.setAttribute("aria-label", mas.title);
       mas.onclick = (e) => { e.stopPropagation(); doc.addLayer(); doc.emit("frame"); };
-      nombre.append(pos, mas);
+      // y al lado, la capa de MAPA DE BITS (como Harmony: el tipo es de la capa)
+      const masBits = document.createElement("button");
+      masBits.type = "button"; masBits.className = "tl2-addlayer tl2-addbits";
+      masBits.textContent = "▦";
+      masBits.title = "Nueva capa de mapa de bits: lo que dibujes en ella se vuelve píxeles; la goma borra píxeles y el balde rellena píxeles";
+      masBits.setAttribute("aria-label", masBits.title);
+      masBits.onclick = (e) => { e.stopPropagation(); doc.addLayer(null, "raster"); doc.emit("frame"); };
+      nombre.append(pos, mas, masBits);
       regla.appendChild(nombre);
       const pista = document.createElement("div");
       pista.className = "tl2-track";
@@ -517,7 +524,9 @@
         const txt = document.createElement("span");
         // recortada: una flecha hacia la base, como en Photoshop; tono: su marca
         const recortada = !!(animation.recorte && animation.recorte.baseDeRecorte(doc.scene.layers, doc.scene.layers.indexOf(ly)) >= 0);
-        txt.textContent = (recortada ? "↳ " : "") + (ly.tone ? (ly.tone.kind === "luz" ? "☀ " : "◐ ") : "") + ly.name;
+        const bits = doc.scene.level(ly.levelId)?.type === "raster";   // capa de mapa de bits (ui/drawing/capa-bitmap.js)
+        if (bits) cab.classList.add("tl2-bits");
+        txt.textContent = (recortada ? "↳ " : "") + (bits ? "▦ " : "") + (ly.tone ? (ly.tone.kind === "luz" ? "☀ " : "◐ ") : "") + ly.name;
         if (recortada) txt.classList.add("tl2-recortada");
         cab.title = ly.name;          // compactada, el nombre vive en el tooltip
         // MESA DE LUZ de esta capa: se ve lavada para calcar encima (no cambia el render)
