@@ -63,7 +63,7 @@
     save(preset, persist = true) { if (!preset || !preset.id) throw Error("El pincel necesita id"); this.presets.set(preset.id, { ...preset }); if (persist && !this.persist()) throw Error("No hay espacio local para guardar más puntas de pincel"); }
     saveMany(presets) { for (const preset of presets || []) this.save(preset, false); if (!this.persist()) throw Error("No hay espacio local para guardar el paquete de pinceles"); return (presets || []).length; }
     remove(id) { if (defaults.some(x => x[0] === id)) return false; const ok = this.presets.delete(id); this.persist(); return ok; }
-    persist() { try { this.storage?.setItem("low.brushes.v1", JSON.stringify(this.all().filter(x => !defaults.some(d => d[0] === x.id)))); return true; } catch (_) { return false; } }
+    persist() { try { this.storage?.setItem("low.brushes.v1", JSON.stringify(this.all().filter(x => !x.fromLibrary && !defaults.some(d => d[0] === x.id)))); return true; } catch (_) { return false; } }   // las BIBLIOTECAS instaladas viven en archivos (ui/drawing/bibliotecas.js), no acá
     load() { try { (JSON.parse(this.storage?.getItem("low.brushes.v1") || "[]") || []).forEach(x => this.presets.set(x.id, x)); } catch (_) {} }
   }
   /** La categoría de un pincel; los importados y los propios van aparte. */
@@ -74,7 +74,12 @@
   drawing.opcionesDePinceles = function (seleccionado, biblioteca) {
     const lib = biblioteca || drawing.brushes, esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
     const grupos = new Map(drawing.BRUSH_CATEGORIAS.map(([id, nombre]) => [id, { nombre, items: [] }]));
-    for (const p of lib.all()) { const g = grupos.get(lib.categoria(p)) || grupos.get("propio"); g.items.push(p); }
+    for (const p of lib.all()) {
+      let g = grupos.get(lib.categoria(p));
+      // una BIBLIOTECA instalada es su propio grupo, con su nombre
+      if (!g && p.libraryId) { g = { nombre: "📚 " + (p.libraryName || "Biblioteca"), items: [] }; grupos.set(lib.categoria(p), g); }
+      (g || grupos.get("propio")).items.push(p);
+    }
     return [...grupos.values()].filter((g) => g.items.length).map((g) => `<optgroup label="${esc(g.nombre)}">` +
       g.items.map((p) => `<option value="${esc(p.id)}"${p.id === seleccionado ? " selected" : ""}>${esc(p.name)}</option>`).join("") + "</optgroup>").join("");
   };

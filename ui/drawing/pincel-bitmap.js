@@ -119,9 +119,21 @@
   const imagenes = new Map();   // tipData → HTMLImageElement decodificada
   /** Una punta importada se decodifica una vez; hasta que esté, no hay punta. */
   function prepararPunta(brush) {
-    if (!brush || !brush.tipData || imagenes.has(brush.tipData)) return;
-    const img = new Image(); img.decoding = "async"; img.src = brush.tipData;
-    imagenes.set(brush.tipData, img);
+    if (!brush) return;
+    for (const src of [brush.tipData, brush.grainData, ...(brush.tipVariants || [])]) {
+      if (!src || imagenes.has(src)) continue;
+      const img = new Image(); img.decoding = "async"; img.src = src;
+      imagenes.set(src, img);
+    }
+  }
+  const lista = (src) => { const img = imagenes.get(src); return img && img.complete && img.naturalWidth ? img : null; };
+  /** Una punta de imagen (importada) como lienzo, en caché. */
+  const puntasImg = new Map();
+  function puntaDeImagen(src) {
+    if (puntasImg.has(src)) return puntasImg.get(src);
+    const img = lista(src); if (!img) return null;
+    const c = lienzo(TIP, TIP); c.getContext("2d").drawImage(img, 0, 0, TIP, TIP);
+    puntasImg.set(src, c); return c;
   }
   function punta(brush) {
     const forma = brush.shape || "ellipse", dureza = Math.max(0, Math.min(1, brush.hardness ?? .8));
@@ -209,12 +221,15 @@
     const c = lienzo(bw * k, bh * k), x = c.getContext("2d");
     x.setTransform(k, 0, 0, k, -x0 * k, -y0 * k);
     const aColor = dabs.some((d) => d.hue);
+    // VARIANTES (puntas animadas de GIMP .gih, follaje): una al azar en cada sello
+    const variantes = (brush.tipVariants || []).map(puntaDeImagen).filter(Boolean);
     // porosos y cerdas: cada sello con su giro (porosos) o una leve variación
     // (cerdas), para que el mismo dibujo de punta no se repita en fila
     const tex = brush.texture || "", girar = POROSAS.test(tex) && tex !== "dry" && (brush.shape || "ellipse") === "ellipse", cerdas = tex === "dry";
     let sd = ((brush.seed || 1) * 2654435761) >>> 0; const azar = () => ((sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0) / 4294967296);
     for (const d of dabs) {
-      const tip = aColor ? puntaTenida(base, d.hue && drawing.efectos ? drawing.efectos.girarTono(color, d.hue) : color) : base;
+      const propia = variantes.length > 1 ? variantes[Math.floor(azar() * variantes.length)] : base;
+      const tip = aColor ? puntaTenida(propia, d.hue && drawing.efectos ? drawing.efectos.girarTono(color, d.hue) : color) : propia;
       const giro = girar ? azar() * 360 : cerdas ? (azar() - .5) * 8 : 0, alfa = cerdas ? d.opacity * (.7 + azar() * .3) : d.opacity;
       x.save(); x.globalAlpha = Math.max(0, Math.min(1, alfa));
       x.translate(d.x, d.y); x.rotate(((d.angle || 0) + giro) * Math.PI / 180);
@@ -222,7 +237,14 @@
       x.restore();
     }
     // el GRANO, fijo en la hoja: un mosaico alineado a las coordenadas del dibujo
-    if (brush.texture && GRANOS.has(brush.texture)) {
+    // el GRANO PROPIO de un pincel de Procreate (Grain.png): es el papel de ese pincel
+    const granoPropio = brush.grainData ? lista(brush.grainData) : null;
+    if (granoPropio) {
+      const tam = Math.max(8, (brush.size || 30) * 4 * Math.max(.2, Math.min(5, brush.textureScale ?? 1)));
+      const patron = x.createPattern(granoPropio, "repeat");
+      if (patron && patron.setTransform) patron.setTransform(new DOMMatrix([tam / granoPropio.naturalWidth, 0, 0, tam / granoPropio.naturalHeight, 0, 0]));
+      x.save(); x.globalCompositeOperation = "destination-in"; x.fillStyle = patron; x.fillRect(x0, y0, bw, bh); x.restore();
+    } else if (brush.texture && GRANOS.has(brush.texture)) {
       const seco = brush.texture === "dry";   // las vetas las hacen las cerdas; el papel sólo las corta un poco
       const g = grano(seco ? "paper" : brush.texture, seco ? .35 : Math.max(0, Math.min(1, brush.textureStrength ?? .6)), (brush.seed || 1) >>> 0);
       const escala = (g.unidades / 256) * Math.max(.2, Math.min(5, brush.textureScale ?? 1));

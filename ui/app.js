@@ -5231,7 +5231,7 @@ function _drawFinish() {
       && !DZPointerController.finish(t.gestureToken, t.pid)) {
     t.el?.remove(); _hideGuideLine(); return;
   }
-  if (t.pts.length < 2) { if (t.el) t.el.remove(); return; }
+  if (t.pts.length === 1 && t.mode === "brush" && dzCurrentBrush()?.engine === "raster") t.pts.push(t.pts[0]); if (t.pts.length < 2) { if (t.el) t.el.remove(); return; }   // un TOQUE con un pincel raster deja UN sello (un árbol, una casa de una biblioteca); antes no dejaba nada
   const pts = dzRefineStroke(t.pts);
   let finalEl = t.el;
   if (t.mode === "pencil") {
@@ -12096,22 +12096,6 @@ function dzBrushStudioOpen() {
   DZ_BRUSH_STUDIO.selected = DZ.brushPreset || DZ_BRUSH_STUDIO.selected; DZ_BRUSH_STUDIO.render();
 }
 
-async function dzImportBrushes() {
-  const result = await api.import_brush_pack();
-  if (!result || result.cancel) return;
-  if (result.error) return sysMsg(" No pude importar el pincel: " + result.error);
-  const incoming = Array.isArray(result.presets) ? result.presets : [];
-  const valid = incoming.filter(p => p && p.name && (p.tipData || p.engine === "vector"));
-  if (!valid.length) return dzSetStatus("El archivo no contiene pinceles utilizables");
-  const stamp = Date.now().toString(36);
-  try {
-    LOW.drawing.brushes.saveMany(valid.map((preset, index) => ({ ...preset,
-      id: `imported-${stamp}-${index + 1}`, imported: true })));
-  } catch (error) { return sysMsg(" No pude guardar el paquete: " + error.message); }
-  DZ.brushPreset = `imported-${stamp}-1`; DZ.drawW = valid[0].size || 36;
-  if (DZ_BRUSH_STUDIO) { DZ_BRUSH_STUDIO.selected = DZ.brushPreset; DZ_BRUSH_STUDIO.filter = "imported"; DZ_BRUSH_STUDIO.render(); }
-  dzToolOptsRender(); dzSetStatus(`${valid.length} pincel${valid.length === 1 ? "" : "es"} importado${valid.length === 1 ? "" : "s"} desde ${result.name || result.format || "archivo"}`);
-}
 /* splitter: redimensionar el inspector arrastrando (persistente) */
 function dzSplitWire() {
   const sp = $("#dzSplit"), insp = document.querySelector(".dz-inspector");

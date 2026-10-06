@@ -78,6 +78,11 @@
     open_file: async (path) => (window.__lowFiles || {})[path]
       || { error: "no existe " + path },
     enter_safe_mode: async () => ({ ok: true }),
+    // BIBLIOTECAS DE PINCELES (brush_import.py en la app real): en memoria
+    __pinceles: {},
+    brush_libraries: async () => ({ libraries: Object.values(impl.__pinceles).map((l) => ({ id: l.id, name: l.name, format: l.format, count: l.brushes.length })) }),
+    brush_library: async (id) => impl.__pinceles[id] || { error: "no existe " + id },
+    remove_brush_library: async (id) => { const ok = !!impl.__pinceles[id]; delete impl.__pinceles[id]; return { ok }; },
     history: async () => [],
     ollama_models: async () => [],
     refresh_tree: async () => ({ tree: [] }),

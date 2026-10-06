@@ -96,8 +96,10 @@
       }
       carry = (carry + length) % spacing;
     }
-    const last = points[points.length - 1];
-    if (result[result.length - 1] !== last) result.push(last);
+    const last = points[points.length - 1], ultimo = result[result.length - 1];
+    // el punto final, salvo que coincida con el último sello: un TOQUE (dos
+    // puntos en el mismo lugar) dejaba DOS sellos encimados, el doble de tinta
+    if (ultimo !== last && Math.hypot(last.x - ultimo.x, last.y - ultimo.y) > 1e-6) result.push(last);
     return result;
   }
 

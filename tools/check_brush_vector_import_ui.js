@@ -39,7 +39,9 @@ async function main() {
     api.import_character_art=async()=>({svg:illustrator,name:"personaje-illustrator.svg",kind:"svg",source_kind:"svg"});
     const pieces=await dzRigImportCharacter();
     const tip='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-    api.import_brush_pack=async()=>({name:"photoshop.abr",format:"abr",presets:[{name:"Tinta importada",engine:"raster",size:24,opacity:1,flow:.8,spacing:.2,pressureSize:.7,tipData:tip}]});
+    // contrato de 3.6.0: importar INSTALA una biblioteca y devuelve su ficha; los pinceles se leen con brush_library
+    api.__pinceles["photoshop-abr-0001"]={id:"photoshop-abr-0001",name:"photoshop.abr",format:"abr",brushes:[{name:"Tinta importada",engine:"raster",size:24,opacity:1,flow:.8,spacing:.2,pressureSize:.7,tipData:tip}]};
+    api.import_brush_pack=async()=>({libraries:[{id:"photoshop-abr-0001",name:"photoshop.abr",format:"abr",count:1}],errors:[]});
     const before=LOW.drawing.brushes.all().length; await dzImportBrushes();
     const brush=LOW.drawing.brushes.get(DZ.brushPreset),made=dzBrushFinalElement([[0,0,.2,10,0,0,0],[20,0,.8,20,0,0,10],[40,8,1,30,0,0,20]],"#e5322d");
     const longStroke=Array.from({length:5000},(_,i)=>[i*.8,Math.sin(i/18)*8,.65,0,0,0,i*2]),savedWidth=DZ.drawW; DZ.drawW=.5;

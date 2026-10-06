@@ -23,8 +23,8 @@
     render() {
       const active = this.library?.get?.(this.selected), brushes = this.brushes();
       this.root.innerHTML = `<header><div><b>Estudio de pinceles</b><small>${this.library?.all?.().length || 0} pinceles</small></div><button data-a="close" aria-label="Cerrar">×</button></header>
-        <div class="bst-search"><input type="search" placeholder="Buscar pincel" value="${esc(this.query)}"><button data-a="import">Importar…</button></div>
-        <nav><button data-filter="all"${this.filter === "all" ? ' class="active"' : ""}>Todos</button><button data-filter="favorites"${this.filter === "favorites" ? ' class="active"' : ""}>Favoritos</button>${(global.LOW?.drawing?.BRUSH_CATEGORIAS || []).filter(([id]) => !["propio", "importado"].includes(id)).map(([id, nombre]) => `<button data-filter="${id}"${this.filter === id ? ' class="active"' : ""}>${esc(nombre)}</button>`).join("")}<button data-filter="imported"${this.filter === "imported" ? ' class="active"' : ""}>Importados</button></nav>
+        <div class="bst-search"><input type="search" placeholder="Buscar pincel" value="${esc(this.query)}"><button data-a="import" title="Photoshop .abr, Procreate .brushset, Krita .bundle/.kpp, GIMP .gbr/.gih, MyPaint .myb, PNG">Instalar biblioteca…</button></div>
+        <nav><button data-filter="all"${this.filter === "all" ? ' class="active"' : ""}>Todos</button><button data-filter="favorites"${this.filter === "favorites" ? ' class="active"' : ""}>Favoritos</button>${(global.LOW?.drawing?.BRUSH_CATEGORIAS || []).filter(([id]) => !["propio", "importado"].includes(id)).map(([id, nombre]) => `<button data-filter="${id}"${this.filter === id ? ' class="active"' : ""}>${esc(nombre)}</button>`).join("")}<button data-filter="imported"${this.filter === "imported" ? ' class="active"' : ""}>Importados</button></nav>${this.navBibliotecas()}
         <div class="bst-list" role="listbox" aria-label="Pinceles">${brushes.map(brush => `<button class="bst-brush${brush.id === this.selected ? " selected" : ""}" data-id="${esc(brush.id)}" role="option" aria-selected="${brush.id === this.selected}"><span class="bst-tip ${brush.engine || "vector"}">${brush.tipData ? `<img src="${esc(brush.tipData)}" alt="">` : ""}</span><span><b>${esc(brush.name)}</b><small>${brush.engine === "raster" ? "Raster" : "Vector"}${brush.imported ? " · importado" : ""}</small></span><i>${this.favorites.has(brush.id) ? "★" : "☆"}</i></button>`).join("") || '<p class="bst-empty">No hay pinceles con ese filtro.</p>'}</div>
         <section class="bst-editor${active ? "" : " disabled"}"><div class="bst-preview"><svg viewBox="0 0 300 86" aria-label="Vista previa del pincel"></svg></div>
           <div class="bst-title"><strong>${esc(active?.name || "Sin selección")}</strong><button data-a="favorite" title="Favorito">${this.favorites.has(this.selected) ? "★" : "☆"}</button><button data-a="duplicate">Duplicar</button></div>
@@ -50,6 +50,18 @@
         hueJitter: "La variación es por sello: una cinta vectorial no tiene sellos. Usá un pincel raster.",
         opacityJitter: "La variación es por sello: una cinta vectorial no tiene sellos. Usá un pincel raster."
       }, raster: {} };
+    }
+    /** Las BIBLIOTECAS instaladas (Photoshop, Procreate, Krita, GIMP…): elegir
+     *  una muestra sólo sus pinceles; «Quitar» la desinstala. */
+    navBibliotecas() {
+      const libs = [...((global.LOW?.drawing?.bibliotecas?.instaladas) || new Map()).values()];
+      const actual = String(this.filter || "").startsWith("lib:") ? this.filter.slice(4) : "";
+      return `<div class="bst-libs"><select data-a="lib" aria-label="Biblioteca"><option value="">${libs.length ? "Bibliotecas instaladas (" + libs.length + ")…" : "Sin bibliotecas instaladas"}</option>` +
+        libs.map((l) => `<option value="${esc(l.id)}"${l.id === actual ? " selected" : ""}>${esc(l.name)} · ${l.count}</option>`).join("") + `</select>` +
+        (actual ? (() => { const l = libs.find((x) => x.id === actual) || {};
+          // una INCLUIDA (viene con LOW) se oculta, no se borra; se muestra su autor y licencia
+          return (l.author ? `<small class="bst-lib-cred">${esc(l.author)}${l.license ? " · " + esc(l.license) : ""}</small>` : "") +
+            `<button data-a="quitarlib" title="${l.builtin ? "Ocultar esta biblioteca incluida (no se borra del programa)" : "Desinstalar esta biblioteca"}">${l.builtin ? "Ocultar biblioteca" : "Quitar biblioteca"}</button>`; })() : "") + `</div>`;
     }
     controls(brush) {
       const p = brush || {};
@@ -82,7 +94,11 @@
     }
     wire() {
       this.root.querySelector('[data-a="close"]').onclick = () => this.options.onClose?.();
-      this.root.querySelector('[data-a="import"]').onclick = () => this.options.onImport?.();
+      this.root.querySelector('[data-a="import"]').onclick = () => (global.dzImportBrushes || this.options.onImport)?.();
+      const libSel = this.root.querySelector('[data-a="lib"]');
+      if (libSel) libSel.onchange = () => { this.filter = libSel.value ? "lib:" + libSel.value : "all"; this.render(); };
+      const quitar = this.root.querySelector('[data-a="quitarlib"]');
+      if (quitar) quitar.onclick = () => { const id = this.filter.slice(4); global.LOW?.drawing?.bibliotecas?.quitar(id); this.filter = "all"; this.render(); };
       this.root.querySelector(".bst-search input").oninput = event => {
         this.query = event.target.value; const caret = event.target.selectionStart; this.render();
         const search = this.root.querySelector(".bst-search input"); search.focus(); search.setSelectionRange(caret, caret);
