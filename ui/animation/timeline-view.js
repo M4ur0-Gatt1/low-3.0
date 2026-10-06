@@ -655,6 +655,7 @@
 
       this.host.innerHTML = "";
       this.host.appendChild(cont);
+      this._ponerAsa();
       cont.scrollTop = oldScroll.top;
       if (this._pendingScrollFrame != null) {
         cont.scrollLeft = Math.max(0, (this._pendingScrollFrame - 1) * this._frameWidth());
@@ -745,7 +746,7 @@
         setTimeout(() => { this._recienArrastro = false; }, 0);
         const s = doc.cellSelection;
         if (s) { doc.selectLayer(s.anchorLayerId); doc.goTo(s.anchorFrame); }
-        if (this.status && s) this.status(this._medidaSeleccion() + " seleccionados · clic derecho para las acciones · Alt+arrastrar para mover");
+        if (this.status && s) this.status(this._medidaSeleccion() + " seleccionados · arrastrá la manija ⠿ para moverlos · clic derecho para las acciones");
       };
       document.addEventListener("pointermove", mover);
       document.addEventListener("pointerup", soltar);
@@ -799,6 +800,34 @@
       if (!this.host) return;
       this.host.querySelectorAll(".tl2-cell[data-layer-id][data-frame]").forEach((c) =>
         c.classList.toggle("rango", this._inSelection(c.dataset.layerId, Number(c.dataset.frame))));
+      this._ponerAsa();
+    }
+    /** LA MANIJA PARA MOVER. Pedido de Mauro (oct-2026): «quiero poder mover
+     *  los frames de lugar eligiéndolos en la línea de tiempo». Mover existía
+     *  pero escondido: sólo con Alt+arrastrar. Y apretar sobre lo
+     *  seleccionado no puede mover —lo pidió él mismo: al querer reseleccionar
+     *  se desordenaba la escena—. Así que la selección lleva una MANIJA a la
+     *  izquierda, como la barra de arrastre de las celdas de OpenToonz: se
+     *  agarra y se lleva. Arrastrar en cualquier otro lado sigue seleccionando. */
+    _ponerAsa() {
+      if (!this.host) return;
+      this.host.querySelectorAll(".tl2-asa").forEach((a) => a.remove());
+      const s = this.doc && this.doc.cellSelection;
+      if (!s) return;
+      const primera = this.host.querySelector(`.tl2-cell[data-layer-id="${s.fromLayerId}"][data-frame="${s.from}"]`)
+        || this.host.querySelector(".tl2-cell.rango");
+      if (!primera) return;
+      const asa = document.createElement("i");
+      asa.className = "tl2-asa";
+      asa.title = "Arrastrá para mover los cuadros seleccionados · Alt+← / Alt+→ los corre de a uno";
+      asa.setAttribute("aria-label", "Mover la selección");
+      asa.onpointerdown = (ev) => {
+        if (ev.button !== 0) return;
+        ev.stopPropagation();
+        this._moverArrastrando(ev, primera.dataset.layerId, Number(primera.dataset.frame));
+      };
+      asa.onclick = (ev) => ev.stopPropagation();
+      primera.appendChild(asa);
     }
     _medidaSeleccion() {
       const s = this.doc && this.doc.cellSelection;
@@ -826,6 +855,8 @@
         { icon: "⎘", label: "Reexponer lo copiado (comparte el dibujo)", shortcut: "Ctrl+V", disabled: !hayCopia,
           action: () => { const r = cells && cells.paste(doc); avisar(r ? cells.medida(r) + " reexpuestas: en el mismo nivel comparten el dibujo" : "Copiá celdas antes de reexponer"); } },
         { icon: "▦", label: "Reexponer un dibujo del nivel…", action: () => requestAnimationFrame(() => this._menuReexponer(lugar)) },
+        { icon: "←", label: "Mover un cuadro antes", shortcut: "Alt+←", disabled: sel.from <= 1, action: () => doc.moveCellsInRange(sel, -1) && avisar(this._medidaSeleccion() + " movidos") },
+        { icon: "→", label: "Mover un cuadro después", shortcut: "Alt+→", action: () => doc.moveCellsInRange(sel, +1) && avisar(this._medidaSeleccion() + " movidos") },
         "separator",
         { icon: "⇥", label: "Rellenar los huecos con el dibujo anterior", action: () => doc.applySelectedTiming("autoexpose", sel) || avisar("No había huecos para rellenar") },
         { icon: "＋", label: "Dibujo nuevo en cada celda vacía", action: () => { const n = doc.blankDrawingsInEmptyCells(sel); avisar(n ? n + " dibujos nuevos, listos para dibujar" : "No hay celdas vacías en la selección"); } },

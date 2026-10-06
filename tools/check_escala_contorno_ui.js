@@ -81,7 +81,10 @@ async function main() {
   await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: pageUrl });
   for (let i = 0; i < 90; i++) {
-    const listo = await ev('typeof dzEscalaGeometrica==="function" && typeof dzBoxHandleDown==="function" && !!api').catch(() => false);
+    // readyState «complete»: las funciones existen antes de que terminen de
+    // cargar los módulos de después de app.js, y montar la forma antes daba
+    // «la forma no quedó seleccionada» de a ratos (puerta 3.9.0; sola pasaba)
+    const listo = await ev('document.readyState==="complete" && typeof dzEscalaGeometrica==="function" && typeof dzBoxHandleDown==="function" && !!api').catch(() => false);
     if (listo === true) break;
     await w(400);
   }

@@ -12013,7 +12013,7 @@ function dzToolOptsRender() {
   const os = $("#toSmooth"); if (os) os.oninput = e => {
     DZ.smooth = +e.target.value; $("#toSmoothLbl").textContent = e.target.value;
     const p = $("#dzSmooth"); if (p) { p.value = e.target.value; $("#dzSmoothLbl").textContent = e.target.value; }
-    try { dzPrefsStorage().setItem("fidel.dzsmooth", String(DZ.smooth)); } catch (err) { /* */ }
+    try { dzPrefsStorage().setItem("low.dzsmooth", String(DZ.smooth)); } catch (err) { /* */ }   // la MISMA clave que se lee al arrancar: guardaba en «fidel.dzsmooth» y el suavizado nunca volvía
   };
   const of2 = $("#toFill"); if (of2) of2.oninput = e => { DZ.fillColor = e.target.value; const p = $("#dzPFill"); if (p) p.value = e.target.value; };
   const fillMode = $("#toFillMode"); if (fillMode) fillMode.onchange = e => dzColoringPrefsSet("mode", e.target.value);

@@ -48,8 +48,9 @@ prueba("remate: el trazo arranca y termina finito, el cuerpo queda igual", () =>
   const b = { id: "t", size: 10, pressureSize: 0, taperStart: .5, taperEnd: .5 };
   const ancho = (r) => { const m = /M ([\d.-]+) ([\d.-]+)/.exec(r.path); return r; };
   const r = E.buildVectorOutline(linea(), b), plano = E.buildVectorOutline(linea(), { ...b, taperStart: 0, taperEnd: 0 });
-  const anchos = (o) => { const pts = o.path.replace(/[MLZ]/g, " ").trim().split(/\s+/).map(Number); const n = pts.length / 4; const out = [];
-    for (let i = 0; i < n; i++) { const izq = pts[i * 2 + 1], der = pts[pts.length - 1 - i * 2]; out.push(Math.abs(izq - der)); } return out; };
+  // el ancho en cada muestra: la distancia entre los dos bordes (el contorno
+  // ahora es curvo y con remates redondos; ya no se puede leer del path)
+  const anchos = (o) => o.left.map((l, i) => Math.hypot(l.x - o.right[i].x, l.y - o.right[i].y));
   const a = anchos(r), p = anchos(plano);
   assert.ok(a[0] < p[0] * .2, "no arranca en punta: " + a[0].toFixed(2) + " vs " + p[0].toFixed(2));
   const medio = Math.floor(a.length / 2);

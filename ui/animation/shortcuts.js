@@ -97,6 +97,13 @@
       const ly = doc.layer;
       let manejado = true;
 
+      // Alt+←/→ MUEVE la selección de cuadros de a uno (pedido de Mauro:
+      // «mover los frames de lugar eligiéndolos en la línea de tiempo»)
+      if (e.altKey && !ctrl && (e.key === "ArrowLeft" || e.key === "ArrowRight") && doc.cellSelection) {
+        e.preventDefault();
+        doc.moveCellsInRange(doc.cellSelection, e.key === "ArrowLeft" ? -1 : 1);
+        return;
+      }
       switch (e.key) {
         case "ArrowLeft":  pb ? pb.step(-1) : doc.step(-1); break;
         case "ArrowRight": pb ? pb.step(+1) : doc.step(+1); break;

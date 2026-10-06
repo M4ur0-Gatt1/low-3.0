@@ -75,7 +75,7 @@ async function main() {
       const n=hoja().querySelector('[data-low="brush"],[data-low="raster-brush"],[data-low="imported-brush"]');
       if(!n) return {vacio:true};
       let bb=null; try{bb=n.getBBox()}catch(_){}
-      return {porElMotor:!!n.getAttribute("data-brush-id"),
+      return {porElMotor:!!n.getAttribute("data-brush-id"), d:n.getAttribute("d")||"", op:n.getAttribute("fill-opacity")||"",
         firma:(n.getAttribute("d")||"")+"|"+(n.getAttribute("fill-opacity")||"")+"|"+n.innerHTML,
         caja:bb?{w:+bb.width.toFixed(2),h:+bb.height.toFixed(2)}:null}; };
 
@@ -90,6 +90,21 @@ async function main() {
       if(A.length!==B.length) return true;
       for(let i=0;i<A.length;i++){ if(i%2){ if(Math.abs(+A[i]-+B[i])>.5) return true; } else if(A[i]!==B[i]) return true; }
       return false; };
+    /* La cinta VECTORIAL se compara por GEOMETRÍA (oct-2026). Desde que el
+       contorno se simplifica (se queda con los puntos que hacen falta), el
+       mismo gesto con el jitter del filtro de presión puede dejar un punto
+       más o uno menos: el TEXTO cambia de largo sin que la forma cambie, y la
+       comparación por texto lo daba por distinto. Se muestrean los dos
+       contornos a lo largo y se mide la distancia entre ellos. */
+    const geoDistinto=(x,y)=>{
+      if(!x.d||!y.d) return distinto(x.firma,y.firma);
+      if(x.op!==y.op) return true;
+      const ns="http://www.w3.org/2000/svg", tmp=document.createElementNS(ns,"svg"); document.body.appendChild(tmp);
+      const mk=d=>{ const p=document.createElementNS(ns,"path"); p.setAttribute("d",d); tmp.appendChild(p); return p; };
+      const pa=mk(x.d), pb=mk(y.d), la=pa.getTotalLength(), lb=pb.getTotalLength();
+      let peor=Math.abs(la-lb)>2?99:0;
+      for(let k=0;k<=200&&peor<=.5;k++){ const a=pa.getPointAtLength(la*k/200), b=pb.getPointAtLength(lb*k/200); peor=Math.max(peor,Math.hypot(a.x-b.x,a.y-b.y)); }
+      tmp.remove(); return peor>.5; };
     // 1. Ningun pincel incorporado puede saltearse el motor.
     const incorporados=LOW.drawing.brushes.all().filter(b=>LOW.drawing.brushes.isBuiltin(b.id));
     const control=await trazoCon(LOW.drawing.brushes.get("clean-ink"),{});
@@ -104,7 +119,7 @@ async function main() {
     for(const [clave,min,max] of VIS){
       const av=await trazoCon(vector,{[clave]:min}), bv=await trazoCon(vector,{[clave]:max});
       const ar=await trazoCon(raster,{[clave]:min}), br=await trazoCon(raster,{[clave]:max});
-      tabla[clave]={vector:distinto(av.firma,bv.firma), raster:distinto(ar.firma,br.firma),
+      tabla[clave]={vector:geoDistinto(av,bv), raster:distinto(ar.firma,br.firma),
         vacio:!!(av.vacio||bv.vacio||ar.vacio||br.vacio)};
     }
 

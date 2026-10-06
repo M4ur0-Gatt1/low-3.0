@@ -170,8 +170,17 @@
     dial.id = "dzDisc"; dial.className = "dz-disc mesa-dial";
     dial.title = "Disco de la mesa: arrastrá para girar la hoja · rueda: de a 5° · " +
       "Shift: de a 15° · doble clic: enderezar";
-    dial.innerHTML = '<i class="mesa-dial-giro"></i><i class="mesa-dial-indice"></i><b class="mesa-dial-grados">0°</b>';
+    /* ENDEREZAR A LA VISTA. Mauro: «no encuentro el botón para restablecer el
+       giro de la mesa de animación al punto inicial». Existía (doble clic en
+       el dial, Vista → Enderezar la vista) pero no se veía. Ahora, mientras la
+       mesa está girada, el dial muestra un botón «↺ 0°». */
+    dial.innerHTML = '<i class="mesa-dial-giro"></i><i class="mesa-dial-indice"></i><b class="mesa-dial-grados">0°</b>' +
+      '<button type="button" class="mesa-enderezar" title="Enderezar la mesa: volver a 0°">↺ 0°</button>';
     cv.appendChild(dial);
+    const boton = dial.querySelector(".mesa-enderezar");
+    boton.addEventListener("pointerdown", (e) => e.stopPropagation());
+    boton.addEventListener("dblclick", (e) => e.stopPropagation());
+    boton.addEventListener("click", (e) => { e.stopPropagation(); enderezar(); });
     dial.addEventListener("pointerdown", (e) => agarrar(e, dial, dial));
     dial.addEventListener("dblclick", (e) => { e.preventDefault(); enderezar(); });
     dial.addEventListener("wheel", (e) => {

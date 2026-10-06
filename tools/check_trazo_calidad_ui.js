@@ -52,9 +52,18 @@ async function medir(herramienta) {
       const arte = [...svg.querySelectorAll('g[data-low-art] > *')];
       const el = arte.at(-1); if (!el) return null;
       const muestras = [];
-      const geoms = el.tagName === "path" ? [el] : [...el.querySelectorAll("path,line,polyline")];
-      for (const g of geoms) { if (!g.getTotalLength) continue; const L = g.getTotalLength(); const n = Math.max(2, Math.ceil(L / 2));
-        for (let i = 0; i <= n; i++) { const p = g.getPointAtLength(L * i / n); muestras.push([p.x, p.y]); } }
+      // un trazo de PINCEL se mide por su EJE (la curva que sigue el pincel, la
+      // misma que usa al dibujarse), no por su contorno: el contorno está a
+      // medio grosor del eje, y con el pincel por defecto dibujando al grosor
+      // que dice la barra (oct-2026) ese medio grosor se leía como «temblor»
+      let eje = null; try { eje = JSON.parse(el.getAttribute("data-low-brush-points") || "null"); } catch (_) { eje = null; }
+      if (Array.isArray(eje) && eje.length > 1 && LOW.drawing.puntosDeCurva) {
+        for (const p of LOW.drawing.puntosDeCurva(eje, 1)) muestras.push([p[0], p[1]]);
+      } else {
+        const geoms = el.tagName === "path" ? [el] : [...el.querySelectorAll("path,line,polyline")];
+        for (const g of geoms) { if (!g.getTotalLength) continue; const L = g.getTotalLength(); const n = Math.max(2, Math.ceil(L / 2));
+          for (let i = 0; i <= n; i++) { const p = g.getPointAtLength(L * i / n); muestras.push([p.x, p.y]); } }
+      }
       const aDoc = (x, y) => { const q = dzToUser(x, y); return [q.x, q.y]; };
       return { tag: el.tagName, d: (el.getAttribute("d") || "").length, muestras, aDoc: ${JSON.stringify(puntos)}.map(([x, y]) => aDoc(x, y)) }; })()`);
   }

@@ -44,6 +44,9 @@
       return { vector: {
         pressureOpacity: "Una cinta vectorial es un solo camino relleno: no puede cambiar de opacidad a lo largo del trazo. Usá un pincel raster.",
         hardness: "El borde de una cinta vectorial es el borde del camino: no hay difuminado que ajustar. Usá un pincel raster.",
+        // medido al comparar por GEOMETRÍA (oct-2026): de 0,01 a 1 la cinta no
+        // se movía media unidad. El espaciado separa SELLOS; una cinta no tiene.
+        spacing: "El espaciado separa los sellos de un pincel raster: una cinta vectorial es un contorno continuo. Usá un pincel raster.",
         shape: "Las formas son de SELLOS: una cinta vectorial es un solo camino. Usá un pincel raster.",
         sizeJitter: "La variación es por sello: una cinta vectorial no tiene sellos. Usá un pincel raster.",
         angleJitter: "La variación es por sello: una cinta vectorial no tiene sellos. Usá un pincel raster.",

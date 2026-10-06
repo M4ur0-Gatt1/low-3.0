@@ -482,3 +482,25 @@ nav:has(> [data-filter]) { flex-wrap: wrap; }
 .bst-libs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
 .bst-libs select { flex: 1 1 160px; min-width: 0; height: 24px; background: var(--panel2, #232220); color: var(--txt, #ddd); border: 1px solid var(--line, #333); border-radius: 4px; font-size: 11px; }
 .bst-lib-cred { flex-basis: 100%; color: var(--mut, #929799); font-size: 9.5px; }
+
+/* LA MANIJA PARA MOVER CUADROS (ui/animation/timeline-view.js, _ponerAsa):
+   a la izquierda de la selección, como la barra de arrastre de OpenToonz.
+   Se agarra y se lleva; arrastrar en otro lado sigue seleccionando. */
+.tl2-cell:has(> .tl2-asa) { position: relative; }
+.tl2-asa {
+  position: absolute; left: -1px; top: 1px; bottom: 1px; width: 7px; z-index: 2;
+  border-radius: 2px; cursor: grab; background-color: #F0450E;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, .85) 1px, transparent 1.2px);
+  background-size: 7px 4px; background-position: center;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+}
+.tl2-asa:hover { width: 9px; background-color: #ff5a22; }
+.tl2-asa:active { cursor: grabbing; }
+
+/* LA MANO SE VE (ui/drawing/mano.js). Con el espacio apretado, la mano manda
+   sobre todo lo que hay en el lienzo: la regla `cursor: none !important` de
+   las herramientas con cursor propio (app.css) le ganaba y no se veía nada.
+   Con #id para ganarle en especificidad, y el anillo de la herramienta oculto. */
+#dzCanvas.mano, #dzCanvas.mano * { cursor: grab !important; }
+#dzCanvas.mano-agarra, #dzCanvas.mano-agarra * { cursor: grabbing !important; }
+#dzCanvas.mano .dz-tool-cursor, #dzCanvas.mano-agarra .dz-tool-cursor { display: none !important; }

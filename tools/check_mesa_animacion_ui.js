@@ -14,6 +14,7 @@
       pantalla» su aro se ve dentro del área de trabajo.
    3. Arrastrar el dial un cuarto de vuelta gira la hoja 90°, y el disco con
       ella; la hoja sólo cambia de vista (el dibujo no se toca).
+   3b. Con la mesa girada aparece «↺ 0°»: un clic la endereza y el botón se va.
    4. Shift lo lleva de a 15°; la rueda, de a 5°.
    5. Doble clic endereza por el camino corto.
    6. Las teclas ] y [ (±15°) giran el disco (animado) y suman.
@@ -148,6 +149,16 @@ async function main() {
       const m = new DOMMatrix(getComputedStyle(b).transform); return { ang: Math.round(Math.atan2(m.b, m.a) * 180 / Math.PI), cam: dzCamCur().rot || 0 }; })()`);
     assert.ok(cuadro, "no se ve el cuadro de la cámara para medirlo");
     assert.ok(Math.abs(((cuadro.ang - cuadro.cam - giro.rot) % 360 + 540) % 360 - 180) <= 2, "el cuadro de la cámara no gira con la hoja: " + JSON.stringify({ cuadro, hoja: giro.rot }));
+
+    // ── 3b. el botón «↺ 0°» (Mauro: «no encuentro el botón para restablecer el
+    //    giro»): aparece con la mesa girada, endereza con un clic y se va ─────
+    const boton = await ev(`(()=>{ const b = document.querySelector("#dzDisc .mesa-enderezar"); if (!b) return null; const r = b.getBoundingClientRect();
+      return { visible: r.width > 0 && getComputedStyle(b).display !== "none", x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+    assert.ok(boton && boton.visible, "con la mesa girada no se ve el botón para enderezarla: " + JSON.stringify(boton));
+    await mouse("mouseMoved", boton.x, boton.y); await mouse("mousePressed", boton.x, boton.y, { buttons: 1, clickCount: 1 });
+    await mouse("mouseReleased", boton.x, boton.y, { buttons: 0, clickCount: 1 }); await wait(600);
+    assert.equal(await rot(), 0, "el botón «↺ 0°» no endereza la mesa");
+    assert.ok(await ev(`getComputedStyle(document.querySelector("#dzDisc .mesa-enderezar")).display === "none"`), "con la mesa derecha el botón sigue a la vista");
 
     // ── 4. Shift de a 15°, rueda de a 5° ───────────────────────────────────
     await fijarRot(0);
