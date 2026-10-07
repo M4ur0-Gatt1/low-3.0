@@ -119,6 +119,22 @@ async function main() {
     assert.ok(menu.some((t) => /Mover un cuadro después/.test(t)) && menu.some((t) => /Mover un cuadro antes/.test(t)), "el menú no ofrece mover: " + JSON.stringify(menu));
     await tecla("Escape", "Escape", 27);
 
+    // ── 6. «Completar los huecos sosteniendo el dibujo anterior» con la
+    //    selección empezando en un hueco: sostiene el dibujo de ANTES (reporte
+    //    de Mauro: «al seleccionar todo y apretarlo debería rellenar todo lo
+    //    seleccionado con el dibujo anterior»; no rellenaba nada)
+    await ev(`(()=>{ const doc = DZ.doc; doc.addLayer("Fondo"); const ly = doc.layer, lv = doc.level;
+      lv.addDrawing(1, '<g data-low-art="colour"></g><g data-low-art="line"><path d="M5 5 L 90 90" stroke="#111"/></g>'); ly.setCell(1, 1);
+      doc.emit("cells"); doc.emit("frame"); return true; })()`); await wait(400);
+    const filaFondo = await ev(`DZ.doc.scene.layers.findIndex(l => l.name === "Fondo")`);
+    await arrastrar(filaFondo, 3, filaFondo, 8);
+    const boton = await ev(`(()=>{ const b = [...document.querySelectorAll("button")].find(x => (x.title || "").startsWith("Completar los huecos sosteniendo")); if (!b) return null; b.scrollIntoView({ block: "nearest", inline: "nearest" }); const r = b.getBoundingClientRect(); return r.width ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null; })()`);
+    assert.ok(boton, "no se ve el botón «Completar los huecos sosteniendo el dibujo anterior»");
+    await mouse("mouseMoved", boton.x, boton.y); await mouse("mousePressed", boton.x, boton.y, { buttons: 1, clickCount: 1 });
+    await mouse("mouseReleased", boton.x, boton.y, { buttons: 0, clickCount: 1 }); await wait(400);
+    const sostenido = await ev(`(()=>{ const ly = DZ.doc.scene.layers.find(l => l.name === "Fondo"); return [2,3,4,5,6,7,8,9].map(f => ly.cellAt(f) ?? null); })()`);
+    assert.deepEqual(sostenido, [null, 1, 1, 1, 1, 1, 1, null], "«Completar los huecos» no sostiene el dibujo anterior en la selección: " + JSON.stringify(sostenido));
+
     assert.deepEqual(errores, [], "errores de JavaScript: " + errores.join(" | "));
     console.log("E2E mover cuadros OK", JSON.stringify({ manija: asa.cuadro, movido, corrido }));
   } finally { ws.close(); await fetch(endpoint + "/json/close/" + tab.id).catch(() => {}); }

@@ -260,6 +260,19 @@
       ok("autoexpose sostiene cada pose hasta la siguiente",
          ly.cellAt(4) === 1 && ly.cellAt(8) === 2 && ly.cellAt(12) === 3,
          JSON.stringify(cells(ly, 16)));
+      // Reporte de Mauro (oct-2026): «hay un botón para completar el hueco con
+      // el dibujo anterior; al seleccionar todo y apretarlo debería rellenar
+      // todo lo seleccionado». Con el dibujo ANTES de la selección (cuadro 1) y
+      // la selección empezando en un hueco, no rellenaba nada: arrancaba con la
+      // celda vacía del principio del rango.
+      {
+        const lv2 = sc.addLevel("Fondo"), ly2 = sc.addLayer(lv2.id, "Fondo");
+        sc.expose(ly2.id, 1, 1);
+        X.autoexpose(ly2, 3, 10);
+        ok("autoexpose sostiene el dibujo de ANTES de la selección en los huecos",
+           [3, 6, 10].every((f) => ly2.cellAt(f) === 1) && ly2.cellAt(2) == null && ly2.cellAt(11) == null,
+           JSON.stringify(cells(ly2, 12)));
+      }
       // intercalar un dibujo nuevo
       const inter = lv.addDrawing(5, "<path d='M0 0 L5 5'/>");
       sc.expose(ly.id, 3, inter.number);

@@ -188,7 +188,10 @@
      *  que uno espera al dejar celdas sueltas (2 … 5 → 2,2,2,5). */
     autoexpose(layer, from, to) {
       if (layer.locked) return false;
+      // el dibujo que se sostiene puede estar ANTES de la selección: con el
+      // rango empezando en un hueco no rellenaba nada (reporte de Mauro, oct-2026)
       let ultimo = layer.cellAt(from);
+      for (let f = from - 1; ultimo == null && f >= 1; f--) ultimo = layer.cellAt(f);
       for (let f = from; f <= to; f++) {
         const c = layer.cellAt(f);
         if (c == null) layer.setCell(f, ultimo); else ultimo = c;

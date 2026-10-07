@@ -5990,7 +5990,7 @@ function dzFillRegionSet(imgData, w, h, gap) {
     if (alpha > 10 && lum < 245) raw[i] = 1;
   }
   let blocked = raw;
-  const radius = Math.ceil(Math.max(0, Math.min(10, gap || 0)) / 2);
+  const radius = Math.ceil(Math.max(0, Math.min(10 * w / 720, gap || 0)) / 2);
   if (radius) {
     blocked = new Uint8Array(raw);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (raw[y * w + x]) {
@@ -6051,7 +6051,7 @@ function dzFillRegionSet(imgData, w, h, gap) {
 }
 function dzFillNearestRegion(labels, regions, w, h, x, y) {
   const allowed = new Set(regions.map((r) => r.label));
-  for (let radius = 0; radius <= 5; radius++) for (let dy = -radius; dy <= radius; dy++)
+  for (let radius = 0; radius <= Math.max(5, Math.round(w / 144)); radius++) for (let dy = -radius; dy <= radius; dy++)
     for (let dx = -radius; dx <= radius; dx++) {
       const xx = x + dx, yy = y + dy;
       if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
@@ -6061,19 +6061,19 @@ function dzFillNearestRegion(labels, regions, w, h, x, y) {
   return null;
 }
 async function dzFillAnalyze(root, vb, point, gap) {
-  const clean = dzFillPrepareSvg(root, vb), durl = await dzRasterize(clean.outerHTML, 720);
+  const clean = dzFillPrepareSvg(root, vb), durl = await dzRasterize(clean.outerHTML, dzFillResolucion(vb));   // ~1 px por unidad (era 720: las zonas chicas desaparecían)
   const img = new Image();
   await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = durl; });
   const canvas = document.createElement("canvas"); canvas.width = img.width; canvas.height = img.height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true }); ctx.drawImage(img, 0, 0);
-  const set = dzFillRegionSet(ctx.getImageData(0, 0, img.width, img.height), img.width, img.height, gap);
+  const set = dzFillRegionSet(ctx.getImageData(0, 0, img.width, img.height), img.width, img.height, (gap || 0) * img.width / 720);   // «Hueco» en la misma distancia del dibujo que a 720
   let region = null;
   if (point) {
     const x = Math.max(0, Math.min(img.width - 1, Math.round((point.x - vb[0]) / vb[2] * (img.width - 1))));
     const y = Math.max(0, Math.min(img.height - 1, Math.round((point.y - vb[1]) / vb[3] * (img.height - 1))));
     region = dzFillNearestRegion(set.labels, set.regions, img.width, img.height, x, y);
   }
-  return { ...set, width: img.width, height: img.height, region };
+  return { ...set, width: img.width, height: img.height, region, gapPx: Math.ceil(Math.min(10, gap || 0) * img.width / 720 / 2) };
 }
 function dzFillMask(analysis, region) {
   const mask = new Uint8Array(analysis.labels.length), label = region && region.label;
