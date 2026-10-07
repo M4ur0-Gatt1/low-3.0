@@ -40,8 +40,11 @@ async function main() {
     await mouse("mouseReleased", p.x, p.y, { buttons: 0, clickCount: 1 }); await wait(250);
   };
   const cargar = async () => {
+    // se marca la página VIEJA: recién cargada sigue «complete» con su botón un
+    // instante después del reload, y la espera la daba por buena (puerta 3.11.1)
+    await ev('(()=>{ window.__paginaVieja = 1; return 1; })()').catch(() => 0);
     await send("Page.reload", { ignoreCache: true });
-    for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&!!document.querySelector("#dzBienvenida2D [data-a=nuevo]:not([disabled])")').catch(() => false)) break; await wait(300); }
+    for (let i = 0; i < 120; i++) { if (await ev('!window.__paginaVieja&&document.readyState==="complete"&&typeof DZ!=="undefined"&&!!document.querySelector("#dzBienvenida2D [data-a=nuevo]:not([disabled])")').catch(() => false)) break; await wait(300); }
   };
   const nuevo = async () => { await clic(`document.querySelector('#dzBienvenida2D [data-a="nuevo"]')`, "Nuevo documento"); await wait(2600);
     await ev('(()=>{ if (typeof closeL3d === "function") closeL3d(); return true; })()'); };

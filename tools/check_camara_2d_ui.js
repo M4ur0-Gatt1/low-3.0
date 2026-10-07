@@ -70,8 +70,9 @@ async function main() {
     await send("Page.navigate", { url });
     for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&typeof dzMenuAction==="function"&&!!api&&!!window.LOW?.camara2d').catch(() => false)) break; await wait(300); }
     await ev('(()=>{ try{localStorage.clear(); localStorage.setItem("low.workspace.active","drawing");}catch(e){} return true; })()');
+    await ev('(()=>{ window.__paginaVieja = 1; return 1; })()').catch(() => 0);   // la página vieja sigue «lista» un instante tras el reload
     await send("Page.reload", { ignoreCache: true });
-    for (let i = 0; i < 120; i++) { if (await ev('!!document.querySelector("#dzBienvenida2D [data-a=nuevo]:not([disabled])")').catch(() => false)) break; await wait(300); }
+    for (let i = 0; i < 120; i++) { if (await ev('!window.__paginaVieja&&!!document.querySelector("#dzBienvenida2D [data-a=nuevo]:not([disabled])")').catch(() => false)) break; await wait(300); }
     await clic(`document.querySelector('#dzBienvenida2D [data-a="nuevo"]')`, "Nuevo documento"); await wait(2600);
     await ev('(()=>{ if (typeof closeL3d === "function") closeL3d(); return true; })()');
 

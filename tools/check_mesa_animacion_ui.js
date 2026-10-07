@@ -69,8 +69,9 @@ async function main() {
     await send("Page.navigate", { url });
     for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&typeof dzMenuAction==="function"&&!!api&&!!window.LOW_MESA').catch(() => false)) break; await wait(300); }
     await ev('(()=>{ try{localStorage.clear(); localStorage.setItem("low.workspace.active","drawing");}catch(e){} return true; })()');
+    await ev('(()=>{ window.__paginaVieja = 1; return 1; })()').catch(() => 0);   // la página vieja sigue «lista» un instante tras el reload
     await send("Page.reload", { ignoreCache: true });
-    for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&!!document.querySelector("#dzBienvenida2D [data-a=nuevo]:not([disabled])")').catch(() => false)) break; await wait(300); }
+    for (let i = 0; i < 120; i++) { if (await ev('!window.__paginaVieja&&document.readyState==="complete"&&!!document.querySelector("#dzBienvenida2D [data-a=nuevo]:not([disabled])")').catch(() => false)) break; await wait(300); }
 
     // ── 1. LA PORTADA ──────────────────────────────────────────────────────
     const portada = await ev(`(()=>{ const c = document.querySelector("#dzBienvenida2D"); if (!c) return null;

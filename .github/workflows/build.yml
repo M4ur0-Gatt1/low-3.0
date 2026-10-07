@@ -172,6 +172,7 @@ jobs:
           node tools/check_mano_ui.js
           node tools/check_esculpir_ui.js
           node tools/check_capa_bitmap_ui.js
+          node tools/check_pulsacion_larga_ui.js
           node tools/check_trazo_calidad_ui.js
           node tools/check_nueva_capa_ui.js
           node tools/check_cambiar_capa_ui.js

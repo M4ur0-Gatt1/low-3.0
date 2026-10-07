@@ -63,8 +63,9 @@ async function main() {
     await send("Page.navigate", { url });
     for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&typeof dzMenuAction==="function"&&!!LOW.drawing?.capaBitmap').catch(() => false)) break; await wait(300); }
     await ev('(()=>{ try{localStorage.clear(); localStorage.setItem("low.workspace.active","animation");}catch(e){} return true; })()');
+    await ev('(()=>{ window.__paginaVieja = 1; return 1; })()').catch(() => 0);   // la página vieja sigue «lista» un instante tras el reload
     await send("Page.reload", { ignoreCache: true });
-    for (let i = 0; i < 120; i++) { if (await ev('document.readyState==="complete"&&typeof dzMenuAction==="function"&&!!LOW.drawing?.capaBitmap').catch(() => false)) break; await wait(300); }
+    for (let i = 0; i < 120; i++) { if (await ev('!window.__paginaVieja&&document.readyState==="complete"&&typeof dzMenuAction==="function"&&!!LOW.drawing?.capaBitmap').catch(() => false)) break; await wait(300); }
     await ev(`dzMenuAction("nuevo")`); await wait(2600);
     await ev('(()=>{ if (typeof closeL3d === "function") closeL3d(); DZ.zoom = .6; dzApplyZoom(); return true; })()'); await wait(200);
 
