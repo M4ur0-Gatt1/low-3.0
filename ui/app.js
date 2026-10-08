@@ -12552,10 +12552,10 @@ function dzPushAnimationPanelPlayback(index, playing) {
 const DZ_PANELS = ["viewer", "timeline", "xsheet", "layers", "tools", "color", "onion", "levelstrip", "rig"];
 DZ.detached = DZ.detached || new Set();
 
-/** Id estable para una capa: el panel remoto no puede mandar un nodo del DOM. */
+/** Id estable para una capa: el panel remoto no puede mandar un nodo del DOM. NO se escribe en el dibujo: se guardaba en el archivo y la capa pasaba a llamarse «dz-l-3». */
 function dzPanelElId(el) {
-  if (!el.id) el.id = "dz-l-" + (DZ.panelSeq = (DZ.panelSeq || 0) + 1);
-  return el.id;
+  const ids = DZ.panelIds || (DZ.panelIds = new WeakMap()); if (el.id) return el.id;
+  if (!ids.has(el)) ids.set(el, "dz-l-" + (DZ.panelSeq = (DZ.panelSeq || 0) + 1)); return ids.get(el);
 }
 
 /** Foto chica del panel pedido (lo mínimo para dibujarlo del otro lado). */
@@ -12806,7 +12806,7 @@ window.lowPanelCommand = async ({ kind, action, payload }) => {
   }
 
   if (kind === "layers") {
-    const el = payload.id && document.getElementById(payload.id);
+    const el = payload.id && (document.getElementById(payload.id) || [...($("#dzCanvas")?.querySelector(":scope > svg")?.children || [])].find(n => DZ.panelIds?.get(n) === payload.id));
     if (!el) return false;
     if (action === "select") { dzSelect(el); }
     else if (action === "visible") {

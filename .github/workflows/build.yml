@@ -72,6 +72,7 @@ jobs:
           python tools/check_diag_log_backend.py
           python tools/check_perfil_instancias_backend.py
           python tools/check_ui_sin_cache_backend.py
+          python tools/check_servidor_rafaga_backend.py
           python tools/check_recientes_backend.py
           python tools/check_brush_import_backend.py
       - name: Contratos críticos de interacción 2D
@@ -158,6 +159,7 @@ jobs:
           node tools/check_exportar_sin_ffmpeg_ui.js
           node tools/check_timeline_xsheet_coherentes_ui.js
           node tools/check_panel_separado_estilo_ui.js
+          node tools/check_panel_espejo_ui.js
           node tools/check_timeline_seleccion_ui.js
           node tools/check_recorte_tono_ui.js
           node tools/check_composicion_botones_ui.js

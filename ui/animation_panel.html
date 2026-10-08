@@ -424,8 +424,10 @@ function paint(s){
  }
  const content=document.getElementById('content'),next=renderFor(s);next.id='content';content.replaceWith(next);
 }
-async function refresh(){if(!api)return;try{const s=await (api.panel_state?api.panel_state(kind):api.animation_panel_state());const key=JSON.stringify(s);if(key===last)return;if(document.activeElement&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;last=key;paint(s)}catch(e){}}
+async function refresh(){if(!api||window.__lowEspejo)return;try{const s=await (api.panel_state?api.panel_state(kind):api.animation_panel_state());const key=JSON.stringify(s);if(key===last)return;if(document.activeElement&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;last=key;paint(s)}catch(e){}}
 window.addEventListener('pywebviewready',()=>{api=window.pywebview.api;refresh();setInterval(refresh,350)});
 </script>
+<!-- el panel de verdad, cuando la ventana es del mismo origen que el estudio (v3.12.1) -->
+<script src="panel-espejo-ventana.js?v=3.12.1"></script>
 </body>
 </html>

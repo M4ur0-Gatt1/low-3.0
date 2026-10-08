@@ -51,7 +51,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.12.0"
+LOW_VERSION = "3.12.1"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -88,6 +88,24 @@ def _ui_sin_cache():
 
     static_file._low_sin_cache = True
     bottle.static_file = static_file
+    return True
+
+
+def _servidor_paciente(cola=256):
+    """La cola de conexiones del servidor de la interfaz, para la ráfaga del
+    arranque. pywebview sirve con el WSGIServer de la biblioteca estándar, que
+    escucha con `request_queue_size = 5`: WebView2 pide de golpe ~16 hojas y
+    ~150 programas, y Windows RESETEA lo que no entra en la cola. Medido el
+    7-oct-2026: seis hojas de estilo seguidas sin cargar (estado 0) y la
+    ventana con otro aspecto hasta reabrirla; en la prueba, 69 de 120
+    conexiones simultáneas rechazadas. tools/check_servidor_rafaga_backend.py
+    """
+    try:
+        from wsgiref.simple_server import WSGIServer
+    except Exception:
+        return False
+    if getattr(WSGIServer, "request_queue_size", 5) < cola:
+        WSGIServer.request_queue_size = cola
     return True
 
 
@@ -408,9 +426,9 @@ class Api:
         "timeline": {"title": "Timeline", "w": 1180, "h": 520, "min": (720, 320)},
         "xsheet":   {"title": "X-sheet",  "w": 760,  "h": 760, "min": (520, 360)},
         "layers":   {"title": "Capas",    "w": 340,  "h": 720, "min": (260, 320)},
-        "tools":    {"title": "Herramientas", "w": 300, "h": 640, "min": (220, 320)},
+        "tools":    {"title": "Herramientas", "w": 140, "h": 640, "min": (110, 320)},
         "color":    {"title": "Color",    "w": 340,  "h": 420, "min": (260, 260)},
-        "onion":    {"title": "Papel cebolla", "w": 250, "h": 330, "min": (220, 260)},
+        "onion":    {"title": "Papel cebolla", "w": 270, "h": 470, "min": (220, 260)},
         "levelstrip":{"title": "Dibujos del nivel", "w": 360, "h": 620, "min": (260, 320)},
         "rig":      {"title": "Esqueleto / Cut-out", "w": 360, "h": 760, "min": (300, 420)},
     }
@@ -507,6 +525,13 @@ class Api:
         if not archivo.exists():
             return {"error": f"falta {archivo.name} en la instalación"}
         panel = archivo.as_uri() + f"#kind={kind}"
+        # Del MISMO origen que la ventana principal (http://127.0.0.1:<puerto>):
+        # así las dos hablan por un BroadcastChannel y la separada muestra el
+        # panel de verdad, con su estilo (ui/workspace/panel-espejo.js). Por
+        # file:// eso no se puede y queda el dibujo a mano de siempre.
+        origen = getattr(s._window, "real_url", None) if s._window else None
+        if isinstance(origen, str) and origen.startswith("http://127.0.0.1:"):
+            panel = urllib.parse.urljoin(origen, "animation_panel.html") + f"#kind={kind}"
         spec = s.PANELS[kind]
         # Geometría recordada: en un setup de dos monitores la gracia es que el
         # panel vuelva SOLO al monitor donde lo dejaste. Sin esto, cada vez se
@@ -6132,7 +6157,7 @@ def main():
     if puerto is None:
         log("el puerto %d esta ocupado: LOW arranca sin origen fijo y NO va a "
             "conservar preferencias ni rescate entre arranques" % LOW_UI_PORT)
-    _ui_sin_cache(); _cache_de_version(perfil)
+    _ui_sin_cache(); _servidor_paciente(); _cache_de_version(perfil)
     try:
         webview.start(debug="--debug" in sys.argv, private_mode=False,
                       storage_path=perfil, http_port=puerto)

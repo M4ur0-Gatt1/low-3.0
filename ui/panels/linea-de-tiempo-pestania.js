@@ -70,7 +70,47 @@
       '<span class="dz-tlp-dato"></span>';
     n.addEventListener("click", alternar);
     ancla.parentNode.insertBefore(n, ancla);
+    fila(n);
     return n;
+  }
+
+  /* «OTRA PANTALLA», COMO LOS DEMÁS PANELES.  Reporte de Mauro (oct-2026):
+     «no estoy pudiendo desacoplar la línea de tiempo». Dibujos del nivel,
+     papel cebolla y la X-sheet tienen su «Otra pantalla» en la cabecera; la
+     línea de tiempo no tenía cabecera —tiene esta pestaña— y sólo se podía
+     sacar desde el menú Ventana. Va al lado de la pestaña (un botón no puede
+     ir adentro de otro botón), y con la línea de tiempo afuera la trae de
+     vuelta. */
+  function fila(n) {
+    if (n.parentElement && n.parentElement.classList.contains("dz-tlp-fila")) return;
+    const f = document.createElement("div");
+    f.className = "dz-tlp-fila";
+    n.parentNode.insertBefore(f, n);
+    f.appendChild(n);
+    const b = document.createElement("button");
+    b.type = "button"; b.id = "dzTlOtraPantalla"; b.className = "dz-tlp-externa";
+    b.textContent = "Otra pantalla";
+    b.title = "Abrir la línea de tiempo en su propia ventana, para llevarla a otro monitor";
+    b.addEventListener("click", (e) => { e.stopPropagation(); otraPantalla(); });
+    f.appendChild(b);
+  }
+  const estaAfuera = () => {
+    const DZ = estado();
+    return !!(DZ && ((DZ.detached && DZ.detached.has("timeline"))
+      || (DZ.detachedAnimationPanels && DZ.detachedAnimationPanels.has("timeline"))));
+  };
+  async function traer() {
+    if (typeof global.lowPanelCommand === "function")
+      await global.lowPanelCommand({ kind: "timeline", action: "dock", payload: { kind: "timeline" } });
+    try { if (typeof api !== "undefined" && api && api.close_panel) await api.close_panel("timeline"); }
+    catch (_) { /* la ventana ya no estaba */ }
+    pintar();
+  }
+  async function otraPantalla() {
+    if (estaAfuera()) return traer();
+    if (plegada) { plegada = false; guardar(false); }
+    if (typeof global.dzDetachPanel === "function") await global.dzDetachPanel("timeline");
+    pintar();
   }
 
   /** Cuántos cuadros hay y en cuál estás, o null si no hay animación.
@@ -157,10 +197,25 @@
       ? "Encender la línea de tiempo y desplegarla"
       : (plegada ? "Desplegar la línea de tiempo" : "Plegar la línea de tiempo"));
     n.setAttribute("aria-expanded", String(hayAnim && !plegada));
+    // afuera: la pestaña lo dice, y los dos botones la traen de vuelta
+    const fuera = estaAfuera();
+    n.classList.toggle("afuera", fuera);
+    if (fuera) {
+      if (flecha) flecha.textContent = "↗";
+      ponerAyuda(n, "La línea de tiempo está en otra ventana · clic para traerla de vuelta");
+    }
+    const ext = document.getElementById("dzTlOtraPantalla");
+    if (ext) {
+      ext.textContent = fuera ? "Traer de vuelta" : "Otra pantalla";
+      ponerAyuda(ext, fuera ? "Volver a acoplar la línea de tiempo en esta ventana"
+        : "Abrir la línea de tiempo en su propia ventana, para llevarla a otro monitor");
+    }
   }
 
   async function alternar() {
     const DZ = estado();
+    // afuera no hay nada que plegar acá: la pestaña la trae (no es un botón muerto)
+    if (estaAfuera()) return traer();
     /* 1. Apagada: la pestaña la PRENDE. No es un botón que no hace nada.
        El interruptor de la animación es `DZ.anim` y punto: `hayCuerpo()` sirve
        para decidir QUÉ DECIR, no para decidir si hay que encenderla. Al usarlo
@@ -225,6 +280,10 @@
     pestania();
     envolverEspacios(); envolverAnim(); envolverCuadro();
     pintar();
+    // se saca y se acopla por muchos caminos (menú Ventana, la X de la otra
+    // ventana, arrastrarla encima): la pestaña mira y se pone al día
+    let antes = estaAfuera();
+    setInterval(() => { const ahora = estaAfuera(); if (ahora !== antes) { antes = ahora; pintar(); } }, 500);
   }
 
   panels.lineaDeTiempoPestania = { arrancar, pintar, alternar, cuadros, ID,
