@@ -614,15 +614,15 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
   $("#tlWalk").onclick = dzWalkCycleModal;
   // scrub del X-sheet: arrastrá sobre los cuadros para hojearlos (flipping)
   $("#tlFrames").addEventListener("pointerdown", (e) => {
-    if (!DZ.anim) return;
+    if (!DZ.anim && !DZ.doc) return;   // en un .low DZ.anim puede no existir: el scrub quedaba muerto
     const pointerId = e.pointerId;
     let busy = false;
     const go = async (x, y) => {
       const chip = document.elementFromPoint(x, y);
       const c = chip && chip.closest && chip.closest(".tl-frame");
-      if (!c || busy || !DZ.anim) return;
+      if (!c || busy || (!DZ.anim && !DZ.doc)) return;
       const idx = [...$("#tlFrames").children].indexOf(c);
-      if (idx >= 0 && idx !== DZ.anim.idx) { busy = true; try { await dzGoFrame(idx); } finally { busy = false; } }
+      if (idx >= 0 && idx !== (DZ.doc ? DZ.doc.frame - 1 : DZ.anim.idx)) { busy = true; try { await dzGoFrame(idx); } finally { busy = false; } }
     };
     const mm = (ev) => { if (ev.pointerId === pointerId) go(ev.clientX, ev.clientY); };
     const mu = (ev) => {
@@ -768,10 +768,10 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
   $("#dzZen").onclick = dzZenToggle;
   $("#tlAdd").onclick = dzFrameAdd;
   $("#tlBlank").onclick = () => dzFrameInsert(true);
-  $("#tlFirst").onclick = () => { if (DZ.playback) DZ.playback.first(); else { dzAnimStopIf(); dzGoFrame(0); } };
-  $("#tlPrev").onclick = () => { if (DZ.playback) DZ.playback.step(-1); else { dzAnimStopIf(); dzGoFrame(Math.max(0, (DZ.anim ? DZ.anim.idx : 0) - 1)); } };
-  $("#tlNext").onclick = () => { if (DZ.playback) DZ.playback.step(1); else { dzAnimStopIf(); dzGoFrame(Math.min((DZ.anim ? DZ.anim.frames.length : 1) - 1, (DZ.anim ? DZ.anim.idx : 0) + 1)); } };
-  $("#tlLast").onclick = () => { if (DZ.playback) DZ.playback.last(); else { dzAnimStopIf(); dzGoFrame((DZ.anim ? DZ.anim.frames.length : 1) - 1); } };
+  $("#tlFirst").onclick = () => dzNavegar("first");   // un solo camino para teclas, botones y la ventana separada (animation/navegar-cuadros.js)
+  $("#tlPrev").onclick = () => dzNavegar("prev");
+  $("#tlNext").onclick = () => dzNavegar("next");
+  $("#tlLast").onclick = () => dzNavegar("last");
   $("#tlDel").onclick = dzDeleteFrameSelection;
   $("#tlOnion").onclick = () => {
     if (!DZ.anim) return;
@@ -1152,8 +1152,8 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
   const bArco = $("#tlArco");
   if (bArco) bArco.onclick = (e) => (e.shiftKey ? dzArcoFijar() : dzArcoToggle());
   $("#tlExport").onclick = dzExportModal;
-  $("#tlKey").onclick = dzKeyToggle;
-  $("#tlAI").onclick = dzAIKeyModal;
+  $("#tlKey").onclick = () => dzKeyToggle();   // por nombre: animation/clave-de-dibujo.js la envuelve para el .low
+  $("#tlAI").onclick = () => dzAIKeyModal();   // por nombre: animation/clave-de-dibujo.js la envuelve para el .low
   $("#tlCamKey").onclick = dzCamKeyToggle;
   // cámara: botón de la barra lateral + tiradores del encuadre
   $("#dzCamBtn").onclick = dzCamToggle;
@@ -1202,7 +1202,7 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
   $("#dzCodeBtn").onclick = dzToggleCode;
   $("#dzCodeApply").onclick = dzApplyCode;
   $("#dzSend").onclick = designPrompt;
-  $("#dzAiSequence").onclick = dzAIKeyModal;
+  $("#dzAiSequence").onclick = () => dzAIKeyModal();
   $("#dzPrompt").addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); designPrompt(); }
   });
@@ -1232,11 +1232,7 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
       if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); dzRedo(); return; }
     }
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(t)) return;
-    if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === "x") {
-      e.preventDefault(); dzSwapPaint(); return;
-    }
-    if (e.key === "Tab") { e.preventDefault(); dzZenToggle(); return; }   // modo dibujo
-    if (e.key === "F7") { e.preventDefault(); dzLayersToggle(); return; } // capas
+    // Shift+X, Tab, F7, 3 y Z eran teclas escritas a mano ACÁ, antes del mapa: no figuraban en Preferencias ni se reasignaban. Ahora son del mapa (panels/atajos.js).
     if (e.ctrlKey && e.key.toLowerCase() === "r") { e.preventDefault(); dzRulersToggle(); return; } // reglas 2D
     // ── espacio 3D: 3 entra · adentro 1/3/7/5 = vistas (estilo Blender),
     //    F = centrar cámara, Shift+A = plano nuevo, Esc = salir ──
@@ -1250,8 +1246,6 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
         if (e.key.toLowerCase() === "f") { e.preventDefault(); dz3dHome(); return; }
         if (e.shiftKey && e.key.toLowerCase() === "a") { e.preventDefault(); dz3dAddPlane(); return; }
       }
-    } else if (e.key === "3" && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      e.preventDefault(); dz3dToggle(); return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
       if (dzDeleteContext()) { e.preventDefault(); return; }
@@ -1271,23 +1265,12 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
     if (e.ctrlKey && e.key.toLowerCase() === "g") {
       e.preventDefault(); dzGroupSel(e.shiftKey); return;
     }
-    // Z = acercar · Alt+Z = alejar (zoom estilo OpenToonz, centrado en la mesa)
-    if (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "z") {
-      e.preventDefault();
-      const c = $("#dzCanvas").getBoundingClientRect();
-      dzZoomAt(e.altKey ? 1 / 1.2 : 1.2, c.left + c.width / 2, c.top + c.height / 2);
-      return;
-    }
-    // atajos configurables ( Preferencias): una tecla  una acción
-    if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+    // atajos configurables (Preferencias): una tecla —sola, con Shift o con Alt— → una acción. Si un modo con atajos propios (esqueleto, 3D) ya la atendió (defaultPrevented), no se usa dos veces: en el esqueleto P hacía la pose Y además elegía la Pluma.
+    if (!e.ctrlKey && !e.metaKey && !e.defaultPrevented) {
       if (!DZ.keyrev) dzKeysLoad();
-      // Además de las teclas sueltas, el mapa admite Enter: hacía falta un
-      // atajo para reproducir que no fuera la barra espaciadora.
-      const k = e.key.length === 1 ? (e.key === "=" ? "+" : e.key.toLowerCase())
-        : (e.key === "Enter" ? "enter" : null);
-      const act = k && DZ.keyrev[k];
+      const k = typeof dzAtajoDe === "function" ? dzAtajoDe(e) : (e.key.length === 1 ? e.key.toLowerCase() : null), act = k && DZ.keyrev[k];
       // con la pluma abierta, Enter cierra el trazado: eso manda
-      if (act && !(k === "enter" && PEN)) { e.preventDefault(); dzRunAction(act); if (DZ_KEY_LABELS[act]) dzSetStatus(DZ_KEY_LABELS[act] + " · lo pidio la tecla «" + k.toUpperCase() + "» (cambiala en Preferencias → atajos)"); }   /* DE DONDE VINO: «se activa sola una herramienta pincel sin que nadie la elija». Una tecla suelta cambia de herramienta, y las ExpressKeys de una tableta mandan teclas: si vino del teclado, que lo diga. */
+      if (act && !(k === "enter" && PEN)) { e.preventDefault(); dzRunAction(act); if (DZ_KEY_LABELS[act]) dzSetStatus(DZ_KEY_LABELS[act] + " · lo pidio la tecla «" + (typeof dzAtajoEtiqueta === "function" ? dzAtajoEtiqueta(k) : k.toUpperCase()) + "» (cambiala en Preferencias → atajos)"); }   /* DE DONDE VINO: «se activa sola una herramienta pincel sin que nadie la elija». Una tecla suelta cambia de herramienta, y las ExpressKeys de una tableta mandan teclas: si vino del teclado, que lo diga. */
     }
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); dzUndo(); }
     if (e.ctrlKey && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) { e.preventDefault(); dzRedo(); }
@@ -5651,8 +5634,8 @@ function dzRunAction(act) {
     if (DZ.sel?.id && DZ.doc?.scene.rigNode(DZ.sel.id)) return dzRigSetKey(DZ.sel.id, dzRigCur(), dzRigLocalAt(DZ.sel.id, dzRigCur()));
     return dzRigKeyAll();
   }
-  if ((act === "prevframe" || act === "nextframe") && DZ.playback) return DZ.playback.step(act === "prevframe" ? -1 : 1);   // un .low: el documento manda (DZ.anim.frames está vacío y «,» «.» no movían nada)
-  if ((act === "prevframe" || act === "nextframe") && DZ.anim) { dzAnimStopIf(); return dzGoFrame(Math.max(0, Math.min(DZ.anim.frames.length - 1, DZ.anim.idx + (act === "prevframe" ? -1 : 1)))); }
+  // un .low: manda el documento, haya o no reproducción montada (DZ.anim.frames está vacío)
+  if (act === "prevframe" || act === "nextframe") return dzNavegar(act === "prevframe" ? "prev" : "next");
 }
 /*  Preferencias del estudio: reasignar atajos (clic en el campo y apretá la
    tecla nueva) + suavizado por defecto */
@@ -11350,7 +11333,7 @@ function dzPerfSmooth() {
 }
 /*  generar los cuadros del lapso (mismo dibujo; el rig se aplica al exportar) */
 async function dzPerfBake() {
-  if (!DZ.anim) return dzSetStatus(" Abrí la animación (🎞) primero");
+  if (DZ.doc) { const r = dzSostenerHastaCuadro(DZ.doc, Math.max(2, Math.round(dzPerfDur() * dzPerfFps()))); dzTimelineBadges(); return dzSetStatus(r.error ? " " + r.error : " " + r.hasta + " cuadros listos (" + r.puestos + " nuevos, el mismo dibujo) — el esqueleto lo mueve en todo el lapso"); } if (!DZ.anim) return dzSetStatus(" Abrí la animación (🎞) primero");
   const N = Math.max(2, Math.round(dzPerfDur() * dzPerfFps()));
   if (N > 200) return dzSetStatus(" Demasiados cuadros (" + N + ") — bajá duración o fps");
   await dzPersist();
@@ -11568,7 +11551,7 @@ async function dzPuppetStop() {
   dzSetStatus("🎞 Guardando la actuación (" + snaps.length + " cuadros)…");
   const r = (!DZ.path && DZ.doc) ? dzTomaAlDocumento(DZ.doc, snaps) : await api.record_take(DZ.path, snaps);
   if (r && r.error) return dzSetStatus(" " + r.error);
-  DZ.anim.cache = {};
+  if (DZ.anim) DZ.anim.cache = {};   // la animación se pudo apagar durante la toma: TypeError
   try { S.tree = (await api.refresh_tree()).tree; renderTree(); } catch (e) { /* */ }
   await dzTimelineRefresh(); dzTimelineBadges();
   if (r && r.path) { await dzGoFrame(DZ.anim.frames.indexOf(r.path)); } else if (r && r.desde && typeof dzDocGoTo === "function") dzDocGoTo(r.desde);
@@ -11780,8 +11763,8 @@ function dzMenuAction(act) {
     "art-colour": () => dzArtMoveSelection("colour"),
     pivote: () => dzSetTool("pivot"),
     timeline: dzAnimToggle, cuadro: dzFrameAdd, insertar: () => dzFrameInsert(false),
-    clave: dzKeyToggle, intercalar: dzTweenModal, interpolar: dzMoveTween,
-    grabar: dzRecToggle, claveia: dzAIKeyModal, esqueleto: dzRigOpen,
+    clave: () => dzKeyToggle(), intercalar: dzTweenModal, interpolar: dzMoveTween,
+    grabar: dzRecToggle, claveia: () => dzAIKeyModal(), esqueleto: dzRigOpen,
     arcos: dzArcoToggle,
     "mocap-video": dzMocapOpen,
     camara: dzCamToggle, clavecam: dzCamKeyToggle,
@@ -12488,7 +12471,7 @@ function dzAnimationPanelExtras(state) {
 }
 
 async function dzPublishAnimationPanelState(perFrame, levels, displayCount) {
-  if (!api || !DZ.anim) return;
+  if (!api || (!DZ.anim && !DZ.doc)) return;
   if (DZ.doc && DZ.doc.scene) {
     const doc = DZ.doc, scene = doc.scene, last = Math.max(1, scene.lastFrame());
     const rigNodes = Object.values((scene.rig && scene.rig.nodes) || {});
@@ -12925,10 +12908,10 @@ window.lowAnimationPanelCommand = async ({ action, payload }) => {
   else if (action === "stop") { if (DZ.playback) DZ.playback.stop(); else dzAnimStopIf(); }
   else if (action === "frame") await dzTimelineCellActivate(index, false, payload || null);
   else if (action === "create-frame") await dzTimelineCellActivate(index, true, payload || null);
-  else if (action === "first") { if (DZ.playback) DZ.playback.first(); else { dzAnimStopIf(); await dzGoFrame(0); } }
-  else if (action === "previous") { if (DZ.playback) DZ.playback.step(-1); else await dzGoFrame(Math.max(0, DZ.anim.idx - 1)); }
-  else if (action === "next") { if (DZ.playback) DZ.playback.step(1); else await dzGoFrame(Math.min(DZ.anim.frames.length - 1, DZ.anim.idx + 1)); }
-  else if (action === "last") { if (DZ.playback) DZ.playback.last(); else { dzAnimStopIf(); await dzGoFrame(Math.max(0, DZ.anim.frames.length - 1)); } }
+  else if (action === "first") await dzNavegar("first");
+  else if (action === "previous") await dzNavegar("prev");
+  else if (action === "next") await dzNavegar("next");
+  else if (action === "last") await dzNavegar("last");
   else if (action === "toggle-loop") {
     DZ.anim.loop = !(DZ.anim.loop !== false);
     $("#tlLoop")?.classList.toggle("active", DZ.anim.loop);
@@ -13002,11 +12985,11 @@ window.lowAnimationPanelCommand = async ({ action, payload }) => {
 };
 
 async function dzTimelineCellActivate(index, createFuture, event=null) {
-  if (!DZ.anim) return;
+  if (!DZ.anim && !DZ.doc) return;
   if (DZ.playback) DZ.playback.stop(); else dzAnimStopIf();
-  const previous = DZ.timelineSelection || { anchor: DZ.anim.idx, from: DZ.anim.idx, to: DZ.anim.idx };
+  const aqui = DZ.doc ? DZ.doc.frame - 1 : DZ.anim.idx, previous = DZ.timelineSelection || { anchor: aqui, from: aqui, to: aqui };   // en un .low DZ.anim.idx no se actualiza al navegar: el ancla del Shift+clic quedaba vieja
   if (event && event.shiftKey) {
-    const anchor = previous.anchor == null ? DZ.anim.idx : previous.anchor;
+    const anchor = previous.anchor == null ? aqui : previous.anchor;
     DZ.timelineSelection = { anchor, from: Math.min(anchor, index), to: Math.max(anchor, index) };
   } else {
     DZ.timelineSelection = { anchor: index, from: index, to: index };

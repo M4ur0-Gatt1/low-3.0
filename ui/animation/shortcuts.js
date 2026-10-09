@@ -11,11 +11,11 @@
      Inicio / Fin   primer / último frame del rango
      Espacio        MANO: mantener y arrastrar para panear (nunca reproduce)
      Enter          reproducir / parar (reasignable en Preferencias)
-     L              loop
+     Alt+L          loop (en el mapa de atajos: panels/atajos.js)
      . ,            cuadro siguiente / anterior (mapa de atajos de app.js)
      Insert         insertar un frame vacío
      Supr           vaciar la celda (el DIBUJO no se toca)
-     O              papel cebolla
+     Alt+O          papel cebolla (en el mapa de atajos)
      Ctrl+C / Ctrl+V  copiar y pegar. Sin rango seleccionado copia el DIBUJO
                       y pega una copia aparte; con un rango, copia las CELDAS
                       (tiempo). Ctrl+Shift+V pega como REUSO del mismo dibujo.
@@ -136,11 +136,10 @@
         default: manejado = false;
       }
 
-      if (!manejado && !ctrl) {
-        const k = e.key.toLowerCase();
-        if (k === "l" && pb) { pb.setLoop(!pb.loop); manejado = true; }
-        else if (k === "o" && opts.toggleOnion) { opts.toggleOnion(); manejado = true; }
-      }
+      // L y O NO van acá: en el mapa de atajos son Línea y Elipse, y atrapadas
+      // en captura nunca llegaban (con documento abierto, L hacía loop y O el
+      // papel cebolla). Loop y papel cebolla están en el mapa: Alt+L y Alt+O
+      // (panels/atajos.js), y se reasignan en Preferencias.
 
       // ── Copiar y pegar ────────────────────────────────────────────────
       // UNA regla, y visible: lo que manda es si hay un RANGO seleccionado.

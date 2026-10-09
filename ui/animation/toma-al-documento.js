@@ -87,6 +87,32 @@
     return { desde, n: nuevos.length };
   }
 
+  /* ── HORNEAR UNA ACTUACIÓN: el mismo dibujo hasta el cuadro N ────────────
+     «Generar los cuadros del lapso» (panel de actuación del esqueleto) los
+     sacaba con `api.dup_frame` sobre `DZ.anim.frames`, que en un .low está
+     vacío: duplicaba «undefined» y no agregaba nada. El esqueleto vive en el
+     documento, así que lo natural es SOSTENER el dibujo actual hasta cubrir el
+     lapso, en un solo paso de historial (un Ctrl+Z lo saca entero). */
+  function dzSostenerHastaCuadro(doc, n) {
+    if (!doc || !doc.scene) return { error: "no hay documento" };
+    const N = Math.max(1, Math.round(+n || 0));
+    if (N > 200) return { error: "demasiados cuadros (" + N + ") — bajá duración o fps" };
+    const capa = doc.layer || (doc.scene.layers || [])[0];
+    if (!capa) return { error: "el documento no tiene capas" };
+    if (capa.locked) return { error: "la capa está bloqueada" };
+    let dibujo = capa.cellAt(doc.frame);
+    for (let f = doc.frame - 1; dibujo == null && f >= 1; f--) dibujo = capa.cellAt(f);
+    if (dibujo == null) return { error: "no hay dibujo que sostener: dibujá el personaje primero" };
+    const ultimo = (typeof capa.lastFrame === "function" ? capa.lastFrame() : 0) || 0;
+    const tx = !!doc.history && !doc.history.transaction;
+    if (tx) doc.history.begin("Generar los cuadros de la actuación");
+    let puestos = 0;
+    for (let f = ultimo + 1; f <= N; f++) if (doc.setCell(f, dibujo, capa.id)) puestos++;
+    if (tx) doc.history.commit();
+    return { puestos, hasta: Math.max(ultimo, N) };
+  }
+
+  global.dzSostenerHastaCuadro = dzSostenerHastaCuadro;
   global.dzTomaAlDocumento = dzTomaAlDocumento;
   global.dzCuadrosAlDocumento = dzCuadrosAlDocumento;
   global.LOW = global.LOW || {};

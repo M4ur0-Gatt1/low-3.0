@@ -21,6 +21,7 @@ CMPCAM = (ROOT / "ui" / "panels" / "composition-camera.js").read_text(encoding="
 CMPPAN = (ROOT / "ui" / "panels" / "composition-panel.js").read_text(encoding="utf-8")
 INDEX = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
 SHORTCUTS = (ROOT / "ui" / "animation" / "shortcuts.js").read_text(encoding="utf-8")
+ATAJOS = (ROOT / "ui" / "panels" / "atajos.js").read_text(encoding="utf-8")
 SCENE_MODEL = (ROOT / "ui" / "animation" / "scene-model.js").read_text(encoding="utf-8")
 BRUSH_RENDER = (ROOT / "ui" / "drawing" / "brush-render.js").read_text(encoding="utf-8")
 
@@ -260,8 +261,11 @@ require('case " ":' not in SHORTCUTS,
         "la barra espaciadora volvio a reproducir: es la mano, siempre")
 require('play: "enter"' in APP and '"play") return dzPlayToggle()' in APP,
         "reproducir dejo de tener atajo propio o de ser reasignable")
-require('e.key === "Enter" ? "enter"' in APP and 'k === "enter" && PEN' in APP,
+# desde la 3.13 la tecla del evento se arma en panels/atajos.js (combinaciones Shift/Alt)
+require('e.key === "Enter") base = "enter"' in ATAJOS and 'dzAtajoDe(e)' in APP and 'k === "enter" && PEN' in APP,
         "Enter dejo de reproducir, o pisa el cierre del trazado de la pluma")
+require('["play", "Reproducir / parar", "Animación", "enter"' in ATAJOS,
+        "Enter dejo de ser el atajo de fabrica de reproducir")
 require("fijadas" in APP and "ocultas" in APP and "menuAnclar" in APP,
         "la barra de herramientas dejo de ser configurable por el usuario")
 require('node.parentElement === drawer' in APP,

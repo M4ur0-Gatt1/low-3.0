@@ -1,0 +1,26 @@
+/* ══ ATAJOS DE TECLADO (panels/atajos.js) ═══════════════════════════════════
+   La lista de Preferencias, agrupada y con buscador. Las filas reusan .krow
+   y .dz-keycap del estudio; acá sólo lo que cambia: el nombre es largo
+   («Deformar trazo (imán)») y no entra en los 84 px de .krow label. */
+.atajos { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
+.atajos-cabeza { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.atajos-buscar {
+  flex: 1 1 220px; min-width: 0; height: 30px; padding: 0 10px; border-radius: 6px;
+  border: 1px solid var(--line, rgba(255,255,255,.12)); background: var(--panel2, #1e2026); color: var(--fg, #e6e9f0);
+  font: 500 12px Figtree, sans-serif;
+}
+.atajos-aviso { color: var(--accent, #F0450E); font: 500 11px Figtree, sans-serif; min-height: 1em; }
+.atajos-cuerpo { max-height: min(52vh, 460px); overflow: auto; padding-right: 4px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 18px; align-items: start; }
+.atajos-grupo h3 { margin: 10px 0 6px; font: 700 10.5px/1 Figtree, sans-serif; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--fg2, #8a93a6); }
+.atajos .krow { margin-bottom: 4px; justify-content: space-between; }
+.atajos .krow label { width: auto; flex: 1 1 auto; min-width: 0; font: 500 12px Figtree, sans-serif; color: var(--fg, #e6e9f0);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atajos .dz-keycap { flex: none; width: 92px; text-align: center; }
+.atajos kbd { flex: none; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line, rgba(255,255,255,.12));
+  background: var(--panel2, #1e2026); color: var(--fg2, #8a93a6); font: 600 11px 'JetBrains Mono', monospace; white-space: nowrap; }
+.atajos-fijos .krow label { color: var(--fg2, #8a93a6); }
+
+/* ── el dibujo clave (animation/clave-de-dibujo.js): raya naranja arriba ── */
+.tl2-cell.dibujo-clave { box-shadow: inset 0 2px 0 #F0450E; }

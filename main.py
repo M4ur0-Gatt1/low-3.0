@@ -51,7 +51,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.12.2"
+LOW_VERSION = "3.13.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -2254,13 +2254,30 @@ class Api:
         justo después. Es el flujo pose-a-pose de Toon Boom con IA."""
         if not s.prov:
             return {"error": "No hay proveedor activo — configurá una API key ()"}
-        p = Path(path)
-        if not s._FRAME_RX.match(p.name):
+        p = Path(path or "")
+        if not path or not s._FRAME_RX.match(p.name):
             return {"error": "no es un cuadro de animación (_fNNN.svg)"}
         try:
             src = p.read_text(encoding="utf-8", errors="replace")[:14000]
         except OSError as e:
             return {"error": str(e)}
+        r = s._ai_siguiente_svg(src, prompt)
+        return r if "error" in r else s.insert_frame(path, r["svg"])
+
+    def ai_keyframe_svg(s, svg, prompt):
+        """La misma clave con IA para un documento `.low`, que no tiene un
+        archivo `_fNNN.svg` por cuadro: recibe el SVG del cuadro actual y
+        devuelve el del cuadro siguiente. La ventana lo mete en el documento.
+        Antes, con un `.low`, `ai_keyframe(None, …)` no podía hacer nada."""
+        if not s.prov:
+            return {"error": "No hay proveedor activo — configurá una API key ()"}
+        if not isinstance(svg, str) or "<svg" not in svg:
+            return {"error": "no llegó el dibujo del cuadro actual"}
+        return s._ai_siguiente_svg(svg[:14000], prompt)
+
+    def _ai_siguiente_svg(s, src, prompt):
+        """Pide al modelo el SIGUIENTE fotograma clave a partir de `src`.
+        Devuelve {"svg": …} o {"error": …}."""
         chars = s._load_characters()
         sheet = ("\nFICHAS DE PERSONAJE (canónicas, NO se negocian):\n" +
                  "\n".join(f"- {c['name']}: {c['desc']}" for c in chars) + "\n"
@@ -2291,7 +2308,7 @@ class Api:
         m = re.search(r"<svg.*?</svg>", r.content or "", re.DOTALL)
         if not m:
             return {"error": "el modelo no devolvió un SVG válido — probá describir el movimiento más concreto"}
-        return s.insert_frame(path, m.group(0))
+        return {"svg": m.group(0)}
 
     def new_design(s):
         """Crea un lienzo SVG Full HD en blanco (1920×1080) y devuelve su ruta.
