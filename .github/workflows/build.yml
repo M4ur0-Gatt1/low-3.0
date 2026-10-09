@@ -79,7 +79,7 @@ jobs:
         run: python tools/check_2d_interaction_contracts.py
       - name: Recorridos reales — dibujo, rigging, composición y storyboard
         run: |
-          python -m http.server 8791 --bind 127.0.0.1 >/tmp/low-http.log 2>&1 &
+          python tools/servidor_mock.py 8791 127.0.0.1 >/tmp/low-http.log 2>&1 &
           CHROME="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium)"
           test -n "$CHROME"
           # El navegador a veces no levanta en el runner y la puerta moría muda:
@@ -172,6 +172,8 @@ jobs:
           node tools/check_pincel_suave_ui.js
           node tools/check_mover_cuadros_ui.js
           node tools/check_mano_ui.js
+          node tools/check_coma_punto_cuadro_ui.js
+          node tools/check_cebolla_al_reproducir_ui.js
           node tools/check_esculpir_ui.js
           node tools/check_capa_bitmap_ui.js
           node tools/check_pulsacion_larga_ui.js

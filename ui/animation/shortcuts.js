@@ -12,7 +12,7 @@
      Espacio        MANO: mantener y arrastrar para panear (nunca reproduce)
      Enter          reproducir / parar (reasignable en Preferencias)
      L              loop
-     . ,            alargar / acortar la exposición actual
+     . ,            cuadro siguiente / anterior (mapa de atajos de app.js)
      Insert         insertar un frame vacío
      Supr           vaciar la celda (el DIBUJO no se toca)
      O              papel cebolla
@@ -128,8 +128,11 @@
           else doc.apply("clear", doc.frame, doc.frame);
           break;
         }
-        case ".":          doc.apply("stepChange", doc.frame, +1); break;
-        case ",":          doc.apply("stepChange", doc.frame, -1); break;
+        // «.» y «,» NO van acá: son cuadro siguiente / anterior en el mapa de
+        // atajos (Preferencias) y así lo anuncian los botones ◀ ▶. Acá
+        // alargaban la exposición en captura y cortaban la tecla: «muestran la
+        // leyenda pero no mueven el cuadro» (Mauro, oct-2026). Alargar y
+        // acortar siguen en los botones + / − de la línea de tiempo.
         default: manejado = false;
       }
 

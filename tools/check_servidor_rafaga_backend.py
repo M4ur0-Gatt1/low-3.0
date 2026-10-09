@@ -28,7 +28,48 @@ import main  # noqa: E402
 RAFAGA = 120
 
 
+def rafaga(host, puerto, ruta):
+    """Todas las conexiones a la vez, sin esperar a que el servidor acepte.
+    Devuelve (bien, fallas)."""
+    listo = threading.Barrier(RAFAGA)
+    fallas, bien = [], []
+
+    def pedir(i):
+        try:
+            listo.wait(10)
+            s = socket.create_connection((host, puerto), timeout=10)
+            s.sendall(b"GET %s?r=%d HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n" % (ruta.encode(), i))
+            datos = b""
+            while True:
+                trozo = s.recv(4096)
+                if not trozo:
+                    break
+                datos += trozo
+            s.close()
+            (bien if b" 200 " in datos.split(b"\r\n", 1)[0] else fallas).append(i)
+        except OSError as e:
+            fallas.append("%d: %s" % (i, e))
+
+    hilos = [threading.Thread(target=pedir, args=(i,)) for i in range(RAFAGA)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join(30)
+    return bien, fallas
+
+
+def esperar(url, quien):
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(url, timeout=5).read()
+            return
+        except OSError:
+            time.sleep(0.1)
+    raise AssertionError(quien + " no levantó")
+
+
 def main_prueba():
+    # ── 1. la app: el servidor de pywebview con el arreglo de main.py ──────
     main._servidor_paciente()
     from webview import http as wvhttp
 
@@ -36,42 +77,9 @@ def main_prueba():
         raiz = Path(carpeta)
         (raiz / "index.html").write_text("<p>hola</p>", encoding="utf-8")
         direccion, _, _ = wvhttp.BottleServer.start_server([str(raiz / "index.html")], None)
-        for _ in range(50):
-            try:
-                urllib.request.urlopen(direccion + "index.html", timeout=5).read()
-                break
-            except OSError:
-                time.sleep(0.1)
-        else:
-            raise AssertionError("el servidor de pywebview no levantó")
+        esperar(direccion + "index.html", "el servidor de pywebview")
         host, puerto = direccion.split("//")[1].rstrip("/").split(":")
-        puerto = int(puerto)
-
-        # todas las conexiones a la vez, sin esperar a que el servidor acepte
-        listo = threading.Barrier(RAFAGA)
-        fallas, bien = [], []
-
-        def pedir(i):
-            try:
-                listo.wait(10)
-                s = socket.create_connection((host, puerto), timeout=10)
-                s.sendall(b"GET /index.html?r=%d HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n" % i)
-                datos = b""
-                while True:
-                    trozo = s.recv(4096)
-                    if not trozo:
-                        break
-                    datos += trozo
-                s.close()
-                (bien if b" 200 " in datos.split(b"\r\n", 1)[0] else fallas).append(i)
-            except OSError as e:
-                fallas.append("%d: %s" % (i, e))
-
-        hilos = [threading.Thread(target=pedir, args=(i,)) for i in range(RAFAGA)]
-        for h in hilos:
-            h.start()
-        for h in hilos:
-            h.join(30)
+        bien, fallas = rafaga(host, int(puerto), "/index.html")
         assert not fallas, (
             "el servidor de la interfaz RECHAZÓ %d de %d conexiones simultáneas "
             "(cola de %s). Al arrancar, WebView2 pide todo de golpe y lo rechazado no "
@@ -79,7 +87,32 @@ def main_prueba():
                 len(fallas), RAFAGA, getattr(__import__("wsgiref.simple_server").simple_server.WSGIServer,
                                              "request_queue_size", "?"), fallas[:3]))
         assert len(bien) == RAFAGA, len(bien)
-    print("OK servidor de la interfaz: %d conexiones simultáneas, ninguna rechazada" % RAFAGA)
+
+    # ── 2. las pruebas: el servidor del mock (tools/servidor_mock.py) ──────
+    # con `python -m http.server` (cola de 5) se cortaban 41 de 120 y en la
+    # puerta faltaba algún programa: «dzCornerDown is not defined»
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import servidor_mock
+    import functools
+    from http.server import SimpleHTTPRequestHandler
+    with tempfile.TemporaryDirectory(prefix="low-mock-") as carpeta:
+        (Path(carpeta) / "a.js").write_text("// hola", encoding="utf-8")
+        class Callado(SimpleHTTPRequestHandler):
+            def log_message(self, *a, **k):
+                pass
+        manejador = functools.partial(Callado, directory=carpeta)
+        srv = servidor_mock.Servidor(("127.0.0.1", 0), manejador)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            puerto = srv.server_address[1]
+            esperar("http://127.0.0.1:%d/a.js" % puerto, "el servidor del mock")
+            bien, fallas = rafaga("127.0.0.1", puerto, "/a.js")
+            assert not fallas, (
+                "el servidor de las PRUEBAS rechazó %d de %d conexiones simultáneas: "
+                "en la puerta falta algún programa al azar. Ejemplos: %s" % (len(fallas), RAFAGA, fallas[:3]))
+        finally:
+            srv.shutdown()
+    print("OK servidores de la interfaz y del mock: %d conexiones simultáneas, ninguna rechazada" % RAFAGA)
 
 
 if __name__ == "__main__":

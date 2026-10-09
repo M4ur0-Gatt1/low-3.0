@@ -5651,8 +5651,8 @@ function dzRunAction(act) {
     if (DZ.sel?.id && DZ.doc?.scene.rigNode(DZ.sel.id)) return dzRigSetKey(DZ.sel.id, dzRigCur(), dzRigLocalAt(DZ.sel.id, dzRigCur()));
     return dzRigKeyAll();
   }
-  if (act === "prevframe" && DZ.anim) { dzAnimStopIf(); return dzGoFrame(Math.max(0, DZ.anim.idx - 1)); }
-  if (act === "nextframe" && DZ.anim) { dzAnimStopIf(); return dzGoFrame(Math.min(DZ.anim.frames.length - 1, DZ.anim.idx + 1)); }
+  if ((act === "prevframe" || act === "nextframe") && DZ.playback) return DZ.playback.step(act === "prevframe" ? -1 : 1);   // un .low: el documento manda (DZ.anim.frames está vacío y «,» «.» no movían nada)
+  if ((act === "prevframe" || act === "nextframe") && DZ.anim) { dzAnimStopIf(); return dzGoFrame(Math.max(0, Math.min(DZ.anim.frames.length - 1, DZ.anim.idx + (act === "prevframe" ? -1 : 1)))); }
 }
 /*  Preferencias del estudio: reasignar atajos (clic en el campo y apretá la
    tecla nueva) + suavizado por defecto */

@@ -72,3 +72,8 @@
 }
 .mesa-enderezar:hover { background: #ff5a22; }
 .mesa-dial.girada .mesa-enderezar { display: block; }
+
+/* ── el papel cebolla no titila en el play (animation/cebolla-al-reproducir.js) ──
+   Los fantasmas del pasado y del futuro se esconden mientras se reproduce; las
+   capas de la mesa (dz-capa) usan la misma marca y tienen que seguir viéndose. */
+#dzCanvas.dz-reproduciendo g.dz-onion:not(.dz-capa):not(.dz-capa-defs) { display: none; }
