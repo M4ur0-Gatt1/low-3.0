@@ -177,6 +177,7 @@ jobs:
           node tools/check_atajos_ui.js
           node tools/check_flechas_ui.js
           node tools/check_forma_rapida_ui.js
+          node tools/check_recorrido_ui.js
           node tools/check_esculpir_ui.js
           node tools/check_capa_bitmap_ui.js
           node tools/check_pulsacion_larga_ui.js
