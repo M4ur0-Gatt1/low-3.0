@@ -29,6 +29,12 @@
         if (pb) return pb.step(paso);
         return doc.step(paso);
       }
+      // de DIBUJO en dibujo, saltando los sostenidos (antes ↑ ↓; ahora Alt+, Alt+.)
+      if (que === "prevdrawing" || que === "nextdrawing") {
+        const dir = que === "prevdrawing" ? -1 : 1;
+        if (pb && typeof pb.stepDrawing === "function") return pb.stepDrawing(dir);
+        return typeof doc.stepDrawing === "function" ? doc.stepDrawing(dir) : doc.step(dir);
+      }
       if (que === "first") {
         if (pb) return pb.first();
         const r = doc.scene.playRange ? doc.scene.playRange() : null;

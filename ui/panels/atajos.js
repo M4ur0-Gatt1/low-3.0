@@ -91,6 +91,8 @@
     ["play", "Reproducir / parar", "Animación", "enter", "#tlPlay"],
     ["prevframe", "Cuadro anterior", "Animación", ",", "#tlPrev"],
     ["nextframe", "Cuadro siguiente", "Animación", ".", "#tlNext"],
+    ["prevdrawing", "Dibujo anterior (saltea los sostenidos)", "Animación", "alt+,", null],
+    ["nextdrawing", "Dibujo siguiente (saltea los sostenidos)", "Animación", "alt+.", null],
     ["loop", "Repetir en bucle (loop)", "Animación", "alt+l", "#tlLoop"],
     ["onion", "Papel cebolla", "Animación", "alt+o", "#tlOnion"],
     ["nuevodibujo", "Cuadro vacío después del actual", "Animación", "alt+n", "#tlBlank"],
@@ -117,9 +119,11 @@
     ["Ctrl+N · Ctrl+O · Ctrl+W", "Nuevo · abrir · cerrar"], ["Ctrl+C · Ctrl+V · Ctrl+X", "Copiar · pegar · cortar"],
     ["Ctrl+Shift+V", "Pegar celdas como reuso del mismo dibujo"], ["Ctrl+D", "Duplicar lo seleccionado"],
     ["Ctrl+G · Ctrl+Shift+G", "Agrupar / desagrupar"], ["Ctrl+R", "Reglas"],
-    ["Espacio (mantener)", "Mano: arrastrá para navegar"], ["← →", "Cuadro anterior / siguiente"],
-    ["↑ ↓", "Dibujo anterior / siguiente (saltea los sostenidos)"], ["Inicio · Fin", "Primer / último cuadro"],
-    ["Alt+← →", "Mover los cuadros seleccionados"], ["Insert", "Insertar un cuadro vacío"],
+    ["Espacio (mantener)", "Mano: arrastrá para navegar"],
+    ["← → ↑ ↓", "Mover lo seleccionado de a 1 (como en Illustrator)"], ["Shift+flecha", "Mover lo seleccionado de a 10"],
+    ["Inicio · Fin", "Primer / último cuadro"],
+    ["Alt+← →", "Mover los cuadros elegidos en la línea de tiempo (sin nada elegido en la mesa)"], ["Insert", "Insertar un cuadro vacío"],
+    ["Shift al soltar un trazo", "Círculo perfecto (o recta, si el trazo es abierto)"], ["Alt al soltar un trazo", "La elipse que mejor ajusta"],
     ["Supr", "Borrar lo seleccionado / vaciar la celda"], ["F5", "Sostener el dibujo (como Harmony)"],
     ["Esc", "Cancelar lo que está en curso"],
   ];
@@ -189,6 +193,8 @@
   }
   const ACCIONES = {
     sculpt: () => global.dzSetTool("sculpt"),
+    prevdrawing: () => global.dzNavegar("prevdrawing"),
+    nextdrawing: () => global.dzNavegar("nextdrawing"),
     warp: () => typeof global.dzWarpAlternar === "function" && global.dzWarpAlternar(),
     circle: () => global.dzFormaElegir("circle"),
     poly: () => global.dzFormaElegir("poly"),

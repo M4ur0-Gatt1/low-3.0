@@ -6,8 +6,11 @@
    FRAMES y moverse por DIBUJOS: dentro de un hold de cuatro frames uno no
    quiere pulsar cuatro veces para llegar al dibujo siguiente.
 
-     ← →            frame anterior / siguiente
-     ↑ ↓            dibujo anterior / siguiente (saltea los holds)
+     ← → ↑ ↓        NO van acá: mueven lo seleccionado en la mesa, como en
+                    Illustrator (drawing/flechas.js). Pedido de Mauro: «las
+                    flechas deben mover los vectores, no la línea de tiempo».
+     , .            cuadro anterior / siguiente (mapa de atajos)
+     Alt+, Alt+.    dibujo anterior / siguiente, saltando los sostenidos
      Inicio / Fin   primer / último frame del rango
      Espacio        MANO: mantener y arrastrar para panear (nunca reproduce)
      Enter          reproducir / parar (reasignable en Preferencias)
@@ -99,18 +102,14 @@
 
       // Alt+←/→ MUEVE la selección de cuadros de a uno (pedido de Mauro:
       // «mover los frames de lugar eligiéndolos en la línea de tiempo»)
-      if (e.altKey && !ctrl && (e.key === "ArrowLeft" || e.key === "ArrowRight") && doc.cellSelection) {
+      // Con algo elegido en la MESA, Alt+flecha es de la mesa (drawing/flechas.js).
+      if (e.altKey && !ctrl && (e.key === "ArrowLeft" || e.key === "ArrowRight") && doc.cellSelection
+          && !(typeof global.dzHaySeleccionEnMesa === "function" && global.dzHaySeleccionEnMesa())) {
         e.preventDefault();
         doc.moveCellsInRange(doc.cellSelection, e.key === "ArrowLeft" ? -1 : 1);
         return;
       }
       switch (e.key) {
-        case "ArrowLeft":  pb ? pb.step(-1) : doc.step(-1); break;
-        case "ArrowRight": pb ? pb.step(+1) : doc.step(+1); break;
-        // ↑ va hacia ATRÁS en el tiempo: en una xsheet el tiempo baja, así que
-        // "arriba" es el dibujo anterior. Es la convención de OpenToonz.
-        case "ArrowUp":    pb ? pb.stepDrawing(-1) : doc.stepDrawing(-1); break;
-        case "ArrowDown":  pb ? pb.stepDrawing(+1) : doc.stepDrawing(+1); break;
         case "Home":       pb ? pb.first() : doc.goTo(1); break;
         case "End":        if (pb) pb.last(); else doc.goTo(doc.scene.lastFrame() || 1); break;
         // La BARRA ESPACIADORA es la mano, siempre y en todos los modos: es el
