@@ -190,6 +190,9 @@ jobs:
           node tools/check_mesa_sola_ui.js
           node tools/check_hilo_tensado_ui.js
           node tools/check_capa_menu_ui.js
+          node tools/check_cortar_pegar_ui.js
+          node tools/check_acompanar_ui.js
+          node tools/check_insertar_cuadro_ui.js
           node tools/check_esculpir_ui.js
           node tools/check_capa_bitmap_ui.js
           node tools/check_pulsacion_larga_ui.js

@@ -1277,3 +1277,21 @@ LOW_I18N.registrar("pt", "Português", {
   "«{}» subió una posición": "«{}» subiu uma posição", "«{}» bajó una posición": "«{}» desceu uma posição",
   "Es la única capa: una escena necesita al menos una": "É a única camada: uma cena precisa de pelo menos uma",
 });
+
+/* Cortar/copiar/pegar objetos y Acompañar el movimiento */
+LOW_I18N.registrar("pt", "Português", {
+  "Cortar": "Recortar", "Copiar": "Copiar", "Pegar en el mismo lugar": "Colar no mesmo lugar",
+  "Acompañar el movimiento": "Acompanhar o movimento", "Soltar del movimiento": "Soltar do movimento",
+  "Acompañar el movimiento (el último elegido guía)": "Acompanhar o movimento (o último selecionado guia)",
+  "Copié {} objeto · Ctrl+V los pega en el mismo lugar (también en otro cuadro)": "Copiei {} objeto · Ctrl+V cola no mesmo lugar (também em outro quadro)",
+  "Copié {} objetos · Ctrl+V los pega en el mismo lugar (también en otro cuadro)": "Copiei {} objetos · Ctrl+V cola no mesmo lugar (também em outro quadro)",
+  "✂ Corté {} objeto · Ctrl+V los pega en el mismo lugar (también en otro cuadro)": "✂ Recortei {} objeto · Ctrl+V cola no mesmo lugar (também em outro quadro)",
+  "✂ Corté {} objetos · Ctrl+V los pega en el mismo lugar (también en otro cuadro)": "✂ Recortei {} objetos · Ctrl+V cola no mesmo lugar (também em outro quadro)",
+  "Pegué {} objeto en el mismo lugar · están elegidos, listos para mover": "Colei {} objeto no mesmo lugar · selecionado, pronto para mover",
+  "Pegué {} objetos en el mismo lugar · están elegidos, listos para mover": "Colei {} objetos no mesmo lugar · selecionados, prontos para mover",
+  "Elegí con la flecha lo que querés cortar": "Selecione com a seta o que quer recortar",
+  "Elegí la cabeza (o lo que tenga que acompañar) y después, con Shift, el cuerpo: el último que elegís es el que guía": "Selecione a cabeça (ou o que tiver que acompanhar) e depois, com Shift, o corpo: o último selecionado é o que guia",
+  "Buscando el cuerpo en los cuadros…": "Procurando o corpo nos quadros…",
+  "Elegí la parte que acompaña (la cabeza) para soltarla del movimiento": "Selecione a parte que acompanha (a cabeça) para soltá-la do movimento",
+  "Cuadro vacío en el {} · dibujá": "Quadro vazio no {} · desenhe", "Copia del cuadro {} en el {} · retocala sin tocar el original": "Cópia do quadro {} no {} · ajuste sem mexer no original",
+});

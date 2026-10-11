@@ -1304,3 +1304,21 @@ LOW_I18N.registrar("en", "English", {
   "«{}» subió una posición": "«{}» moved up one", "«{}» bajó una posición": "«{}» moved down one",
   "Es la única capa: una escena necesita al menos una": "It's the only layer: a scene needs at least one",
 });
+
+/* Cortar/copiar/pegar objetos y Acompañar el movimiento */
+LOW_I18N.registrar("en", "English", {
+  "Cortar": "Cut", "Copiar": "Copy", "Pegar en el mismo lugar": "Paste in place",
+  "Acompañar el movimiento": "Follow the motion", "Soltar del movimiento": "Release from the motion",
+  "Acompañar el movimiento (el último elegido guía)": "Follow the motion (the last selected leads)",
+  "Copié {} objeto · Ctrl+V los pega en el mismo lugar (también en otro cuadro)": "Copied {} object · Ctrl+V pastes in place (also on another frame)",
+  "Copié {} objetos · Ctrl+V los pega en el mismo lugar (también en otro cuadro)": "Copied {} objects · Ctrl+V pastes in place (also on another frame)",
+  "✂ Corté {} objeto · Ctrl+V los pega en el mismo lugar (también en otro cuadro)": "✂ Cut {} object · Ctrl+V pastes in place (also on another frame)",
+  "✂ Corté {} objetos · Ctrl+V los pega en el mismo lugar (también en otro cuadro)": "✂ Cut {} objects · Ctrl+V pastes in place (also on another frame)",
+  "Pegué {} objeto en el mismo lugar · están elegidos, listos para mover": "Pasted {} object in place · selected, ready to move",
+  "Pegué {} objetos en el mismo lugar · están elegidos, listos para mover": "Pasted {} objects in place · selected, ready to move",
+  "Elegí con la flecha lo que querés cortar": "Select what you want to cut with the arrow",
+  "Elegí la cabeza (o lo que tenga que acompañar) y después, con Shift, el cuerpo: el último que elegís es el que guía": "Select the head (or whatever has to follow) and then, with Shift, the body: the last one you select leads",
+  "Buscando el cuerpo en los cuadros…": "Looking for the body in the frames…",
+  "Elegí la parte que acompaña (la cabeza) para soltarla del movimiento": "Select the part that follows (the head) to release it from the motion",
+  "Cuadro vacío en el {} · dibujá": "Empty frame at {} · draw", "Copia del cuadro {} en el {} · retocala sin tocar el original": "Copy of frame {} at {} · adjust it without touching the original",
+});

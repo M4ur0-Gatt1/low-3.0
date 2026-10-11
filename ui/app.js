@@ -7016,9 +7016,9 @@ async function dzFrameInsert(blank) {
     if (!ly || ly.locked) return dzSetStatus("Capa bloqueada o sin capa activa");
     const f = DZ.doc.frame;
     const actual = ly.cellAt(f);
-    DZ.doc.apply("insert", f, 1);          // corre lo que sigue hacia adelante
-    if (!blank && actual != null) DZ.doc.setCell(f, actual);
-    dzSetStatus(blank ? " Celda vacía insertada en " + f : " Frame " + f + " duplicado");
+    DZ.doc.apply("insert", f + 1, 1); DZ.doc.goTo(f + 1);   // DESPUÉS del actual, como dicen el botón y el atajo: antes insertaba ANTES y te dejaba parado en la celda vacía
+    if (!blank && actual != null) DZ.doc.createBlankDrawing(true, actual);   // una COPIA de verdad: antes re-exponía el mismo dibujo y retocar uno cambiaba el otro
+    dzSetStatus(blank ? " Cuadro vacío en el " + (f + 1) + " · dibujá" : " Copia del cuadro " + f + " en el " + (f + 1) + " · retocala sin tocar el original");
     return;
   }
   if (!DZ.anim) return;

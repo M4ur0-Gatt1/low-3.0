@@ -102,6 +102,7 @@
     ["clavedibujo", "Marcar fotograma clave", "Animación", "alt+k", "#tlKey"],
     ["intercalar", "Intercalar", "Animación", "alt+t", "#tlTween"],
     ["recorrido", "Seguir un recorrido", "Animación", "alt+r", "#tlRecorrido"],
+    ["acompanar", "Acompañar el movimiento (el último elegido guía)", "Animación", "alt+p", null],
     ["exportar", "Exportar la animación", "Animación", "alt+e", "#tlExport"],
     ["camera", "Cámara", "Cámara y esqueleto", "c", "#dzCamBtn"],
     ["camkey", "Clave de cámara en este cuadro", "Cámara y esqueleto", "shift+c", "#tlCamKey"],
@@ -118,7 +119,7 @@
   /* Lo que NO se reasigna, a la vista igual: si no figura, nadie lo encuentra. */
   const FIJOS = [
     ["Ctrl+Z / Ctrl+Y", "Deshacer / rehacer"], ["Ctrl+S · Ctrl+Shift+S", "Guardar / guardar como"],
-    ["Ctrl+N · Ctrl+O · Ctrl+W", "Nuevo · abrir · cerrar"], ["Ctrl+C · Ctrl+V · Ctrl+X", "Copiar · pegar · cortar"],
+    ["Ctrl+N · Ctrl+O · Ctrl+W", "Nuevo · abrir · cerrar"], ["Ctrl+C · Ctrl+V · Ctrl+X", "Copiar · pegar en el mismo lugar · cortar (con objetos elegidos; sin nada elegido, el cuadro entero)"],
     ["Ctrl+Shift+V", "Pegar celdas como reuso del mismo dibujo"], ["Ctrl+D", "Duplicar lo seleccionado"],
     ["Ctrl+G · Ctrl+Shift+G", "Agrupar / desagrupar"], ["Ctrl+R", "Reglas"],
     ["Espacio (mantener)", "Mano: arrastrá para navegar"],
@@ -209,6 +210,7 @@
     enderezar: () => { const d = dz(); d.viewRot = 0; global.dzApplyZoom(); },
     zen: () => global.dzZenToggle(),
     mesasola: () => global.dzMesaSolaToggle && global.dzMesaSolaToggle(),
+    acompanar: () => global.dzAcompanar && global.dzAcompanar(),
     capas: () => global.dzLayersToggle(),
     vista3d: () => global.dz3dToggle(),
     swap: () => global.dzSwapPaint(),
