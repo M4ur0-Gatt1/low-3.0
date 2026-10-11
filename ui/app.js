@@ -665,7 +665,7 @@ $("#dzDiscBtn").onclick = () => dzDiscToggle();
   DZ.pressureGamma = +(dzPrefsStorage().getItem("low.dzgamma") || 0.85);
   DZ.pressureMin = +(dzPrefsStorage().getItem("low.dzpressuremin") || 0);
   DZ.pressureMax = +(dzPrefsStorage().getItem("low.dzpressuremax") || 1);
-  $("#dzPrefs").onclick = dzPrefsModal;
+  $("#dzPrefs").onclick = () => dzPrefsModal();   // por nombre: atajos.js e i18n/idioma.js la envuelven después
   $("#dzRotate").addEventListener("pointerdown", dzRotateDown);
   $("#dzGroup").onclick = (e) => dzGroupSel(e.shiftKey);
   $("#dzImg").onclick = dzImportImage;
@@ -4090,8 +4090,8 @@ function dzIsCanvasBackground(el) {
 }
 
 /* ── selección por marquee (arrastrar un rectángulo en el fondo del lienzo) ──
-   Izquierda→derecha: sólo lo completamente contenido. Derecha→izquierda: todo
-   lo que toca. Shift suma y Alt invierte temporalmente esa convención. */
+   Como Illustrator: en cualquier dirección elige lo que su TRAZO toca. Shift
+   suma; Alt elige sólo lo que queda entero adentro. Ver drawing/selection.js. */
 function dzMarqueeStart(e) {
   e.preventDefault();
   const pointerId = e.pointerId;
@@ -4143,13 +4143,13 @@ function dzMarqueeSelect(l, t, r, b, additive, mode = "touching") {
     let bb; try { bb = el.getBoundingClientRect(); } catch (e) { return; }
     if (!bb.width && !bb.height) return;
     const hit = LOW.drawing.selection.marqueeHit(bb,
-      { left:l, top:t, right:r, bottom:b }, mode);
+      { left:l, top:t, right:r, bottom:b }, mode, el);   // con el elemento: toca su TRAZO, no su caja (como Illustrator)
     if (hit && !DZ.multi.includes(el)) DZ.multi.push(el);
   });
   DZ.multi = [...new Set(DZ.multi)].filter(n => n?.isConnected);
   if (DZ.multi.length > 1) {
     dzSelect(DZ.multi[DZ.multi.length - 1]);   // el "activo" es el último; la multi manda al mover
-    dzSetStatus(" " + DZ.multi.length + " elemento(s) seleccionado(s) — Ctrl+G agrupa · Shift suma · marco → contiene / marco ← toca");
+    dzSetStatus(" " + DZ.multi.length + " elemento(s) seleccionado(s) — Ctrl+G agrupa · Shift suma · Alt: sólo lo que queda entero adentro");
   } else if (DZ.multi.length === 1) {
     const only = DZ.multi[0]; DZ.multi = []; dzSelect(only); dzSetStatus("1 elemento seleccionado");
   } else { dzDeselect(); dzSetStatus("Nada en el rango"); }
@@ -14775,7 +14775,7 @@ function dzAnimationDock(visible) {
   dzPanelDockSetup();
   document.querySelectorAll(".dz-animation-dock").forEach(dock => {
     const panels = Array.from(dock.children).filter(el => !el.matches(".dz-dock-resizer,.dz-panel-splitter"));
-    dock.hidden = !visible || !panels.length;
+    const oculto = !visible || !panels.length; if (dock.hidden !== oculto) dock.hidden = oculto;   // sólo si cambia: se llama ~57 veces por segundo y cada escritura repintaba todas las pestañas plegables
   });
   const view = $("#designView");
   if (view) view.classList.toggle("animation-workspace", !!visible);
@@ -14862,8 +14862,8 @@ function dzPanelDockSetup() {
     .filter(el => !el.matches(".dz-dock-resizer,.dz-panel-splitter"));
   const visiblesDe = dock => panelesDe(dock)
     .filter(el => !el.hidden && getComputedStyle(el).display !== "none");
-  const refreshPanelSplitters = dock => {
-    dock.querySelectorAll(":scope > .dz-panel-splitter").forEach(el => el.remove());
+  const refreshPanelSplitters = dock => {   // SÓLO si cambió qué paneles se ven: rehacerlas siempre disparaba al vigía y era un bucle de 57 por segundo (medido)
+    const clave = visiblesDe(dock).map(p => p.id || p.className).join("|"), n = clave ? clave.split("|").length : 0; if (dock.__divisiones === clave && dock.querySelectorAll(":scope > .dz-panel-splitter").length === Math.max(0, n - 1)) return; dock.__divisiones = clave; dock.querySelectorAll(":scope > .dz-panel-splitter").forEach(el => el.remove());
     const panels = panelesDe(dock);
     if (dock.dataset.zone === "bottom") panels.forEach(panel => {
       if (panelSizes[panel.id]?.w) panel.style.width = panelSizes[panel.id].w + "px";
@@ -14898,7 +14898,7 @@ function dzPanelDockSetup() {
     });
   };
   const updateDocks = () => Object.values(docks).forEach(d => {
-    d.hidden = !visiblesDe(d).length || !DZ.anim;
+    const oculto = !visiblesDe(d).length || !DZ.anim; if (d.hidden !== oculto) d.hidden = oculto;   // escribir lo mismo también avisa al vigía
   });
   /* Los paneles se muestran y se ocultan desde muchos lados (workspaces, menú
      Ventana, botones propios). En vez de acordarse de avisar en cada uno, se

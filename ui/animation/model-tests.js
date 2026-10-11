@@ -1168,15 +1168,15 @@
       ok("el dueño correcto puede cerrar la transacción",shared.finish(rigToken,9)&&!shared.active);
     }
 
-    // 30. El marco de selección usa la convención profesional por dirección.
+    // 30. El marco de selección es el de Illustrator: toca, en cualquier dirección.
     {
       const S=LOW.drawing.selection;
       const region={left:0,top:0,right:100,bottom:100};
       const inside={left:10,top:10,right:40,bottom:40};
       const crossing={left:80,top:20,right:120,bottom:50};
-      ok("marco izquierda a derecha exige contenido",S.marqueeMode(0,100)==="contained");
+      ok("marco izquierda a derecha selecciona por contacto (Illustrator)",S.marqueeMode(0,100)==="touching");
       ok("marco derecha a izquierda selecciona por contacto",S.marqueeMode(100,0)==="touching");
-      ok("Alt invierte la regla del marco",S.marqueeMode(0,100,true)==="touching");
+      ok("Alt pide lo que queda entero adentro",S.marqueeMode(0,100,true)==="contained"&&S.marqueeMode(100,0,true)==="contained");
       ok("contenido acepta lo interno y rechaza lo cruzado",
         S.marqueeHit(inside,region,"contained")&&!S.marqueeHit(crossing,region,"contained"));
       ok("contacto captura también el objeto cruzado",S.marqueeHit(crossing,region,"touching"));

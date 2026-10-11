@@ -183,6 +183,8 @@ jobs:
           node tools/check_punteria_transformada_ui.js
           node tools/check_interpolacion_movimiento_ui.js
           node tools/check_intercalar_claves_ui.js
+          node tools/check_marco_illustrator_ui.js
+          node tools/check_idioma_ui.js
           node tools/check_esculpir_ui.js
           node tools/check_capa_bitmap_ui.js
           node tools/check_pulsacion_larga_ui.js

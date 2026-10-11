@@ -103,9 +103,14 @@
      se escribe AHÍ. */
   function ponerAyuda(el, texto) {
     if (!el) return;
-    if (el.dataset.tituloAyuda != null) el.dataset.tituloAyuda = texto;
-    else el.title = texto;
+    if (el.dataset.tituloAyuda != null) { if (el.dataset.tituloAyuda !== texto) el.dataset.tituloAyuda = texto; }
+    else if (el.title !== texto) el.title = texto;
   }
+  /* EN EL IDIOMA ELEGIDO, Y SÓLO SI CAMBIA. Se repinta seguido: escribir lo
+     mismo igual genera un cambio en el DOM, y en español el texto de acá
+     pisaba la traducción —que lo volvía a traducir, que lo volvía a pisar—,
+     unas cien veces por segundo (medido). Ver i18n/idioma.js. */
+  const enIdioma = (t) => (global.LOW_I18N && global.LOW_I18N.traducir(t)) || t;
 
   function pintarUno(id, meta) {
     const el = document.querySelector(meta.element);
@@ -135,11 +140,12 @@
     t.classList.toggle("angosta", !!angosta);
 
     const flecha = t.querySelector(".dz-pp-flecha");
-    if (flecha) flecha.textContent = plegado ? (forma === "ancho" ? "▸" : "▴") : "▾";
-    const ayuda = (plegado ? "Mostrar " : "Esconder ") + ((meta.label || id).toLowerCase());
+    const signo = plegado ? (forma === "ancho" ? "▸" : "▴") : "▾";
+    if (flecha && flecha.textContent !== signo) flecha.textContent = signo;
+    const ayuda = enIdioma((plegado ? "Mostrar " : "Esconder ") + ((meta.label || id).toLowerCase()));
     ponerAyuda(t, ayuda);
-    t.setAttribute("aria-expanded", String(!plegado));
-    t.setAttribute("aria-label", ayuda);
+    if (t.getAttribute("aria-expanded") !== String(!plegado)) t.setAttribute("aria-expanded", String(!plegado));
+    if (t.getAttribute("aria-label") !== ayuda) t.setAttribute("aria-label", ayuda);
   }
 
   function pintar() {
@@ -181,6 +187,8 @@
       obs.observe(raiz, { attributes: true, attributeFilter: ["hidden"], subtree: true });
       panels.panelesPlegablesObs = obs;
     } catch (_) { /* sin observador, igual anda al cambiar de espacio */ }
+    // al cambiar de idioma: repintar las ayudas en el nuevo (ya no se repintan solas)
+    global.addEventListener("low:idioma", () => { try { pintar(); } catch (_) { /* nada que pintar */ } });
   }
 
   panels.panelesPlegables = { arrancar, pintar, alternar, leer, orientacion, SIN_PESTANIA, CLASE, PESTANIA };
