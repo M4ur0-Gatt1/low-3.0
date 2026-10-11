@@ -7124,8 +7124,8 @@ function dzTweenEl(a, b, t) {
     const va = a.getAttribute(k), vb = b.getAttribute(k);
     if (va && vb && va !== vb) out.setAttribute(k, dzLerpColor(va, vb, t));
   });
-  DZ_TWEEN_STR.forEach(k => {
-    const va = a.getAttribute(k), vb = b.getAttribute(k);
+  DZ_TWEEN_STR.forEach(k => { const va = a.getAttribute(k), vb = b.getAttribute(k);
+    if (k === "transform" && (va || vb) && va !== vb && typeof dzTweenTransform === "function") return out.setAttribute(k, dzTweenTransform(va, vb, t));   // lo movido con la flecha deja un matrix(…) y la clave anterior no tiene transform: ver animation/interpolar-transform.js
     if (va && vb && va !== vb) {
       let v = dzLerpNums(va, vb, t);
       // estructura distinta + es un path  MORPH real por re-muestreo (inbetween)
@@ -7503,10 +7503,10 @@ async function dzFrameAdd() {
         return;
       }
     }
-    const n = lv.nextNumber();
-    DZ.doc.setCell(f, n);
-    DZ.doc.goTo(f);
-    dzSetStatus(" Drawing " + n + " expuesto en el frame " + f);
+    const src = ly.cellAt(DZ.doc.frame); DZ.doc.goTo(f);   // «dibujar sobre la copia»: el dibujo nuevo NACE con lo del cuadro actual (en un .low nacía VACÍO: sólo se veía el fantasma de cebolla y no había nada que mover para la pose siguiente)
+    const dw = (src != null && DZ.doc.createBlankDrawing(true, src)) || DZ.doc.createBlankDrawing(false), n = dw && dw.number;
+    if (!dw) return dzSetStatus("No pude crear el dibujo del frame " + f);
+    dzSetStatus(" Drawing " + n + " expuesto en el frame " + f + (src != null ? " · es una copia del anterior: movelo o dibujá encima" : ""));
     return;
   }
   if (!DZ.anim) return;
@@ -11376,8 +11376,8 @@ function dzElAt(root, path) {
   return n;
 }
 function dzPosDelta(a, b) {
-  if (a.mode === "c") return [b.cx - a.cx, b.cy - a.cy];
-  if (a.mode === "xy") return [b.x - a.x, b.y - a.y];
+  if (a.mode === "c") return [b.cx - a.cx, b.cy - a.cy]; if (a.mode === "xy") return [b.x - a.x, b.y - a.y];
+  if (a.mode === "matrix") { const L = a.rootToParent, px = b.base.e - a.base.e, py = b.base.f - a.base.f, det = (L.a * L.d - L.b * L.c) || 1; return [(L.d * px - L.c * py) / det, (L.a * py - L.b * px) / det]; }   // dzReadPos devuelve una MATRIZ: sin esto la resta daba NaN y la 🏃 escribía el objeto en NaN (desaparecía)
   return [b.tx - a.tx, b.ty - a.ty];
 }
 async function dzTweenFrames(baseSvgText, elPath, offsets) {
@@ -11457,7 +11457,7 @@ async function dzMoveTween() {
     DZ.anim.cache = {};
     try { S.tree = (await api.refresh_tree()).tree; renderTree(); } catch (e) { /* */ }
     await dzTimelineRefresh(); dzOnionUpdate(); dzTimelineBadges();
-    dzSetStatus("🏃 " + n + " cuadros generados — reproducí () para ver el movimiento.");
+    dzSetStatus("🏃 " + n + " cuadros generados — reproducí (Enter) para ver el movimiento.");
   };
 }
 /* ⏹ grabación en vivo: armás la grabación, arrastrás el elemento y el
