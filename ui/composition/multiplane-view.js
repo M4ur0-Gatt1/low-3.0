@@ -129,7 +129,7 @@
         card.append(surface, tag);
         if (plane.id === this.selected) {
           const gizmo = document.createElement("div"); gizmo.className = "cmp3-gizmo";
-          gizmo.innerHTML = '<button data-axis="xy" title="Mover en X/Y">XY</button><button data-axis="z" title="Mover en profundidad">Z</button><button data-axis="r" title="Rotar en el plano">R</button><button data-axis="s" title="Escala uniforme">S</button>';
+          gizmo.innerHTML = '<button data-axis="xy" title="Mover en X/Y (arrastrá)">XY</button><button data-axis="z" title="Mover en profundidad (arrastrá)">Z</button><button data-axis="r" title="Rotar en el plano (arrastrá)">R</button><button data-axis="s" title="Escala uniforme (arrastrá)">S</button>';
           gizmo.querySelectorAll("button").forEach(handle => handle.onpointerdown = e => this.manipulate(e, plane, handle.dataset.axis));
           card.appendChild(gizmo);
         }

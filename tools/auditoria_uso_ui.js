@@ -66,9 +66,20 @@ async function main() {
   }
   await ev(`(async()=>{
     const wait = ms => new Promise(x=>setTimeout(x,ms));
+    if (typeof closeL3d==="function") { try{ closeL3d(); }catch(e){} }
     try{localStorage.clear()}catch(e){}
-    await openDesign("mock.svg"); await dzDocInit();
-    if (typeof closeL3d==="function") closeL3d();
+    // un documento .low como el de todos los días (antes: openDesign("mock.svg"),
+    // el modelo VIEJO de .svg sueltos), con cuatro dibujos en cuatro cuadros:
+    // con uno solo, media línea de tiempo «no hacía nada» con razón
+    // el documento anterior quedó modificado por los botones: sin esto «nuevo»
+    // pregunta si guardar y el modal traba el rearmado (78 botones sin medir)
+    if (typeof DZ !== "undefined") { if (DZ.doc) DZ.doc.dirty = false; DZ.dirty = false; }
+    if (typeof closeModal === "function") { try { closeModal(); } catch (e) {} }
+    await dzMenuAction("nuevo"); await wait(2200);
+    if (typeof closeModal === "function" && document.querySelector("#modal") && !document.querySelector("#modal").hidden) { try { closeModal(); } catch (e) {} }
+    const D = (x) => '<g data-low-art="colour"></g><g data-low-art="line"><circle cx="' + x + '" cy="540" r="110" fill="none" stroke="#111" stroke-width="10"/></g>';
+    for (const f of [1, 2, 3, 4]) { DZ.doc.goTo(f); dzCanvasSet(D(500 + f * 150)); dzDocCommit(); }
+    DZ.doc.goTo(1); dzCanvasSet(DZ.doc.drawing.content); DZ.doc.emit("cells"); DZ.doc.emit("frame");
     await wait(600); return true; })()`);
 
   /* LA FOTO. El atrapatodo es el largo del innerHTML del body: si eso no se
@@ -132,17 +143,23 @@ async function main() {
     return { estado: "apretado" };
   })()`;
 
-  /** Vuelve al espacio de trabajo pedido y cierra lo que haya quedado abierto. */
-  /** Vuelve al espacio de trabajo pedido y cierra lo que haya quedado abierto. */
-  const volverA = (espacio) => `(async () => {
+  /** Vuelve al espacio de trabajo pedido y cierra lo que haya quedado abierto.
+   *  `desplegada`: cómo estaba la línea de tiempo al hacer el inventario. Su
+   *  pestaña la pliega, y plegada escondía 78 botones del espacio Animación
+   *  que quedaban como «desapareció» sin medir: se la vuelve a desplegar. */
+  const volverA = (espacio, desplegada = false) => `(async () => {
     const wait = ms => new Promise(x=>setTimeout(x,ms));
     const m = document.querySelector("#modal");
     if (m && !m.hidden) { const x = m.querySelector('[id$="X"],.ghost,[data-cerrar]');
       if (x) x.click(); else if (typeof closeModal === "function") closeModal(); }
     if (typeof closeL3d === "function") { try { closeL3d(); } catch (e) {} }
+    // lo que quedó «en otra ventana» (en el mock no hay ventana): de vuelta a su lugar
+    for (const k of [...((typeof DZ !== "undefined" && DZ.detached) || [])]) { try { await lowPanelCommand({ kind: k, action: "dock", payload: { kind: k } }); } catch (e) {} }
     const tab = [...document.querySelectorAll("#dzWorkspaces .dz-ws-tab")]
       .find(b => (b.textContent || "").trim() === ${JSON.stringify(espacio)});
     if (tab) { tab.click(); await wait(450); }
+    const tlp = document.querySelector(".dz-tl-pestania");
+    if (${JSON.stringify(desplegada)} && tlp && tlp.getAttribute("aria-expanded") === "false") { tlp.click(); await wait(350); }
     return !!tab;
   })()`;
 
@@ -155,8 +172,19 @@ async function main() {
     const wait = ms => new Promise(x=>setTimeout(x,ms));
     if (typeof closeL3d==="function") { try{ closeL3d(); }catch(e){} }
     try{localStorage.clear()}catch(e){}
-    await openDesign("mock.svg"); await dzDocInit();
-    await wait(700); return true; })()`;
+    // un documento .low como el de todos los días (antes: openDesign("mock.svg"),
+    // el modelo VIEJO de .svg sueltos), con cuatro dibujos en cuatro cuadros:
+    // con uno solo, media línea de tiempo «no hacía nada» con razón
+    // el documento anterior quedó modificado por los botones: sin esto «nuevo»
+    // pregunta si guardar y el modal traba el rearmado (78 botones sin medir)
+    if (typeof DZ !== "undefined") { if (DZ.doc) DZ.doc.dirty = false; DZ.dirty = false; }
+    if (typeof closeModal === "function") { try { closeModal(); } catch (e) {} }
+    await dzMenuAction("nuevo"); await wait(2200);
+    if (typeof closeModal === "function" && document.querySelector("#modal") && !document.querySelector("#modal").hidden) { try { closeModal(); } catch (e) {} }
+    const D = (x) => '<g data-low-art="colour"></g><g data-low-art="line"><circle cx="' + x + '" cy="540" r="110" fill="none" stroke="#111" stroke-width="10"/></g>';
+    for (const f of [1, 2, 3, 4]) { DZ.doc.goTo(f); dzCanvasSet(D(500 + f * 150)); dzDocCommit(); }
+    DZ.doc.goTo(1); dzCanvasSet(DZ.doc.drawing.content); DZ.doc.emit("cells"); DZ.doc.emit("frame");
+    await wait(600); return true; })()`;
 
   const espacios = await ev(`(() => [...document.querySelectorAll("#dzWorkspaces .dz-ws-tab")]
       .map(b => (b.textContent || "").trim()).filter(Boolean))()`);
@@ -167,6 +195,7 @@ async function main() {
 
   for (const espacio of (Array.isArray(espacios) && espacios.length ? espacios : ["Dibujo"])) {
     await ev(volverA(espacio)); await w(300);
+    const desplegada = await ev(`(document.querySelector(".dz-tl-pestania") || {}).getAttribute?.("aria-expanded") === "true"`);
     const inventario = await ev(listar);
     if (!Array.isArray(inventario)) continue;
 
@@ -176,6 +205,9 @@ async function main() {
       yaVistos.add(clave);
       mirados++;
 
+      // abren otra ventana (nativa): en el mock no existe y dejan la interfaz
+      // «afuera»; medidos así invalidaban 48 botones de la misma tanda
+      if (/otra pantalla|otra ventana|traer de vuelta|separar/i.test(b.titulo + " " + b.texto)) continue;
       if (b.apagado) {
         // C. apagado: ¿la ayuda dice QUÉ FALTA para encenderlo?
         const explica = /nec|falt|primero|eleg|selecc|abr|cre|requier|sin /i.test(b.titulo);
@@ -183,12 +215,12 @@ async function main() {
         continue;
       }
 
-      await ev(volverA(espacio)); await w(250);
+      await ev(volverA(espacio, desplegada)); await w(250);
       const antes = await ev(FOTO);
       let clic = await ev(apretar(b));
       if (clic && clic.__error) { rotos.push({ espacio, ...b, error: clic.__error }); continue; }
       if (clic && clic.estado === "desapareció") {      // el botón anterior se llevó la vista
-        await ev(montar); await ev(volverA(espacio)); await w(350);
+        await ev(montar); await ev(volverA(espacio, desplegada)); await w(350);
         clic = await ev(apretar(b));
         remontajes++;
       }

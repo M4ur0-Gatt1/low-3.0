@@ -15,7 +15,12 @@
       cada marca, en orden y en el sentido del trazo (±4 unidades).
    3. Cada cuadro es un dibujo propio; la capa de referencia no cambió.
    4. Un Ctrl+Z saca todo.
-   5. Con «que gire siguiendo el recorrido», el objeto gira con la tangente. */
+   5. Con «que gire siguiendo el recorrido», el objeto gira con la tangente.
+   6. Dos objetos elegidos (pelota + caja) viajan JUNTOS, sin separarse.
+   7. Una referencia pesada (un recorrido de pincel de miles de puntos y una
+      capa llena de trazos) abre la ventana en menos de 2,5 s.
+   (6 y 7, v3.15.1: «con otro recorrido ni se me abre la opción o demora
+   mucho; si es largo debe avisar; y falló con un grupo de objetos».) */
 const assert = require("node:assert/strict");
 const endpoint = process.argv[2] || "http://127.0.0.1:9223";
 const url = process.argv[3] || "http://127.0.0.1:8791/ui/index.html?mock=1";
@@ -105,8 +110,10 @@ async function main() {
       const p = await pelotaEn(1 + k);
       if (!p) { lejos.push("F" + (1 + k) + ": sin pelota"); continue; }
       numeros.push(p.n);
-      const e = Math.hypot(p.x - marcas[k].p[0], p.y - marcas[k].p[1]);
-      if (e > 4) lejos.push("F" + (1 + k) + ": " + JSON.stringify(p) + " vs marca " + marcas[k].p.map((v) => +v.toFixed(1)));
+      // el recorrido LLEVA a la pelota: conserva su distancia a la primera marca
+      const esperado = [marcas[k].p[0] + P0[0] - marcas[0].p[0], marcas[k].p[1] + P0[1] - marcas[0].p[1]];
+      const e = Math.hypot(p.x - esperado[0], p.y - esperado[1]);
+      if (e > 4) lejos.push("F" + (1 + k) + ": " + JSON.stringify(p) + " vs " + esperado.map((v) => +v.toFixed(1)));
     }
     assert.deepEqual(lejos, [], "la pelota no quedó sobre cada marca, en orden");
 
@@ -129,10 +136,72 @@ async function main() {
     await clicEn(await centro(`document.getElementById("recGo")`)); await wait(800);
     const g0 = await pelotaEn(1), g5 = await pelotaEn(6);
     assert.ok(g0 && g5 && Math.abs(g0.giro) < 1 && Math.abs(g5.giro) > 20, "con «que gire», la pelota no giró con el recorrido: " + JSON.stringify({ g0, g5 }));
-    assert.ok(Math.hypot(g5.x - marcas[5].p[0], g5.y - marcas[5].p[1]) < 4, "al girar, la pelota se salió de su marca: " + JSON.stringify(g5));
+    // al girar, la distancia a la marca (la de la primera, ~8) gira con la curva: queda a esa misma distancia
+    assert.ok(Math.abs(Math.hypot(g5.x - marcas[5].p[0], g5.y - marcas[5].p[1]) - Math.hypot(P0[0] - marcas[0].p[0], P0[1] - marcas[0].p[1])) < 2, "al girar, la pelota se salió de su lugar respecto de la marca: " + JSON.stringify(g5));
+
+    // ── 6. VARIOS objetos viajan juntos ─────────────────────────────────────
+    // (v3.15.1: «falló al intentar animar un grupo de objetos juntos»)
+    await soltarFoco();
+    await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "z", code: "KeyZ", windowsVirtualKeyCode: 90, modifiers: 2 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "z", code: "KeyZ", windowsVirtualKeyCode: 90, modifiers: 2 }); await wait(500);
+    const CAJA = [P0[0] + 70, P0[1] - 20];
+    await ev(`(()=>{ DZ.doc.goTo(1); const svg = document.querySelector("#dzCanvas > svg"); dzCanvasSet(DZ.doc.drawing.content);
+      const linea = document.querySelector('#dzCanvas > svg [data-low-art="line"]'); const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      r.setAttribute("data-caja", "1"); r.setAttribute("x", ${CAJA[0] - 15}); r.setAttribute("y", ${CAJA[1] - 15}); r.setAttribute("width", 30); r.setAttribute("height", 30);
+      r.setAttribute("fill", "none"); r.setAttribute("stroke", "#111"); r.setAttribute("stroke-width", 6); linea.appendChild(r); dzDocCommit(); dzSetTool("select"); return 1; })()`);
+    await wait(400);
+    await clicEn(await pantalla(P0[0] + 40, P0[1]));
+    const cajaXY = await pantalla(CAJA[0] + 15, CAJA[1]);
+    await mouse("mouseMoved", cajaXY[0], cajaXY[1]); await mouse("mousePressed", cajaXY[0], cajaXY[1], { buttons: 1, clickCount: 1, modifiers: 8 });
+    await mouse("mouseReleased", cajaXY[0], cajaXY[1], { buttons: 0, clickCount: 1, modifiers: 8 }); await wait(400);
+    assert.equal(await ev("(DZ.multi || []).length"), 2, "no quedaron elegidos los dos objetos (pelota + caja)");
+    await clicEn(await centro(`document.getElementById("tlRecorrido")`)); await wait(600);
+    const descJuntos = await ev(`(document.getElementById("recDesc") || {}).textContent || ""`);
+    assert.ok(/2 elementos/.test(descJuntos), "con dos objetos elegidos, la ventana no los toma juntos: " + JSON.stringify(descJuntos));
+    await clicEn(await centro(`document.getElementById("recGo")`)); await wait(900);
+    const cajaEn = (f) => ev(`(()=>{ const ly = DZ.doc.scene.layers.find(l => l.name === "Pelota"), dw = DZ.doc.scene.drawingAt(ly.id, ${f}); if (!dw) return null;
+      const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("viewBox", "0 0 1920 1080"); s.setAttribute("width", 1920); s.setAttribute("height", 1080);
+      s.style.cssText = "position:absolute;left:-9000px;top:0"; document.body.appendChild(s); s.innerHTML = dw.content; const c = s.querySelector("rect[data-caja]"); let out = null;
+      if (c) { const m = s.getScreenCTM().inverse().multiply(c.getScreenCTM()); const x = +c.getAttribute("x") + 15, y = +c.getAttribute("y") + 15; out = { x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f }; }
+      s.remove(); return out; })()`);
+    const juntos = [];
+    for (const f of [1, 4, 8, 12]) {
+      const p = await pelotaEn(f), c = await cajaEn(f);
+      if (!p || !c) { juntos.push("F" + f + ": falta " + (!p ? "la pelota" : "la caja")); continue; }
+      const dx = c.x - p.x, dy = c.y - p.y;
+      if (Math.abs(dx - (CAJA[0] - P0[0])) > 1.5 || Math.abs(dy - (CAJA[1] - P0[1])) > 1.5) juntos.push("F" + f + ": se separaron " + JSON.stringify({ dx, dy }));
+    }
+    assert.deepEqual(juntos, [], "los objetos elegidos juntos no viajaron juntos");
+    const p8 = await pelotaEn(8);
+    assert.ok(Math.hypot(p8.x - marcas[7].p[0], p8.y - marcas[7].p[1]) < 60, "el grupo no siguió el recorrido: " + JSON.stringify(p8));
+
+    // ── 7. una referencia PESADA abre la ventana enseguida ──────────────────
+    // (v3.15.1: «con otro recorrido ni se me abre la opción, o demora mucho»):
+    // un recorrido de pincel (cinta rellena de miles de puntos) + una capa
+    // llena de trazos sueltos
+    await soltarFoco();
+    await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "z", code: "KeyZ", windowsVirtualKeyCode: 90, modifiers: 2 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "z", code: "KeyZ", windowsVirtualKeyCode: 90, modifiers: 2 }); await wait(500);
+    const ida = Array.from({ length: 2400 }, (_, i) => lem(i / 2399 * Math.PI * 2)), vuelta = ida.map((p) => [p[0] + 3, p[1] + 3]).reverse();
+    const cinta = '<path data-low="brush" fill="#999" d="M ' + ida.concat(vuelta).map((p) => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L ") + ' Z"/>';
+    const sueltos = Array.from({ length: 400 }, (_, i) => '<path fill="none" stroke="#bbb" stroke-width="2" d="M ' + (100 + (i * 37) % 1700) + " " + (80 + (i * 53) % 900) + " q 20 -30 40 0 t 40 0" + '"/>').join("");
+    await ev(`(()=>{ const doc = DZ.doc; dzDocCommit(); const pelota = doc.layerId; const ref = doc.scene.layers.find(l => l.name === "Referencia");
+      doc.selectLayer(ref.id); doc.goTo(1); dzCanvasSet(${JSON.stringify('<g data-low-art="colour"></g><g data-low-art="line">')} + ${JSON.stringify(cinta)} + ${JSON.stringify(marcas.map((m) => '<path d="' + m.d + '" fill="none" stroke="#999" stroke-width="5"/>').join(""))} + "</g>"); dzDocCommit();
+      doc.addLayer("Fondo"); doc.goTo(1); dzCanvasSet(${JSON.stringify('<g data-low-art="colour"></g><g data-low-art="line">' + sueltos + "</g>")}); dzDocCommit();
+      doc.selectLayer(pelota); doc.goTo(1); dzCanvasSet(doc.drawing.content); dzSetTool("select"); return 1; })()`);
+    await wait(700);
+    await clicEn(await pantalla(P0[0] + 40, P0[1]));
+    const t0 = Date.now();
+    await clicEn(await centro(`document.getElementById("tlRecorrido")`));
+    let espera = null;
+    for (let i = 0; i < 60; i++) { if (await ev(`!!document.getElementById("recDesc") && /marcas/.test(document.getElementById("recDesc").textContent)`)) { espera = Date.now() - t0; break; } await wait(100); }
+    assert.ok(espera != null, "con una referencia pesada la ventana no apareció en 6 s · " + await ev(`[...document.querySelectorAll("#dzStatusbar span")].map(s => s.textContent).pop()`));
+    assert.ok(espera < 2500, "con una referencia pesada la ventana tardó " + espera + " ms en aparecer");
+    assert.ok(/15 marcas/.test(await ev(`document.getElementById("recDesc").textContent`)), "con el recorrido de pincel no encontró las 15 marcas: " + await ev(`document.getElementById("recDesc").textContent`));
+    await ev("closeModal(), 1");
 
     assert.deepEqual(errores, [], "errores de JavaScript: " + errores.join(" | "));
-    console.log("E2E seguir un recorrido OK " + JSON.stringify({ desc, cuadros: numeros.length, giro5: g5.giro }));
+    console.log("E2E seguir un recorrido OK " + JSON.stringify({ desc, cuadros: numeros.length, giro5: g5.giro, juntos: descJuntos, pesadaMs: espera }));
   } finally { ws.close(); await fetch(endpoint + "/json/close/" + tab.id).catch(() => {}); }
 }
 main().catch((e) => { console.error(e.stack || String(e)); process.exit(1); });

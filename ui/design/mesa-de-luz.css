@@ -77,3 +77,11 @@
    Los fantasmas del pasado y del futuro se esconden mientras se reproduce; las
    capas de la mesa (dz-capa) usan la misma marca y tienen que seguir viéndose. */
 #dzCanvas.dz-reproduciendo g.dz-onion:not(.dz-capa):not(.dz-capa-defs) { display: none; }
+
+/* ── la capa activa oculta (animation/capa-oculta.js): se esconde el DIBUJO
+   de la mesa; el papel, las guías y las otras capas (dz-onion) siguen ── */
+#dzCanvas.capa-activa-oculta > svg > *:not(.dz-onion):not(.dz-penui):not([data-low-page]):not(defs):not(style):not(.dz-vp-guides):not([data-low="ruler-guide"]) { visibility: hidden; }
+/* el ojo del panel de Capas: antes un span vacío de 18×0 px, invisible e intocable */
+.dz-lay-row .dz-eye.dz-ojo { display: inline-grid; place-items: center; min-width: 18px; min-height: 18px; cursor: pointer; }
+.dz-lay-row .dz-eye.dz-ojo .ico { width: 13px; height: 13px; }
+.dz-lay-row .dz-eye.dz-ojo:hover { opacity: 1 !important; }

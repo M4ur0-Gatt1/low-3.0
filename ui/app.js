@@ -3689,7 +3689,7 @@ function dzPivotClick(e) {
     return dzSetStatus("Ahí no hay ninguna pieza · elegí primero la pieza o el hueso, o hacé clic encima del dibujo");
   }
   let target = el;
-  const grp = el.closest && el.closest('#dzCanvas svg > g:not(.dz-onion):not([data-low-art])');
+  const grp = el.closest && el.closest('#dzCanvas svg > g:not(.dz-onion):not([data-low-art]), #dzCanvas svg > g[data-low-art] > g:not(.dz-onion)');   // en un .low el grupo vive en su plano
   if (grp && !e.altKey) target = grp;            // en un rig, la parte suele ser un grupo
   if (target.tagName.toLowerCase() === "svg") return;
   dzSnapshot();
@@ -3856,7 +3856,7 @@ function dzPointerDown(e) {
   if (el.closest && el.closest("[data-locked]")) { dzDeselect(); return; }   // capa bloqueada 🔒
   // clic dentro de un grupo real (<g> guardado): seleccionar el GRUPO (como
   // Illustrator); doble clic entraría al hijo — acá con Shift+clic alcanza
-  const grp = el.closest && el.closest('#dzCanvas svg > g:not(.dz-onion):not([data-low-art])');
+  const grp = el.closest && el.closest('#dzCanvas svg > g:not(.dz-onion):not([data-low-art]), #dzCanvas svg > g[data-low-art] > g:not(.dz-onion)');   // en un .low el grupo vive en su plano
   if (grp && DZ.tool !== "direct") el = grp; el = dzAtomicArtwork(el); // generated brush marks stay together
   e.preventDefault();
   dzCapturePointer(e);
@@ -4261,7 +4261,7 @@ function dzHandleDown(e) {
 }
 
 function dzDeleteSelected() {
-  if (!DZ.sel && !(DZ.multi || []).length) return;
+  if (!DZ.sel && !(DZ.multi || []).length) return dzSetStatus("Elegí con la flecha lo que querés borrar");   // antes volvía callado: «apreté y no pasó nada»
   dzSnapshot();
   const activeWillDisappear = DZ.activeLayer &&
     ((DZ.multi || []).includes(DZ.activeLayer) || DZ.sel === DZ.activeLayer || DZ.sel?.contains?.(DZ.activeLayer));
@@ -4814,7 +4814,7 @@ function dzMarkDirty() {
 
 /* duplicar el elemento seleccionado (con un pequeño corrimiento para verlo) */
 function dzDuplicate() {
-  if (!DZ.sel) return;
+  if (!DZ.sel) return dzSetStatus("Elegí con la flecha lo que querés duplicar");
   dzSnapshot();
   const c = DZ.sel.cloneNode(true);
   c.classList.remove("dz-sel");
@@ -14460,9 +14460,9 @@ function dzLayerRow(el, depth) {
   //  visibilidad
   const hidden = el.getAttribute("display") === "none";
   const eye = document.createElement("span");
-  eye.className = "dz-eye"; eye.textContent = hidden ? "◌" : "";
+  eye.className = "dz-eye dz-ojo"; eye.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#' + (hidden ? "i-eye-off" : "i-eye") + '"/></svg>';   // antes, visible = span VACÍO de 18×0 px: no se veía ni se podía tocar
   eye.title = hidden ? "Mostrar" : "Ocultar";
-  if (hidden) eye.style.opacity = ".4";
+  if (!hidden) eye.style.opacity = ".55";
   eye.onclick = (e) => { e.stopPropagation(); dzSnapshot();
     hidden ? el.removeAttribute("display") : el.setAttribute("display", "none");
     dzMarkDirty(); dzBuildLayers(); };

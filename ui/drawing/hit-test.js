@@ -191,6 +191,25 @@ function dzHitCandidatos(svg) {
   return salida;
 }
 
+/* LO MOVIDO SE TOCA DONDE SE VE (oct-2026). `isPointInFill` y compañía
+   reciben el punto en las coordenadas PROPIAS del elemento, antes de su
+   `transform` y de los de sus grupos. Medido: un rect con
+   transform="translate(0 50)" dentro de un grupo trasladado contesta true en
+   (5,5) y false donde se lo ve. Así, lo movido con la flecha blanca, lo de un
+   grupo movido y lo rotado o escalado se tocaba donde ESTUVO: apretar en ese
+   hueco lo arrastraba en vez de empezar el marco, y apretar encima empezaba
+   un marco. Se lleva el punto (y la holgura) al espacio de cada nodo. */
+function dzHitLocal(nodo, punto, raizInversa) {
+  let m;
+  try { const c = raizInversa && nodo.getScreenCTM(); if (!c) return { punto, escala: 1 }; m = raizInversa.multiply(c); }
+  catch (_) { return { punto, escala: 1 }; }
+  if (Math.abs(m.a - 1) < 1e-9 && Math.abs(m.d - 1) < 1e-9 && Math.abs(m.b) < 1e-9 && Math.abs(m.c) < 1e-9
+      && Math.abs(m.e) < 1e-6 && Math.abs(m.f) < 1e-6) return { punto, escala: 1 };
+  const escala = Math.sqrt(Math.abs(m.a * m.d - m.b * m.c));
+  if (!(escala > 1e-9)) return null;   // aplastado a cero: no se ve, no se toca
+  return { punto: punto.matrixTransform(m.inverse()), escala };
+}
+
 /**
  * El elemento de arte que está ADELANTE en ese punto de la pantalla.
  * @returns {Element|null}
@@ -203,11 +222,14 @@ function dzHitTest(x, y) {
   // al alejarse, cuatro píxeles de pantalla son muchas unidades del dibujo.
   const zoom = (typeof DZ !== "undefined" && DZ.zoom) ? DZ.zoom : 1;
   const holgura = DZ_HIT_HOLGURA / Math.max(0.05, zoom);
+  let raizInversa = null;
+  try { const r = svg.getScreenCTM(); raizInversa = r && r.inverse(); } catch (_) { /* sin pantalla */ }
   const candidatos = dzHitCandidatos(svg);
   for (let i = candidatos.length - 1; i >= 0; i--) {
     const n = candidatos[i];
     if ((n.tagName || "").toLowerCase() === "g") continue;   // los grupos no se prueban solos
-    if (dzHitTocado(n, punto, holgura)) return dzAtomicArtwork(n);
+    const local = dzHitLocal(n, punto, raizInversa);
+    if (local && dzHitTocado(n, local.punto, holgura / local.escala)) return dzAtomicArtwork(n);
   }
   return null;
 }

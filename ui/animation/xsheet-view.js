@@ -425,9 +425,12 @@
         b.appendChild(x); return x;
       };
       btn("⏮", "Primer frame (Inicio)", () => pb.first());
-      btn("◀", "Dibujo anterior (↑)", () => pb.stepDrawing(-1));
-      btn(pb.playing ? "⏸" : "▶", "Reproducir / parar (Espacio)", () => pb.toggle(), pb.playing);
-      btn("▶|", "Dibujo siguiente (↓)", () => pb.stepDrawing(+1));
+      // la tecla sale del mapa de atajos (panels/atajos.js): decía «(↑)» y
+      // «(Espacio)», que hoy mueven lo seleccionado y son la mano
+      const tecla = (act) => { try { const k = DZ.keymap && DZ.keymap[act]; return k && global.dzAtajoEtiqueta ? " (" + global.dzAtajoEtiqueta(k) + ")" : ""; } catch (_) { return ""; } };
+      btn("◀", "Dibujo anterior" + tecla("prevdrawing"), () => pb.stepDrawing(-1));
+      btn(pb.playing ? "⏸" : "▶", "Reproducir / parar" + tecla("play"), () => pb.toggle(), pb.playing);
+      btn("▶|", "Dibujo siguiente" + tecla("nextdrawing"), () => pb.stepDrawing(+1));
       btn("⏭", "Último frame (Fin)", () => pb.last());
       btn("↻", "Repetir (L)", () => pb.setLoop(!pb.loop), pb.loop);
 
@@ -467,7 +470,13 @@
       const doc = this.doc;
       const b = document.createElement("div");
       b.className = "xs2-bar";
-      const timing = (op, ...args) => doc.applySelectedTiming(op, this.sel || doc.cellSelection, ...args);
+      // si no cambió nada, decir por qué (la auditoría de uso los marcaba
+      // «apretás y no pasa nada»): sin rango actúan sobre UN cuadro
+      const timing = (op, ...args) => { const rango = this.sel || doc.cellSelection, ok = doc.applySelectedTiming(op, rango, ...args);
+        if (!ok && typeof global.dzSetStatus === "function") global.dzSetStatus(rango && rango.to > rango.from
+          ? "Ese rango ya estaba así: no había nada que cambiar"
+          : "Elegí un rango de celdas (arrastrá sobre la planilla): sin rango actúa sólo sobre el cuadro actual");
+        return ok; };
       const btn = (txt, title, fn) => {
         const x = document.createElement("button");
         x.className = "xs2-op"; x.textContent = txt; x.title = title;

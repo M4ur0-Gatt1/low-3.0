@@ -31,9 +31,13 @@
       }
       // de DIBUJO en dibujo, saltando los sostenidos (antes ↑ ↓; ahora Alt+, Alt+.)
       if (que === "prevdrawing" || que === "nextdrawing") {
-        const dir = que === "prevdrawing" ? -1 : 1;
-        if (pb && typeof pb.stepDrawing === "function") return pb.stepDrawing(dir);
-        return typeof doc.stepDrawing === "function" ? doc.stepDrawing(dir) : doc.step(dir);
+        const dir = que === "prevdrawing" ? -1 : 1, antes = doc.frame;
+        const r = (pb && typeof pb.stepDrawing === "function") ? pb.stepDrawing(dir)
+          : (typeof doc.stepDrawing === "function" ? doc.stepDrawing(dir) : doc.step(dir));
+        // en el primer dibujo (o el último) no hay adónde ir: decirlo, no callar
+        if (doc.frame === antes && typeof global.dzSetStatus === "function")
+          global.dzSetStatus(dir < 0 ? "No hay un dibujo anterior en esta capa" : "No hay un dibujo siguiente en esta capa");
+        return r;
       }
       if (que === "first") {
         if (pb) return pb.first();
