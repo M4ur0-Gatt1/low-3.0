@@ -4893,7 +4893,7 @@ function _showGuideLine(svg, x1, y1, x2, y2, angle) {
   GUIDE_LINE.setAttribute("stroke-width", "1");
   GUIDE_LINE.setAttribute("stroke-dasharray", "5,5");
   GUIDE_LINE.setAttribute("opacity", GUIDE_OPACITY);
-  GUIDE_LINE.setAttribute("class", "dz-guide-line");
+  GUIDE_LINE.setAttribute("class", "dz-guide-line dz-penui");   // guía de pantalla: no se guarda ni la adopta el plano Línea
   GUIDE_LINE.setAttribute("data-angle", angle);
   svg.appendChild(GUIDE_LINE);
   GUIDE_ACTIVE = true;
@@ -6276,7 +6276,7 @@ function dzRulerDown(e) {
       RULER.el.setAttribute("stroke-linecap", "round");
       RULER.el.setAttribute("stroke-dasharray", "6 4");
       RULER.el.setAttribute("opacity", "0.7");
-      RULER.el.setAttribute("data-low", "ruler-guide");
+      RULER.el.setAttribute("data-low", "ruler-guide"); RULER.el.setAttribute("class", "dz-penui");   // guía de pantalla: sin esto el plano Línea la adoptaba y la banda punteada quedaba GUARDADA en el dibujo
       svg.appendChild(RULER.el);
     }
     dzRulerUpdateElastic(p);
@@ -6300,7 +6300,7 @@ function dzRulerDown(e) {
       ln.setAttribute("stroke", DZ.drawColor || "#F0450E");
       ln.setAttribute("stroke-width", DZ.drawW || 4);
       ln.setAttribute("stroke-linecap", "round");
-      svg.appendChild(ln);
+      dzArtAppend(svg, ln, "line"); if (typeof dzStyleTag === "function") dzStyleTag(ln, "ink");   // en un .low va al plano Línea y con su estilo: suelta en el svg se perdía al guardar
       dzMirrorClone(ln);
     }
     dzMarkDirty(); dzBuildLayers();
@@ -11352,7 +11352,7 @@ async function dzPerfBake() {
 }
 
 /* ══ animación de ELEMENTOS (pegs de Toon Boom, versión LOW) ═══════════
-   🏃 interpolación de movimiento: fijás inicio, movés el elemento al final
+   ↦ interpolación de movimiento: fijás inicio, movés el elemento al final
    y LOW genera los cuadros del recorrido con la curva elegida.
    ⏹ grabación en vivo: arrastrás el elemento y el recorrido REAL de tu mano
    (con sus tiempos) se convierte en cuadros — actuación en vivo. ══ */
@@ -11406,22 +11406,22 @@ async function dzTweenFrames(baseSvgText, elPath, offsets) {
   if (alDoc) { const t = dzCuadrosAlDocumento(DZ.doc, nuevos, DZ.doc.frame || 1); if (t && t.error) return t.error; dzDocGoTo(t.desde); }   return null;
 }
 async function dzMoveTween() {
-  if (!DZ.anim) return sysMsg("🏃 Abrí la animación (🎞) primero");
+  if (!DZ.anim) return sysMsg("↦ Abrí la animación (🎞) primero");
   if (!DZ.moveT) {
-    if (!DZ.sel) return dzSetStatus("🏃 Seleccioná el elemento a animar y tocá 🏃 para fijar el INICIO");
+    if (!DZ.sel) return dzSetStatus("↦ Elegí el elemento con la flecha y tocá «Interpolación de movimiento» (↦, en la línea de tiempo) para fijar el INICIO");
     const path = dzElPath(DZ.sel);
-    if (!path) return dzSetStatus("🏃 Ese elemento no se puede animar (no cuelga del lienzo)");
+    if (!path) return dzSetStatus("↦ Ese elemento no se puede animar (no cuelga del lienzo)");
     DZ.moveT = { el: DZ.sel, path, start: dzReadPos(DZ.sel) };
     $("#tlMove").classList.add("rec");
-    dzSetStatus("🏃 INICIO fijado. Arrastrá el elemento a su posición FINAL y tocá 🏃 otra vez.");
+    dzSetStatus("↦ INICIO fijado. Arrastrá el elemento a su posición FINAL y tocá «Interpolación de movimiento» (↦) otra vez.");
     return;
   }
   const t = DZ.moveT; DZ.moveT = null; $("#tlMove").classList.remove("rec");
-  if (!t.el.isConnected) return dzSetStatus("🏃 El elemento ya no está — cancelo");
+  if (!t.el.isConnected) return dzSetStatus("↦ El elemento ya no está — cancelo");
   const [dx, dy] = dzPosDelta(t.start, dzReadPos(t.el));
   if (Math.abs(dx) + Math.abs(dy) < 2)
-    return dzSetStatus("🏃 No lo moviste de lugar — cancelo. Fijá inicio, arrastrá y volvé a tocar 🏃.");
-  openModal(`<h2>🏃 Interpolación de movimiento</h2>
+    return dzSetStatus("↦ No lo moviste de lugar — cancelo. Fijá el inicio, arrastrá y volvé a tocar «Interpolación de movimiento» (↦).");
+  openModal(`<h2>↦ Interpolación de movimiento</h2>
     <div class="sub">Recorrido: ${Math.round(Math.hypot(dx, dy))} unidades. El elemento vuelve al inicio
     y se generan los cuadros del viaje (el último queda en la posición final).</div>
     <div class="dz-style-row">
@@ -11437,7 +11437,7 @@ async function dzMoveTween() {
     </div>
     <div class="m-actions">
       <button class="ghost" id="mCancel">Cancelar</button>
-      <button class="primary" id="mtGo">🏃 Generar</button>
+      <button class="primary" id="mtGo">↦ Generar</button>
     </div>`);
   $("#mCancel").onclick = () => { closeModal(); };
   $("#mtGo").onclick = async () => {
@@ -11449,7 +11449,7 @@ async function dzMoveTween() {
     dzMarkDirty();
     await dzPersist();
     const base = dzSerialize($("#dzCanvas").querySelector(":scope > svg"));
-    dzSetStatus("🏃 Generando " + n + " cuadros del recorrido…");
+    dzSetStatus("↦ Generando " + n + " cuadros del recorrido…");
     const offs = [];
     for (let k = 1; k <= n; k++) offs.push([dx * fn(k / n), dy * fn(k / n)]);
     const err = await dzTweenFrames(base, t.path, offs);
@@ -11457,7 +11457,7 @@ async function dzMoveTween() {
     DZ.anim.cache = {};
     try { S.tree = (await api.refresh_tree()).tree; renderTree(); } catch (e) { /* */ }
     await dzTimelineRefresh(); dzOnionUpdate(); dzTimelineBadges();
-    dzSetStatus("🏃 " + n + " cuadros generados — reproducí (Enter) para ver el movimiento.");
+    dzSetStatus("↦ " + n + " cuadros generados — reproducí (Enter) para ver el movimiento.");
   };
 }
 /* ⏹ grabación en vivo: armás la grabación, arrastrás el elemento y el

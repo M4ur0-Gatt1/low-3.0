@@ -1,0 +1,16 @@
+/* MESA SOLA (F) y MODO DIBUJO (Tab) — ui/workspace/mesa-sola.js
+   No hay lista de paneles: en cada nivel del camino hasta la hoja se esconde
+   lo que NO la contiene. Un panel que se sume mañana queda escondido igual.
+   Sólo se esconde lo de AFUERA de cada nivel, nunca un panel por dentro: los
+   muelles miran si sus paneles se ven, y si los escondiéramos uno por uno se
+   cerrarían solos y no volverían (medido con la X-sheet). */
+#designView.dz-mesa-sola :has(#dzCanvas) > :not(:has(#dzCanvas)):not(#dzCanvas),
+#designView.dz-mesa-sola > :not(:has(#dzCanvas)):not(#dzCanvas):not(.dz-mesa-salir) { display: none !important; }
+
+#designView.dz-zen :has(#dzCanvas) > :not(:has(#dzCanvas)):not(:has(.dz-tools)):not(#dzCanvas):not(.dz-tools),
+#designView.dz-zen > :not(:has(#dzCanvas)):not(:has(.dz-tools)):not(.dz-mesa-salir),
+#designView.dz-zen :has(.dz-tools):not(:has(#dzCanvas)) > :not(.dz-tools):not(:has(.dz-tools)) { display: none !important; }
+
+body.dz-mesa-sola-activa .dz-panel-floating { display: none !important; }
+#designView.dz-mesa-sola .dz-canvas, #designView.dz-zen .dz-canvas { background: #101012; }
+.dz-mesa-salir { position: fixed; top: 10px; right: 12px; z-index: 50; }

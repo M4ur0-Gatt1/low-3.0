@@ -330,6 +330,49 @@ def t_incluidas_del_repo():
         assert j["brushes"] and sum(1 for b in j["brushes"] if b.get("tipData")) >= len(j["brushes"]) // 2, f.name + ": pocas puntas"
 prueba("las bibliotecas que vienen con LOW declaran licencia CC0, autor y fuente, y están en CREDITOS.md", t_incluidas_del_repo)
 
+def t_propias():
+    """Una biblioteca PROPIA: se guarda como archivo, se lista marcada como
+    propia, sobrevive a reabrir, se exporta a un .lowbrush que se vuelve a
+    instalar igual, y no puede pisar a una incluida."""
+    import tempfile, json as J
+    with tempfile.TemporaryDirectory() as d:
+        incl = Path(d) / "incluidas"; incl.mkdir()
+        (incl / "regalo-1234abcd.lowbrush").write_text(J.dumps({"id": "regalo-1234abcd", "name": "Regalo", "brushes": [{"name": "x"}]}), encoding="utf-8")
+        B = BI.Bibliotecas(Path(d) / "pinceles", incluidas=incl)
+        mios = [{"id": "mio-1", "name": "Mi tinta", "size": 7, "engine": "vector"}, {"id": "mio-2", "name": "Mi sello", "engine": "raster", "tipData": "data:image/png;base64,AAAA"}, {"name": ""}]
+        r = B.guardar_propia("mis-pinceles", "Mis pinceles", mios)
+        assert r == {"id": "mis-pinceles", "name": "Mis pinceles", "count": 2}, r
+        lista = {l["id"]: l for l in BI.Bibliotecas(Path(d) / "pinceles", incluidas=incl).listar()}
+        assert lista["mis-pinceles"]["own"] is True and lista["mis-pinceles"]["count"] == 2, lista
+        assert lista["regalo-1234abcd"]["own"] is False
+        j = B.cargar("mis-pinceles")
+        assert [p["id"] for p in j["brushes"]] == ["mio-1", "mio-2"], "los ids propios no se conservan"
+        assert not list((Path(d) / "pinceles").glob("*.tmp")), "quedó un temporal"
+        # volver a guardar reemplaza (no suma)
+        B.guardar_propia("mis-pinceles", "Mis pinceles", mios[:1])
+        assert len(B.cargar("mis-pinceles")["brushes"]) == 1
+        # exportar → reinstalar igual
+        dest = Path(d) / "compartir.lowbrush"
+        e = B.exportar("mis-pinceles", dest)
+        assert e["count"] == 1 and dest.exists()
+        otro = BI.Bibliotecas(Path(d) / "otra")
+        info = otro.instalar(dest.name, dest.read_bytes())
+        assert info["count"] == 1 and otro.cargar(info["id"])["brushes"][0]["name"] == "Mi tinta", info
+        # una incluida no se pisa
+        try:
+            B.guardar_propia("regalo-1234abcd", "Trampa", mios)
+            raise AssertionError("dejó pisar una incluida")
+        except BI.ErrorDeFormato:
+            pass
+        # nombres de archivo peligrosos no pasan
+        for malo in ("../x", "Mis Pinceles", ""):
+            try:
+                B.guardar_propia(malo, "x", mios)
+                raise AssertionError("aceptó el id " + repr(malo))
+            except BI.ErrorDeFormato:
+                pass
+prueba("una biblioteca propia se guarda, se lista, se exporta y se reinstala; no pisa incluidas", t_propias)
+
 print(f"IMPORTADORES DE PINCELES: {total} pruebas, {total - len(fallas)} bien, {len(fallas)} fallan")
 for f in fallas:
     print("FALLA:", f)

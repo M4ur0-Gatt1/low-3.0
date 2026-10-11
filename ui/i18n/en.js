@@ -1256,3 +1256,37 @@ LOW_I18N.registrar("en", "English", {
   "Los efectos viajan con el dibujo del plano; la profundidad y la transformación sí aceptan claves por cuadro con Auto-key.": "Effects travel with the plane's drawing; depth and transform do accept per-frame keys with Auto-key.",
   "Mirar por la cámara de la escena: exactamente el cuadro que se exporta. Arrastrá para panear y ver el paralaje · rueda para dolly · con Auto-key deja clave": "Look through the scene camera: exactly the frame that gets exported. Drag to pan and see the parallax · wheel to dolly · with Auto-key it sets a key",
 });
+
+/* Mis pinceles (drawing/mis-pinceles.js) */
+LOW_I18N.registrar("en", "English", {
+  "Mis pinceles": "My brushes", "Mis pinceles · {}": "My brushes · {}",
+  "Nuevo pincel": "New brush", "Punta desde la selección": "Tip from selection", "Punta desde imagen…": "Tip from image…", "Exportar…": "Export…",
+  "Renombrar": "Rename", "Borrar": "Delete", "Renombrar pincel": "Rename brush", "Borrar pincel": "Delete brush", "Cancelar": "Cancel",
+  "Un pincel redondo básico en Mis pinceles, para empezar de cero": "A basic round brush in My brushes, to start from scratch",
+  "Lo que está elegido en la mesa se vuelve la punta de un pincel nuevo: lo oscuro es tinta, lo claro es transparente": "What's selected on the sheet becomes the tip of a new brush: dark is ink, light is transparent",
+  "Un PNG o JPG se vuelve la punta de un pincel nuevo: lo oscuro es tinta, lo claro es transparente": "A PNG or JPG becomes the tip of a new brush: dark is ink, light is transparent",
+  "Guardar esta biblioteca como .lowbrush para compartirla: en otra máquina se instala con «Instalar biblioteca…»": "Save this library as .lowbrush to share it: on another machine, install it with «Install library…»",
+  "Borrar este pincel de Mis pinceles": "Delete this brush from My brushes",
+  "{} pincel tuyo": "{} brush of yours", "{} pinceles tuyos": "{} brushes of yours",
+  "«{}» se borra de Mis pinceles. Los trazos que ya hiciste con él no cambian.": "«{}» will be deleted from My brushes. Strokes you already made with it don't change.",
+  "Pincel nuevo {}": "New brush {}", "Punta propia {}": "Custom tip {}", "{} · personalizado": "{} · custom", "{} · copia": "{} · copy",
+  "Pincel nuevo en Mis pinceles: ajustalo con los deslizadores": "New brush in My brushes: adjust it with the sliders",
+  "Pincel nuevo con la punta de tu dibujo · está en Mis pinceles": "New brush with your drawing as its tip · it's in My brushes",
+  "Elegí con la flecha lo que querés usar como punta, y después tocá «Punta desde la selección»": "Select what you want to use as a tip with the arrow, then press «Tip from selection»",
+  "Copia en Mis pinceles: retocala con los deslizadores": "Copy in My brushes: adjust it with the sliders",
+  "Lo retocado quedó como «{}» en Mis pinceles: el original no cambia": "Your changes were saved as «{}» in My brushes: the original doesn't change",
+  "Pincel renombrado: {}": "Brush renamed: {}", "Borré «{}» de Mis pinceles": "Deleted «{}» from My brushes",
+});
+
+/* Mesa sola (F), modo dibujo (Tab) e interpolación de movimiento (↦) */
+LOW_I18N.registrar("en", "English", {
+  "Mesa sola": "Canvas only", "Mesa sola (sólo la hoja, como en Photoshop)": "Canvas only (just the sheet, like Photoshop)",
+  "✕ volver a los paneles (F)": "✕ back to the panels (F)", "✕ salir del modo dibujo (Tab)": "✕ exit drawing mode (Tab)",
+  "Mesa sola · F vuelve a mostrar todo": "Canvas only · F shows everything again",
+  "Modo dibujo: la hoja y las herramientas · Tab vuelve a mostrar todo": "Drawing mode: the sheet and the tools · Tab shows everything again",
+  "Ajustar a pantalla (Ctrl+0) · 0 = 100% · espacio o mano (H) panea": "Fit to screen (Ctrl+0) · 0 = 100% · space or hand (H) pans",
+  "↦ Elegí el elemento con la flecha y tocá «Interpolación de movimiento» (↦, en la línea de tiempo) para fijar el INICIO": "↦ Select the element with the arrow and press «Motion tween» (↦, on the timeline) to set the START",
+  "↦ INICIO fijado. Arrastrá el elemento a su posición FINAL y tocá «Interpolación de movimiento» (↦) otra vez.": "↦ START set. Drag the element to its END position and press «Motion tween» (↦) again.",
+  "↦ Interpolación de movimiento": "↦ Motion tween", "↦ Generar": "↦ Generate",
+  "↦ {} cuadros generados — reproducí (Enter) para ver el movimiento.": "↦ {} frames generated — play (Enter) to see the motion.",
+});

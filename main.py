@@ -51,7 +51,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.17.0"
+LOW_VERSION = "3.18.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -1756,6 +1756,39 @@ class Api:
         try:
             return brush_import.Bibliotecas(data_dir() / "pinceles", incluidas=_carpeta_pinceles_incluidos()).cargar(str(lib_id))
         except (OSError, ValueError) as e:
+            return {"error": str(e)}
+
+    def save_own_brush_library(s, lib):
+        """Guarda una biblioteca PROPIA ({id, name, brushes}) como archivo en
+        %APPDATA%/LOW/pinceles. Los pinceles que uno hace en el Estudio viven
+        ahí y no en el almacén del navegador (unos 5 MB, sin archivo a la vista)."""
+        import brush_import
+        lib = lib or {}
+        try:
+            return brush_import.Bibliotecas(data_dir() / "pinceles", incluidas=_carpeta_pinceles_incluidos()).guardar_propia(
+                str(lib.get("id") or ""), lib.get("name"), lib.get("brushes") or [], lib.get("author"))
+        except (OSError, ValueError, brush_import.ErrorDeFormato) as e:
+            return {"error": str(e)}
+
+    def export_brush_library(s, lib_id):
+        """Exporta una biblioteca a un .lowbrush elegido con el diálogo de guardar."""
+        import brush_import
+        B = brush_import.Bibliotecas(data_dir() / "pinceles", incluidas=_carpeta_pinceles_incluidos())
+        try:
+            nombre = (B.cargar(str(lib_id)).get("name") or str(lib_id)).strip()
+        except (OSError, ValueError, brush_import.ErrorDeFormato) as e:
+            return {"error": str(e)}
+        archivo = re.sub(r'[<>:"/\|?*]+', "-", nombre)[:60] + ".lowbrush"
+        try:
+            r = s._window.create_file_dialog(webview.SAVE_DIALOG, directory=s.ws or "", save_filename=archivo,
+                                             file_types=("Biblioteca de pinceles de LOW (*.lowbrush)",))
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+        if not r:
+            return {"cancel": True}
+        try:
+            return B.exportar(str(lib_id), Path(r[0] if isinstance(r, (list, tuple)) else str(r)))
+        except (OSError, ValueError, brush_import.ErrorDeFormato) as e:
             return {"error": str(e)}
 
     def remove_brush_library(s, lib_id):

@@ -54,7 +54,7 @@ async function main() {
       cards:studio.querySelectorAll(".bst-brush").length,controls:studio.querySelectorAll(".bst-controls input").length,selects:studio.querySelectorAll(".bst-controls select").length,preview:studio.querySelector(".bst-preview svg").childElementCount};
     DZ_BRUSH_STUDIO.filter="all"; DZ_BRUSH_STUDIO.selected="animation-pencil"; DZ_BRUSH_STUDIO.render();
     const countBeforeEdit=LOW.drawing.brushes.all().length, sizeControl=studio.querySelector('[data-p="size"]'); sizeControl.value="17"; sizeControl.dispatchEvent(new Event("input",{bubbles:true}));
-    studioState.customCreated=LOW.drawing.brushes.all().length===countBeforeEdit+1&&DZ.brushPreset.startsWith("custom-");
+    studioState.customCreated=LOW.drawing.brushes.all().length===countBeforeEdit+1&&LOW.drawing.brushes.get(DZ.brushPreset)?.libraryId==="mis-pinceles";   // desde la 3.17 la copia retocada vive en Mis pinceles (un archivo), no como custom- en el almacén del navegador
     DZ.pressureMin=.1;DZ.pressureMax=.9;
     // El trazo del pincel es una cinta RELLENA: si se la etiqueta con el papel
     // "paint" queda atada al estilo Relleno (blanco por defecto) y la hoja de

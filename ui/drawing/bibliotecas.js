@@ -34,12 +34,16 @@
     if (!B || !lib || !Array.isArray(lib.brushes)) return 0;
     // los de una versión anterior de la misma biblioteca se van
     for (const p of B.all()) if (p.libraryId === lib.id) B.presets.delete(p.id);
+    // los de una biblioteca PROPIA conservan su id guardado: numerarlos por
+    // posición cambiaba el pincel elegido al borrar o agregar uno
+    const propia = !!(lib.own || (info && info.own));
     lib.brushes.forEach((p, i) => {
-      B.presets.set(`lib-${lib.id}-${i + 1}`, { ...p, id: `lib-${lib.id}-${i + 1}`, cat: "lib:" + lib.id,
-        libraryId: lib.id, libraryName: lib.name, fromLibrary: true, imported: true });
+      const id = propia && p.id ? p.id : `lib-${lib.id}-${i + 1}`;
+      B.presets.set(id, { ...p, id, cat: "lib:" + lib.id,
+        libraryId: lib.id, libraryName: lib.name, fromLibrary: true, imported: !propia, own: propia });
       if (drawing.bitmap && drawing.bitmap.prepararPunta) drawing.bitmap.prepararPunta(p);
     });
-    instaladas.set(lib.id, { id: lib.id, name: lib.name, count: lib.brushes.length, format: lib.format,
+    instaladas.set(lib.id, { id: lib.id, name: lib.name, count: lib.brushes.length, format: lib.format, own: propia,
       builtin: !!(info && info.builtin), license: (info && info.license) || lib.license || null, author: (info && info.author) || lib.author || null });
     return lib.brushes.length;
   }
@@ -98,11 +102,13 @@
     try { if (typeof dzToolOptsRender === "function") dzToolOptsRender(); } catch (_) { /* sin barra todavía */ }
   }
 
-  drawing.bibliotecas = { registrar, cargarTodas, quitar, instalar, instaladas };
+  // `listo`: la promesa de la primera carga (Mis pinceles espera a que estén todas)
+  let avisarListo; const listo = new Promise((r) => { avisarListo = r; });
+  drawing.bibliotecas = { registrar, cargarTodas, quitar, instalar, instaladas, refrescar, listo };
   // el botón «Importar…» del Estudio y el menú usan este nombre
   global.dzImportBrushes = instalar;
 
-  const arrancar = () => setTimeout(cargarTodas, 0);
+  const arrancar = () => setTimeout(() => cargarTodas().catch(() => 0).then((n) => avisarListo(n)), 0);
   if (typeof document !== "undefined" && document.readyState === "loading") document.addEventListener("DOMContentLoaded", arrancar, { once: true });
   else arrancar();
 })(typeof window !== "undefined" ? window : globalThis);

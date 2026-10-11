@@ -1229,3 +1229,37 @@ LOW_I18N.registrar("pt", "Português", {
   "Mirar por la cámara de la escena: exactamente el cuadro que se exporta. Arrastrá para panear y ver el paralaje · rueda para dolly · con Auto-key deja clave": "Olhar pela câmera da cena: exatamente o quadro que é exportado. Arraste para panoramizar e ver o paralaxe · roda para dolly · com Auto-key cria chave",
   "Frame {}": "Quadro {}",
 });
+
+/* Mis pinceles (drawing/mis-pinceles.js) */
+LOW_I18N.registrar("pt", "Português", {
+  "Mis pinceles": "Meus pincéis", "Mis pinceles · {}": "Meus pincéis · {}",
+  "Nuevo pincel": "Novo pincel", "Punta desde la selección": "Ponta da seleção", "Punta desde imagen…": "Ponta de imagem…", "Exportar…": "Exportar…",
+  "Renombrar": "Renomear", "Borrar": "Apagar", "Renombrar pincel": "Renomear pincel", "Borrar pincel": "Apagar pincel", "Cancelar": "Cancelar",
+  "Un pincel redondo básico en Mis pinceles, para empezar de cero": "Um pincel redondo básico em Meus pincéis, para começar do zero",
+  "Lo que está elegido en la mesa se vuelve la punta de un pincel nuevo: lo oscuro es tinta, lo claro es transparente": "O que está selecionado na folha vira a ponta de um pincel novo: o escuro é tinta, o claro é transparente",
+  "Un PNG o JPG se vuelve la punta de un pincel nuevo: lo oscuro es tinta, lo claro es transparente": "Um PNG ou JPG vira a ponta de um pincel novo: o escuro é tinta, o claro é transparente",
+  "Guardar esta biblioteca como .lowbrush para compartirla: en otra máquina se instala con «Instalar biblioteca…»": "Salvar esta biblioteca como .lowbrush para compartilhar: em outra máquina, instale com «Instalar biblioteca…»",
+  "Borrar este pincel de Mis pinceles": "Apagar este pincel de Meus pincéis",
+  "{} pincel tuyo": "{} pincel seu", "{} pinceles tuyos": "{} pincéis seus",
+  "«{}» se borra de Mis pinceles. Los trazos que ya hiciste con él no cambian.": "«{}» será apagado de Meus pincéis. Os traços que você já fez com ele não mudam.",
+  "Pincel nuevo {}": "Pincel novo {}", "Punta propia {}": "Ponta própria {}", "{} · personalizado": "{} · personalizado", "{} · copia": "{} · cópia",
+  "Pincel nuevo en Mis pinceles: ajustalo con los deslizadores": "Pincel novo em Meus pincéis: ajuste com os controles deslizantes",
+  "Pincel nuevo con la punta de tu dibujo · está en Mis pinceles": "Pincel novo com a ponta do seu desenho · está em Meus pincéis",
+  "Elegí con la flecha lo que querés usar como punta, y después tocá «Punta desde la selección»": "Selecione com a seta o que quer usar como ponta, depois toque em «Ponta da seleção»",
+  "Copia en Mis pinceles: retocala con los deslizadores": "Cópia em Meus pincéis: ajuste com os controles deslizantes",
+  "Lo retocado quedó como «{}» en Mis pinceles: el original no cambia": "O ajuste ficou como «{}» em Meus pincéis: o original não muda",
+  "Pincel renombrado: {}": "Pincel renomeado: {}", "Borré «{}» de Mis pinceles": "Apaguei «{}» de Meus pincéis",
+});
+
+/* Mesa sola (F), modo dibujo (Tab) e interpolación de movimiento (↦) */
+LOW_I18N.registrar("pt", "Português", {
+  "Mesa sola": "Só a mesa", "Mesa sola (sólo la hoja, como en Photoshop)": "Só a mesa (apenas a folha, como no Photoshop)",
+  "✕ volver a los paneles (F)": "✕ voltar aos painéis (F)", "✕ salir del modo dibujo (Tab)": "✕ sair do modo desenho (Tab)",
+  "Mesa sola · F vuelve a mostrar todo": "Só a mesa · F mostra tudo de novo",
+  "Modo dibujo: la hoja y las herramientas · Tab vuelve a mostrar todo": "Modo desenho: a folha e as ferramentas · Tab mostra tudo de novo",
+  "Ajustar a pantalla (Ctrl+0) · 0 = 100% · espacio o mano (H) panea": "Ajustar à tela (Ctrl+0) · 0 = 100% · espaço ou mão (H) move a vista",
+  "↦ Elegí el elemento con la flecha y tocá «Interpolación de movimiento» (↦, en la línea de tiempo) para fijar el INICIO": "↦ Selecione o elemento com a seta e toque em «Interpolação de movimento» (↦, na linha do tempo) para fixar o INÍCIO",
+  "↦ INICIO fijado. Arrastrá el elemento a su posición FINAL y tocá «Interpolación de movimiento» (↦) otra vez.": "↦ INÍCIO fixado. Arraste o elemento até a posição FINAL e toque em «Interpolação de movimento» (↦) de novo.",
+  "↦ Interpolación de movimiento": "↦ Interpolação de movimento", "↦ Generar": "↦ Gerar",
+  "↦ {} cuadros generados — reproducí (Enter) para ver el movimiento.": "↦ {} quadros gerados — reproduza (Enter) para ver o movimento.",
+});

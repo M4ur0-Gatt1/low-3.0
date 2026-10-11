@@ -79,7 +79,8 @@
     ["zoomcentro", "Acercar al centro de la mesa", "Vista", "z", null],
     ["alejarcentro", "Alejar desde el centro de la mesa", "Vista", "alt+z", null],
     ["zoom100", "Zoom 100 %", "Vista", "0", null],
-    ["zoomfit", "Ajustar a la pantalla", "Vista", "f", null],
+    ["mesasola", "Mesa sola (sólo la hoja, como en Photoshop)", "Vista", "f", "#dzMesaSalir"],
+    ["zoomfit", "Ajustar a la pantalla (también Ctrl+0)", "Vista", "alt+f", null],
     ["rotl", "Girar la mesa a la izquierda", "Vista", "[", null],
     ["rotr", "Girar la mesa a la derecha", "Vista", "]", null],
     ["enderezar", "Enderezar la mesa", "Vista", "shift+f", null],
@@ -126,7 +127,7 @@
     ["Alt+← →", "Mover los cuadros elegidos en la línea de tiempo (sin nada elegido en la mesa)"], ["Insert", "Insertar un cuadro vacío"],
     ["Shift al soltar un trazo", "Círculo perfecto (o recta, si el trazo es abierto)"], ["Alt al soltar un trazo", "La elipse que mejor ajusta"],
     ["Supr", "Borrar lo seleccionado / vaciar la celda"], ["F5", "Sostener el dibujo (como Harmony)"],
-    ["Esc", "Cancelar lo que está en curso"],
+    ["Esc", "Cancelar lo que está en curso"], ["Ctrl+0", "Ajustar a la pantalla (como en Photoshop)"],
   ];
   const NOMBRES = { enter: "Enter", tab: "Tab", " ": "Espacio" };
 
@@ -170,6 +171,9 @@
     const env = function () {
       let guardado = {};
       try { guardado = JSON.parse(dzPrefsStorage().getItem("low.dzkeys") || "{}") || {}; } catch (_) { /* sin memoria */ }
+      // 3.18: F es «Mesa sola» (como Photoshop) y ajustar pasó a Ctrl+0 / Alt+F. Un mapa
+      // guardado antes trae zoomfit:"f" sin haberlo elegido: no tiene que ganarle
+      if (guardado.zoomfit === "f" && !("mesasola" in guardado)) delete guardado.zoomfit;
       const d = dz();
       const mapa = { ...DZ_KEY_DEFAULTS };
       // lo guardado manda; una tecla de fábrica NUEVA que choca con una que la
@@ -204,6 +208,7 @@
     alejarcentro: () => { const c = $q("#dzCanvas").getBoundingClientRect(); global.dzZoomAt(1 / 1.2, c.left + c.width / 2, c.top + c.height / 2); },
     enderezar: () => { const d = dz(); d.viewRot = 0; global.dzApplyZoom(); },
     zen: () => global.dzZenToggle(),
+    mesasola: () => global.dzMesaSolaToggle && global.dzMesaSolaToggle(),
     capas: () => global.dzLayersToggle(),
     vista3d: () => global.dz3dToggle(),
     swap: () => global.dzSwapPaint(),

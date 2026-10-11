@@ -547,3 +547,10 @@ nav:has(> [data-filter]) { flex-wrap: wrap; }
 .bmp-opciones b { min-width: 22px; font: 600 10px 'JetBrains Mono', monospace; }
 .tl2-name.tl2-bits { box-shadow: inset 2px 0 0 #33B5E8; }
 .tl2-addbits { margin-left: 3px; }
+
+/* Mis pinceles (drawing/mis-pinceles.js): la barra de crear, arriba de la lista */
+.mp-barra { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+.mp-barra button { border: 1px solid var(--line2, #303338); border-radius: 7px; background: var(--surface-raised, #292c31); color: inherit; font-size: 10px; padding: 4px 8px; cursor: pointer; }
+.mp-barra button:hover { border-color: var(--accent, #F0450E); }
+.brush-studio nav button[data-mp="filtro"] { font-weight: 600; white-space: nowrap; }
+.mp-nombre { width: 100%; box-sizing: border-box; margin: 8px 0 4px; }

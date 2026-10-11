@@ -185,6 +185,10 @@ jobs:
           node tools/check_intercalar_claves_ui.js
           node tools/check_marco_illustrator_ui.js
           node tools/check_idioma_ui.js
+          node tools/check_mis_pinceles_ui.js
+          node tools/check_color_elegido_ui.js
+          node tools/check_mesa_sola_ui.js
+          node tools/check_hilo_tensado_ui.js
           node tools/check_esculpir_ui.js
           node tools/check_capa_bitmap_ui.js
           node tools/check_pulsacion_larga_ui.js

@@ -80,9 +80,22 @@
     enter_safe_mode: async () => ({ ok: true }),
     // BIBLIOTECAS DE PINCELES (brush_import.py en la app real): en memoria
     __pinceles: {},
-    brush_libraries: async () => ({ libraries: Object.values(impl.__pinceles).map((l) => ({ id: l.id, name: l.name, format: l.format, count: l.brushes.length })) }),
+    brush_libraries: async () => {
+      try { Object.assign(impl.__pinceles, JSON.parse(sessionStorage.getItem("mock.pinceles.propios") || "{}")); } catch (_) { /* sin almacén */ }
+      return { libraries: Object.values(impl.__pinceles).map((l) => ({ id: l.id, name: l.name, format: l.format, count: l.brushes.length, own: !!l.own })) };
+    },
     brush_library: async (id) => impl.__pinceles[id] || { error: "no existe " + id },
     remove_brush_library: async (id) => { const ok = !!impl.__pinceles[id]; delete impl.__pinceles[id]; return { ok }; },
+    // Mis pinceles: en la app real es un archivo; acá sobrevive a recargar la página (sessionStorage)
+    save_own_brush_library: async (lib) => {
+      if (!/^[a-z0-9-]{1,80}$/.test(lib && lib.id || "")) return { error: "biblioteca inválida" };
+      const reg = { id: lib.id, name: lib.name || "Mis pinceles", format: "propia", own: true, brushes: (lib.brushes || []).filter((p) => p && p.name) };
+      impl.__pinceles[lib.id] = reg; impl.__guardadas = (impl.__guardadas || 0) + 1;
+      try { const t = JSON.parse(sessionStorage.getItem("mock.pinceles.propios") || "{}"); t[lib.id] = reg; sessionStorage.setItem("mock.pinceles.propios", JSON.stringify(t)); } catch (_) { /* sin almacén */ }
+      return { id: reg.id, name: reg.name, count: reg.brushes.length };
+    },
+    export_brush_library: async (id) => impl.__pinceles[id] ? (impl.__exportada = JSON.parse(JSON.stringify(impl.__pinceles[id])), { path: "C:\mock\\" + id + ".lowbrush", count: impl.__pinceles[id].brushes.length }) : { error: "no existe " + id },
+    pick_image: async () => window.__mockImagen || null,
     history: async () => [],
     ollama_models: async () => [],
     refresh_tree: async () => ({ tree: [] }),

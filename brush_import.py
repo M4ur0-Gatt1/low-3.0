@@ -793,7 +793,8 @@ class Bibliotecas:
                     vistos.add(j["id"])
                     out.append({"id": j["id"], "name": j.get("name") or j["id"], "format": j.get("format"),
                                 "count": len(j.get("brushes") or []), "source": j.get("source"),
-                                "license": j.get("license"), "author": j.get("author"), "builtin": incluida})
+                                "license": j.get("license"), "author": j.get("author"), "builtin": incluida,
+                                "own": bool(j.get("own"))})
                 except (OSError, ValueError, KeyError):
                     continue
         return out
@@ -803,6 +804,34 @@ class Bibliotecas:
         if not r.exists() and self.incluidas and (self.incluidas / r.name).exists():
             r = self.incluidas / r.name
         return json.loads(r.read_text(encoding="utf-8"))
+
+    def guardar_propia(self, id_: str, nombre: str | None, pinceles: list, autor: str | None = None) -> dict:
+        """Guarda una biblioteca PROPIA —los pinceles que la persona hizo en el
+        Estudio— como un archivo .lowbrush más, al lado de las instaladas. Se
+        escribe a un temporal y se reemplaza de una vez: un corte a mitad de
+        camino no deja la biblioteca rota."""
+        import time
+        r = self._ruta(id_)
+        if self.incluidas and (self.incluidas / r.name).exists():
+            raise ErrorDeFormato("ese nombre es de una biblioteca incluida")
+        limpios = [p for p in (pinceles or []) if isinstance(p, dict) and str(p.get("name") or "").strip()]
+        registro = {"id": id_, "name": (nombre or "Mis pinceles").strip()[:60] or "Mis pinceles", "format": "propia",
+                    "own": True, "source": "LOW", "author": (autor or "").strip()[:80] or None,
+                    "updatedAt": int(time.time()), "brushes": limpios}
+        self.carpeta.mkdir(parents=True, exist_ok=True)
+        tmp = r.with_suffix(".tmp")
+        tmp.write_text(json.dumps(registro, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(r)
+        return {"id": id_, "name": registro["name"], "count": len(limpios)}
+
+    def exportar(self, id_: str, destino: Path) -> dict:
+        """Copia una biblioteca (propia o instalada) a un .lowbrush para
+        compartirla: LOW la vuelve a instalar con «Instalar biblioteca…»."""
+        j = self.cargar(id_)
+        j.pop("installedAt", None)
+        destino = Path(destino)
+        destino.write_text(json.dumps(j, ensure_ascii=False), encoding="utf-8")
+        return {"path": str(destino), "count": len(j.get("brushes") or [])}
 
     def quitar(self, id_: str) -> bool:
         r = self._ruta(id_)

@@ -109,8 +109,9 @@ async function main() {
     await ev(`dzMenuAction("nuevo")`); await wait(2600);
     await ev('(()=>{ dzSetTool("brush"); dzBrushStudioOpen(); DZ_BRUSH_STUDIO.filter = "lib:prueba-photoshop-1a2b3c4d"; DZ_BRUSH_STUDIO.render(); return 1; })()'); await wait(400);
     await clicEn(`document.querySelector('[data-a="quitarlib"]')`, "Quitar biblioteca");
-    const quitada = await ev(`({ pinceles: LOW.drawing.brushes.all().filter(p => p.libraryId).length, backend: Object.keys(api.__pinceles).length })`);
-    assert.deepEqual(quitada, { pinceles: 0, backend: 0 }, "«Quitar biblioteca» no la desinstaló: " + JSON.stringify(quitada));
+    // sólo ESA biblioteca: desde la 3.18 el pincel propio del paso 4 se mudó a «Mis pinceles» (otra biblioteca, y tiene que seguir ahí)
+    const quitada = await ev(`({ pinceles: LOW.drawing.brushes.all().filter(p => p.libraryId === "prueba-photoshop-1a2b3c4d").length, backend: Object.keys(api.__pinceles).filter(k => k !== "mis-pinceles").length, mio: !!LOW.drawing.brushes.get("custom-mio") })`);
+    assert.deepEqual(quitada, { pinceles: 0, backend: 0, mio: true }, "«Quitar biblioteca» no la desinstaló (o se llevó el pincel propio): " + JSON.stringify(quitada));
 
     const graves = errores.filter((e) => !/ResizeObserver/.test(String(e)));
     assert.deepEqual(graves.slice(0, 3), [], "hubo excepciones durante el recorrido");
