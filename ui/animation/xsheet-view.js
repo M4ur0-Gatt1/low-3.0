@@ -79,6 +79,7 @@
       for (const ly of sc.layers) {
         const h = document.createElement("div");
         h.className = "xs2-col-head" + (ly.id === doc.layerId ? " sel" : "");
+        h.dataset.layerId = ly.id;   // el clic derecho de la capa (animation/capa-menu.js) la reconoce
         h.textContent = ly.name;
         h.title = "Clic: capa activa · doble clic: renombrar";
         h.onclick = () => doc.selectLayer(ly.id);

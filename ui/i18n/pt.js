@@ -1263,3 +1263,17 @@ LOW_I18N.registrar("pt", "Português", {
   "↦ Interpolación de movimiento": "↦ Interpolação de movimento", "↦ Generar": "↦ Gerar",
   "↦ {} cuadros generados — reproducí (Enter) para ver el movimiento.": "↦ {} quadros gerados — reproduza (Enter) para ver o movimento.",
 });
+
+/* Menú de la capa (animation/capa-menu.js) */
+LOW_I18N.registrar("pt", "Português", {
+  "Renombrar…": "Renomear…", "doble clic": "clique duplo", "Duplicar capa": "Duplicar camada", "Traer al frente": "Trazer para a frente",
+  "Subir una posición": "Subir uma posição", "Bajar una posición": "Descer uma posição", "Enviar al fondo": "Enviar para o fundo",
+  "Eliminar capa…": "Excluir camada…", "Eliminar capa (es la única)": "Excluir camada (é a única)",
+  "Nombre de la capa": "Nome da camada", "Eliminar": "Excluir",
+  "¿Eliminar la capa «{}» con sus dibujos? Se puede deshacer con Ctrl+Z.": "Excluir a camada «{}» com seus desenhos? Dá para desfazer com Ctrl+Z.",
+  "Eliminé la capa «{}» · Ctrl+Z la devuelve": "Excluí a camada «{}» · Ctrl+Z a traz de volta",
+  "Capa duplicada: «{}»": "Camada duplicada: «{}»", "Capa renombrada: {}": "Camada renomeada: {}",
+  "«{}» quedó al frente de todo": "«{}» ficou na frente de tudo", "«{}» quedó al fondo": "«{}» ficou no fundo",
+  "«{}» subió una posición": "«{}» subiu uma posição", "«{}» bajó una posición": "«{}» desceu uma posição",
+  "Es la única capa: una escena necesita al menos una": "É a única camada: uma cena precisa de pelo menos uma",
+});

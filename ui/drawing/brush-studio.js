@@ -25,7 +25,7 @@
       this.root.innerHTML = `<header><div><b>Estudio de pinceles</b><small>${this.library?.all?.().length || 0} pinceles</small></div><button data-a="close" aria-label="Cerrar">×</button></header>
         <div class="bst-search"><input type="search" placeholder="Buscar pincel" value="${esc(this.query)}"><button data-a="import" title="Photoshop .abr, Procreate .brushset, Krita .bundle/.kpp, GIMP .gbr/.gih, MyPaint .myb, PNG">Instalar biblioteca…</button></div>
         <nav><button data-filter="all"${this.filter === "all" ? ' class="active"' : ""}>Todos</button><button data-filter="favorites"${this.filter === "favorites" ? ' class="active"' : ""}>Favoritos</button>${(global.LOW?.drawing?.BRUSH_CATEGORIAS || []).filter(([id]) => !["propio", "importado"].includes(id)).map(([id, nombre]) => `<button data-filter="${id}"${this.filter === id ? ' class="active"' : ""}>${esc(nombre)}</button>`).join("")}<button data-filter="imported"${this.filter === "imported" ? ' class="active"' : ""}>Importados</button></nav>${this.navBibliotecas()}
-        <div class="bst-list" role="listbox" aria-label="Pinceles">${brushes.map(brush => `<button class="bst-brush${brush.id === this.selected ? " selected" : ""}" data-id="${esc(brush.id)}" role="option" aria-selected="${brush.id === this.selected}"><span class="bst-tip ${brush.engine || "vector"}">${brush.tipData ? `<img src="${esc(brush.tipData)}" alt="">` : ""}</span><span><b>${esc(brush.name)}</b><small>${brush.engine === "raster" ? "Raster" : "Vector"}${brush.imported ? " · importado" : ""}</small></span><i>${this.favorites.has(brush.id) ? "★" : "☆"}</i></button>`).join("") || '<p class="bst-empty">No hay pinceles con ese filtro.</p>'}</div>
+        <div class="bst-list" role="listbox" aria-label="Pinceles">${brushes.map(brush => `<button class="bst-brush${brush.id === this.selected ? " selected" : ""}" data-id="${esc(brush.id)}" role="option" aria-selected="${brush.id === this.selected}"><span class="bst-tip ${brush.engine || "vector"}">${brush.tipData ? `<img src="${esc(brush.tipData)}" alt="" loading="lazy" decoding="async">` : ""}</span><span><b>${esc(brush.name)}</b><small>${brush.engine === "raster" ? "Raster" : "Vector"}${brush.imported ? " · importado" : ""}</small></span><i>${this.favorites.has(brush.id) ? "★" : "☆"}</i></button>`).join("") || '<p class="bst-empty">No hay pinceles con ese filtro.</p>'}</div>
         <section class="bst-editor${active ? "" : " disabled"}"><div class="bst-preview"><svg viewBox="0 0 300 86" aria-label="Vista previa del pincel"></svg></div>
           <div class="bst-title"><strong>${esc(active?.name || "Sin selección")}</strong><button data-a="favorite" title="Favorito">${this.favorites.has(this.selected) ? "★" : "☆"}</button><button data-a="duplicate">Duplicar</button></div>
           ${this.controls(active)}
@@ -146,21 +146,41 @@
       this.options.onSelect?.(brush); this.preview(brush);
     }
     /** Cada pincel de la lista con un trazo chico de VERDAD (el mismo render
-     *  de la mesa): con 40 pinceles, un ícono genérico no deja elegir. */
+     *  de la mesa): con 40 pinceles, un ícono genérico no deja elegir.
+     *
+     *  Con las bibliotecas incluidas de la 3.19 son más de 1.500: dibujarlas
+     *  todas al abrir congelaba la pantalla 1,9 s (medido en la app). Ahora se
+     *  dibujan sólo las que se VEN en la lista (y un margen, para que al bajar
+     *  ya estén), y cada una se guarda: filtrar o buscar no las vuelve a hacer.
+     *  La caché es por el OBJETO del pincel: retocarlo lo reemplaza y su
+     *  miniatura se rehace sola. */
     miniaturas() {
       if (typeof global.dzBrushRenderElement !== "function") return;
       const NS = "http://www.w3.org/2000/svg";
-      this.root.querySelectorAll(".bst-brush").forEach((boton) => {
+      const cache = BrushStudio._miniaturas || (BrushStudio._miniaturas = new WeakMap());
+      const pintar = (boton) => {
         const tip = boton.querySelector(".bst-tip"), brush = this.library.get(boton.dataset.id);
         if (!tip || !brush || brush.tipData || tip.querySelector("svg")) return;
-        const pts = Array.from({ length: 18 }, (_, i) => [6 + i * 3, 14 - Math.sin(i / 2.8) * 6, .25 + .75 * Math.sin(i / 17 * Math.PI), 0, 0, 0, i * 8]);
-        try {
-          const el = global.dzBrushRenderElement(pts, "#e9ebe8", { brush, size: Math.max(2, Math.min(9, (brush.size || 6) / 3)) });
-          if (!el) return;
-          const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 62 28"); svg.appendChild(el);
-          tip.textContent = ""; tip.appendChild(svg); tip.classList.add("con-trazo");
-        } catch (_) { /* sin miniatura, queda el ícono */ }
-      });
+        let hecho = cache.get(brush);
+        if (!hecho) {
+          const pts = Array.from({ length: 18 }, (_, i) => [6 + i * 3, 14 - Math.sin(i / 2.8) * 6, .25 + .75 * Math.sin(i / 17 * Math.PI), 0, 0, 0, i * 8]);
+          try {
+            const el = global.dzBrushRenderElement(pts, "#e9ebe8", { brush, size: Math.max(2, Math.min(9, (brush.size || 6) / 3)) });
+            if (!el) return;
+            const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 62 28"); svg.appendChild(el);
+            hecho = svg; cache.set(brush, svg);
+          } catch (_) { return; /* sin miniatura, queda el ícono */ }
+        }
+        tip.textContent = ""; tip.appendChild(hecho.cloneNode(true)); tip.classList.add("con-trazo");
+      };
+      if (this._mirador) this._mirador.disconnect();
+      const lista = this.root.querySelector(".bst-list");
+      const botones = this.root.querySelectorAll(".bst-brush");
+      if (!lista || typeof global.IntersectionObserver !== "function") { botones.forEach(pintar); return; }
+      this._mirador = new global.IntersectionObserver((entradas) => {
+        for (const e of entradas) if (e.isIntersecting) { this._mirador.unobserve(e.target); pintar(e.target); }
+      }, { root: lista, rootMargin: "300px 0px" });
+      botones.forEach((b) => this._mirador.observe(b));
     }
     preview(brush) {
       const svg = this.root.querySelector(".bst-preview svg"); if (!svg || !this.engine) return;

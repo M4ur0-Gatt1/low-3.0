@@ -324,10 +324,18 @@ def t_incluidas_del_repo():
     creditos = (carpeta / "CREDITOS.md").read_text(encoding="utf-8")
     for f in archivos:
         j = J.loads(f.read_text(encoding="utf-8"))
-        assert "CC0" in (j.get("license") or ""), f.name + ": sin licencia CC0 declarada"
+        lic = j.get("license") or ""
+        # CC0, o CC-BY con la atribución en CREDITOS.md (3.19: las de David Revoy 2021/Extras/Charcoal)
+        assert "CC0" in lic or "CC-BY" in lic, f.name + ": sin licencia CC0 o CC-BY declarada"
         assert j.get("author") and j.get("source"), f.name + ": sin autor o fuente"
-        assert j["name"].split(" · ")[-1] in creditos, f.name + ": no figura en CREDITOS.md"
-        assert j["brushes"] and sum(1 for b in j["brushes"] if b.get("tipData")) >= len(j["brushes"]) // 2, f.name + ": pocas puntas"
+        seccion = creditos.split("## ")
+        assert any(j["name"].split(" · ")[-1] in sec.splitlines()[0] for sec in seccion[1:]), f.name + ": no figura en CREDITOS.md"
+        if "CC-BY" in lic:
+            assert "Atribución" in creditos and "David Revoy, www.davidrevoy.com" in creditos, f.name + ": CC-BY sin la atribución en CREDITOS.md"
+        assert j["brushes"] and all(b.get("name") and b.get("engine") for b in j["brushes"]), f.name + ": pinceles sin nombre o sin motor"
+        # los paquetes de SELLOS (Photoshop, GIMP) tienen que traer sus puntas; los paramétricos (MyPaint, presets de Krita) usan la redonda
+        if j.get("format") == "zip" and any(b.get("sourceFormat") in ("abr", "gbr", "gih") for b in j["brushes"]):
+            assert sum(1 for b in j["brushes"] if b.get("tipData")) >= len(j["brushes"]) // 2, f.name + ": un paquete de sellos sin sus puntas"
 prueba("las bibliotecas que vienen con LOW declaran licencia CC0, autor y fuente, y están en CREDITOS.md", t_incluidas_del_repo)
 
 def t_propias():

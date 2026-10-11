@@ -1290,3 +1290,17 @@ LOW_I18N.registrar("en", "English", {
   "↦ Interpolación de movimiento": "↦ Motion tween", "↦ Generar": "↦ Generate",
   "↦ {} cuadros generados — reproducí (Enter) para ver el movimiento.": "↦ {} frames generated — play (Enter) to see the motion.",
 });
+
+/* Menú de la capa (animation/capa-menu.js) */
+LOW_I18N.registrar("en", "English", {
+  "Renombrar…": "Rename…", "doble clic": "double-click", "Duplicar capa": "Duplicate layer", "Traer al frente": "Bring to front",
+  "Subir una posición": "Move up one", "Bajar una posición": "Move down one", "Enviar al fondo": "Send to back",
+  "Eliminar capa…": "Delete layer…", "Eliminar capa (es la única)": "Delete layer (it's the only one)",
+  "Nombre de la capa": "Layer name", "Eliminar": "Delete",
+  "¿Eliminar la capa «{}» con sus dibujos? Se puede deshacer con Ctrl+Z.": "Delete layer «{}» and its drawings? You can undo it with Ctrl+Z.",
+  "Eliminé la capa «{}» · Ctrl+Z la devuelve": "Deleted layer «{}» · Ctrl+Z brings it back",
+  "Capa duplicada: «{}»": "Layer duplicated: «{}»", "Capa renombrada: {}": "Layer renamed: {}",
+  "«{}» quedó al frente de todo": "«{}» is now in front of everything", "«{}» quedó al fondo": "«{}» is now at the back",
+  "«{}» subió una posición": "«{}» moved up one", "«{}» bajó una posición": "«{}» moved down one",
+  "Es la única capa: una escena necesita al menos una": "It's the only layer: a scene needs at least one",
+});
