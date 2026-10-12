@@ -18,9 +18,10 @@
      usa el mismo estilo de la paleta que lo elegido.
 
    Para mover una capa entera en toda la escena: Toda la capa → Elegir todo →
-   arrastrar. Las flechas del teclado y el inspector siguen siendo de este
-   dibujo. Con el rig prendido el alcance es sólo este dibujo (las piezas del
-   rig se posan, no se mueven). */
+   arrastrar. Las flechas del teclado y los botones del inspector (voltear,
+   alinear) también se repiten; los campos numéricos que se tipean, no (cada
+   tecla sería un paso). Con el rig prendido el alcance es sólo este dibujo
+   (las piezas del rig se posan, no se mueven). */
 (function (global) {
   "use strict";
   const doc = global.document;
@@ -299,18 +300,34 @@
     const a = Ux * i11 + Vx * i21, c = Ux * i12 + Vx * i22, b = Uy * i11 + Vy * i21, d = Uy * i12 + Vy * i22;
     return { a, b, c, d, e: B[0][0] - (a * A[0][0] + c * A[0][1]), f: B[0][1] - (b * A[0][0] + d * A[0][1]) };
   }
-  function armar() {
+  /** Anota cómo estaba lo elegido ANTES de un gesto (para medir qué le hizo).
+   *  Con el mouse (punteroAbajo) o, con `sinPuntero`, desde el teclado o un botón. */
+  function armar(sinPuntero = false) {
     const dz = D();
-    if (aplicando || armado || !punteroAbajo || !esFlecha() || prefs.alcance === "dibujo" || !criterios || !dz?.doc || dz.rigMode) return;
+    if (aplicando || armado || (!punteroAbajo && !sinPuntero) || !esFlecha() || prefs.alcance === "dibujo" || !criterios || !dz?.doc || dz.rigMode) return;
     const pack = paquete().filter((n) => n && n.isConnected);
     if (!pack.length) return;
     armado = { pack, antes: pack.map(esquinas) };
   }
+  const FLECHAS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+  const tipeando = () => { const a = doc.activeElement; return !!a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable); };
+  /** Las flechas del teclado mueven lo elegido (drawing/flechas.js): con
+   *  «Toda la capa» también se repite. Se arma ANTES que ese manejador. */
+  function alApretar(e) {
+    if (!FLECHAS.includes(e.key) || e.ctrlKey || e.metaKey || tipeando()) return;
+    armar(true);
+  }
   /** Si el gesto terminó sin cambiar nada (un clic), se desarma. Con margen: el
    *  dzMarkDirty del final del gesto llega DESPUÉS de este pointerup. */
   function desarmarLuego() { const a = armado; setTimeout(() => { if (armado === a && !aplicando) armado = null; }, 150); }
-  function alTerminar() {
-    if (!armado || aplicando) return;
+  function alTerminar(medido) {
+    if (medido) return aplicarEnOtros(medido);
+    const delta = medir();
+    if (delta) aplicarEnOtros(delta);
+  }
+  /** Qué le hizo el gesto a lo elegido: la afín de antes a después (en la hoja). */
+  function medir() {
+    if (!armado || aplicando) return null;
     const a = armado; armado = null;
     let delta = null;
     for (let i = 0; i < a.pack.length && !delta; i++) {
@@ -327,8 +344,7 @@
       delta = { a: 1, b: 0, c: 0, d: 1, e: d[0][0] - a.antes[i][0][0], f: d[0][1] - a.antes[i][0][1] };
     }
     const quieto = Math.abs(delta.a - 1) + Math.abs(delta.d - 1) + Math.abs(delta.b) + Math.abs(delta.c) < 1e-6 && Math.hypot(delta.e, delta.f) < 0.01;
-    if (quieto) return;
-    aplicarEnOtros(delta);
+    return quieto ? null : delta;
   }
 
   let oculta = null;
@@ -392,7 +408,10 @@
       if (pack.length) global.dzSelect(pack[pack.length - 1]);
     } finally { eligiendo = false; restaurando = false; }
     criterios = crit;
-    aviso("Hecho en " + (cambios.length + 1) + " dibujos de la " + (prefs.alcance === "capa" ? "capa" : "selección de cuadros") + " · Ctrl+Z lo deshace en todos");
+    // los dibujos son del NIVEL: si otra capa usa el mismo nivel, también cambia
+    const otras = d.scene.layers.filter((l) => l.levelId === capa.levelId && l.id !== capa.id).length;
+    aviso("Hecho en " + (cambios.length + 1) + " dibujos de la " + (prefs.alcance === "capa" ? "capa" : "selección de cuadros") + " · Ctrl+Z lo deshace en todos" +
+      (otras ? " · ojo: " + (otras === 1 ? "otra capa usa" : otras + " capas más usan") + " el mismo nivel y también cambian" : ""));
   }
 
   function envolverHistoria() {
@@ -400,6 +419,22 @@
     if (typeof snap === "function" && !snap.__alcance) {
       global.dzSnapshot = function () { try { armar(); } catch (_) { /* */ } return snap.apply(this, arguments); };
       global.dzSnapshot.__alcance = true;
+    }
+    // los botones del inspector (voltear, alinear) registran con dzDrawingEditBegin/Record
+    const empieza = global.dzDrawingEditBegin, registra = global.dzDrawingEditRecord;
+    if (typeof empieza === "function" && !empieza.__alcance) {
+      global.dzDrawingEditBegin = function () { if (!tipeando()) { try { armar(true); } catch (_) { /* */ } } return empieza.apply(this, arguments); };
+      global.dzDrawingEditBegin.__alcance = true;
+    }
+    if (typeof registra === "function" && !registra.__alcance) {
+      global.dzDrawingEditRecord = function () {
+        // se mide ANTES de registrar: registrar repinta el lienzo y lo elegido pasa a ser otros nodos
+        const delta = armado && !aplicando ? medir() : null;
+        const r = registra.apply(this, arguments);
+        if (delta) setTimeout(() => { try { alTerminar(delta); } catch (err) { console.warn("[selección]", err); } }, 0);
+        return r;
+      };
+      global.dzDrawingEditRecord.__alcance = true;
     }
     const sucio = global.dzMarkDirty;
     if (typeof sucio === "function" && !sucio.__alcance) {
@@ -468,6 +503,7 @@
     doc.addEventListener("pointermove", poliMove, true);
     doc.addEventListener("pointerup", () => { punteroAbajo = false; desarmarLuego(); }, true);
     doc.addEventListener("keydown", poliTecla, true);
+    doc.addEventListener("keydown", alApretar, true);
     const orig = global.dzToolOptsRender;
     if (typeof orig === "function" && !orig.__seleccion) {
       const f = function () { const r = orig.apply(this, arguments); try { opciones(); } catch (err) { console.warn("[selección]", err); } if (!esFlecha() && poli) { poli = null; borrarGuia(); } return r; };

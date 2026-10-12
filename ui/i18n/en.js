@@ -533,6 +533,8 @@ LOW_I18N.registrar("en", "English", {
   "Exportar animación…": "Export animation…",
   "Al elegir el formato, elegís dónde guardarlo.": "When you pick the format, you choose where to save it.",
   "Exportación cancelada": "Export cancelled",
+  "Hecho en {} dibujos de la capa · Ctrl+Z lo deshace en todos · ojo: otra capa usa el mismo nivel y también cambian": "Done in {} drawings of the layer · Ctrl+Z undoes it in all · note: another layer uses the same level and changes too",
+  "Hecho en {} dibujos de la capa · Ctrl+Z lo deshace en todos · ojo: {} capas más usan el mismo nivel y también cambian": "Done in {} drawings of the layer · Ctrl+Z undoes it in all · note: {} more layers use the same level and change too",
   "Tipo": "Type",
   "Lazo": "Lasso",
   "Alcance": "Scope",

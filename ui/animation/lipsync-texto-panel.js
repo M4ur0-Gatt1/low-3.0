@@ -218,7 +218,7 @@
     const caja = $("#rigLipDialogos"), D = dz(), { slotId } = boca();
     if (!caja) return;
     const lista = D && D.doc && slotId ? Object.values(D.doc.lipsyncTexto(slotId).dialogos).sort((a, b) => a.inicio - b.inicio) : [];
-    caja.innerHTML = lista.map((d) => `<button type="button" class="rig2-lip-dlg${d.id === dialogoId ? " activo" : ""}" data-dlg="${esc(d.id)}" title="Volver a editar este diálogo">F${d.inicio}–F${d.fin} · ${esc(d.texto.slice(0, 40))}${d.texto.length > 40 ? "…" : ""}</button>`).join("");
+    caja.innerHTML = lista.map((d) => `<button type="button" class="rig2-lip-dlg${d.id === dialogoId ? " activo" : ""}" data-dlg="${esc(d.id)}" title="Volver a editar este diálogo">F${d.inicio}–F${d.fin} · ${esc(d.texto.slice(0, 40))}${d.texto.length > 40 ? "…" : ""}${d.parte ? " (parte " + d.parte + ")" : ""}</button>`).join("");
     caja.querySelectorAll("[data-dlg]").forEach((b) => b.onclick = () => {
       const d = D.doc.lipsyncTexto(slotId).dialogos[b.dataset.dlg]; if (!d) return;
       dialogoId = d.id; dialogoSlot = slotId;

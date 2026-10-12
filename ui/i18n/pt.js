@@ -517,6 +517,8 @@ LOW_I18N.registrar("pt", "Português", {
   "Exportar animación…": "Exportar animação…",
   "Al elegir el formato, elegís dónde guardarlo.": "Ao escolher o formato, você escolhe onde salvar.",
   "Exportación cancelada": "Exportação cancelada",
+  "Hecho en {} dibujos de la capa · Ctrl+Z lo deshace en todos · ojo: otra capa usa el mismo nivel y también cambian": "Feito em {} desenhos da camada · Ctrl+Z desfaz em todos · atenção: outra camada usa o mesmo nível e também muda",
+  "Hecho en {} dibujos de la capa · Ctrl+Z lo deshace en todos · ojo: {} capas más usan el mismo nivel y también cambian": "Feito em {} desenhos da camada · Ctrl+Z desfaz em todos · atenção: mais {} camadas usam o mesmo nível e também mudam",
   "Tipo": "Tipo",
   "Lazo": "Laço",
   "Polígono": "Polígono",

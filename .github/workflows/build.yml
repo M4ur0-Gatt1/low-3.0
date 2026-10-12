@@ -37,6 +37,7 @@ jobs:
         run: |
           node tools/run_2d_model_tests.js
           node tools/run_limpieza_tests.js
+          node tools/run_lipsync_dialogos_tests.js
           node tools/run_undo_estado_tests.js
           node tools/run_trazo_tests.js
           node tools/run_pinceles_tests.js
@@ -72,6 +73,7 @@ jobs:
           python tools/check_export_anim_backend.py
           python tools/check_export_destino_backend.py
           python tools/check_guardar_extension_backend.py
+          python tools/check_sin_modo_menu.py
           python tools/check_escena_nueva_backend.py
           python tools/check_export_premiere_backend.py
           python tools/check_diag_log_backend.py
@@ -275,6 +277,8 @@ jobs:
           python-version: "3.13"
       - name: Dependencias
         run: pip install -r requirements.txt pyinstaller
+      - name: Alt solo no deja la ventana en modo menú (prueba nativa de Windows)
+        run: python tools/check_sin_modo_menu.py
       - name: Versionar desde el tag
         shell: bash
         run: bash .github/set_version.sh

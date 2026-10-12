@@ -10,7 +10,8 @@
       mismo; UN Ctrl+Z los devuelve a todos.
    3. Toda la capa + un marco que agarra sólo el rectángulo: en los otros
       cuadros se mueve el rectángulo y el círculo no.
-   4. Toda la capa + escalar con un tirador: los otros rectángulos se escalan igual.
+   4. Toda la capa + escalar con un tirador: los otros rectángulos se escalan
+      igual; las flechas del teclado y «voltear» del inspector, también.
    5. Cuadros elegidos (1 y 2 en la línea de tiempo): se mueve el 2, el 3 no.
    6. Lazo: un lazo alrededor del círculo elige sólo el círculo.
    7. Polígono: tres clics alrededor del rectángulo y clic en el primero lo eligen.
@@ -153,6 +154,33 @@ async function main() {
   for (const f of [2, 3]) { const k = despues[f].rect.w / antes[f].rect.w;
     if (Math.abs(k - k1) > 0.03) mal("el rectángulo del cuadro " + f + " no se escaló igual", { f, k, k1 }); }
   await ev(`(()=>{ dzUndo(); return true; })()`); await w(400);
+
+  // ── 4b. las flechas del teclado y «voltear» del inspector también se repiten
+  await clic(380, 360);
+  antes = await cajas();
+  for (let i = 0; i < 2; i++) {
+    await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "ArrowRight", code: "ArrowRight", windowsVirtualKeyCode: 39, modifiers: 8 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "ArrowRight", code: "ArrowRight", windowsVirtualKeyCode: 39, modifiers: 8 });
+    await w(350);
+  }
+  despues = await cajas();
+  for (const f of [1, 2, 3]) if (Math.abs(despues[f].rect.x - antes[f].rect.x - 20) > 0.6)
+    mal("Shift+→ dos veces (20) no movió el rectángulo del cuadro " + f, { f, antes: antes[f].rect, despues: despues[f].rect });
+  if (Math.abs(despues[2].circ.x - antes[2].circ.x) > 0.5) mal("las flechas movieron el círculo de otro cuadro", { antes: antes[2], despues: despues[2] });
+  // el botón «voltear» vive en el inspector, que en el espacio de Animación está
+  // plegado: se llama a la MISMA función que el botón (pasa por los mismos registros)
+  {
+    await ev(`(()=>{ dzFlip("h"); return true; })()`); await w(400);
+    const propio = await ev(`(()=>{ const m = DZ.sel && DZ.sel.transform.baseVal.consolidate(); return m ? m.matrix.a : null; })()`);
+    if (!(propio < -0.99)) mal("el clic en «voltear» no volteó ni el cuadro actual", { propio });
+    const volteado = await ev(`(()=>{ const sc = DZ.doc.scene, ly = DZ.doc.layer, lv = sc.level(ly.levelId);
+      return [2, 3].map(f => { const tmp = document.createElementNS("http://www.w3.org/2000/svg", "svg"); tmp.innerHTML = lv.byNumber(ly.cellAt(f)).content;
+        document.body.appendChild(tmp); const r = tmp.querySelector('[data-t="rect"]'); const m = r.transform.baseVal.consolidate(); tmp.remove(); return m ? m.matrix.a : 1; }); })()`);
+    if (!volteado.every(a => a < -0.99)) mal("«voltear» del inspector no volteó el rectángulo en los otros cuadros", { volteado,
+      diag: await ev(`({ crit: JSON.stringify(LOW.drawing.seleccionOpciones.criterios()).slice(0, 200), sel: DZ.sel && DZ.sel.getAttribute("data-t"),
+        tr: DZ.sel && DZ.sel.getAttribute("transform"), estado: document.querySelector("#dzStatus").textContent, alcance: LOW.drawing.seleccionOpciones.prefs.alcance,
+        activo: document.activeElement && document.activeElement.tagName })`) });
+  }
 
   // ── 5. cuadros elegidos: 1 y 2 en la línea de tiempo
   await opcion("alcance", "cuadros");

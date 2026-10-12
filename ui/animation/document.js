@@ -2003,7 +2003,25 @@
         if (previo) this.clearRigSwitchRange(slotId, previo.inicio, previo.fin);
         this.clearRigSwitchRange(slotId, dialogo.inicio, dialogo.fin);
         puestas = this.applyLipsync(slotId, keys, "Lipsync desde el texto");
-        this._lipsyncTextoGuardar(slotId, (lt) => { lt.dialogos[dialogo.id] = { ...dialogo }; }, "Guardar el diálogo");
+        this._lipsyncTextoGuardar(slotId, (lt) => {
+          // LOS DIÁLOGOS QUE EL NUEVO PISA se recortan: si quedan cubiertos se
+          // van, si sobresalen se achican y si el nuevo cae en el medio quedan
+          // en dos partes. Si no, el viejo seguía con su tramo entero y
+          // rehacerlo o quitarlo borraba las bocas del nuevo de ese tramo.
+          const a = dialogo.inicio, b = dialogo.fin;
+          for (const [id, o] of Object.entries(lt.dialogos)) {
+            if (id === dialogo.id || !o || !(o.inicio <= b && o.fin >= a)) continue;
+            if (o.inicio >= a && o.fin <= b) { delete lt.dialogos[id]; continue; }
+            if (o.inicio < a && o.fin > b) {
+              lt.dialogos[id] = { ...o, fin: a - 1 };
+              let n = (o.parte || 1) + 1, cola = id + "~" + n;
+              while (lt.dialogos[cola]) cola = id + "~" + (++n);
+              lt.dialogos[cola] = { ...o, id: cola, inicio: b + 1, parte: n };
+            } else if (o.inicio < a) lt.dialogos[id] = { ...o, fin: a - 1 };
+            else lt.dialogos[id] = { ...o, inicio: b + 1 };
+          }
+          lt.dialogos[dialogo.id] = { ...dialogo };
+        }, "Guardar el diálogo");
       } finally { if (tx) h.commit(); }
       return puestas;
     }

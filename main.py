@@ -51,7 +51,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.28.0"
+LOW_VERSION = "3.28.1"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -168,6 +168,68 @@ def _ffmpeg_exe():
         return ff if ff and Path(ff).exists() else None
     except Exception:
         return None
+
+
+_SIN_MENU_VIVOS = []   # los WNDPROC de ctypes: si se los lleva el recolector, la ventana se cae
+
+
+def _sin_modo_menu(window):
+    """ALT SOLO NO PUEDE DEJAR LA VENTANA EN «MODO MENÚ».
+
+    Reportado por Mauro: «al apretar la B para elegir el pincel primero me da un
+    error de Windows sonoro muy molesto, y después tengo que hacer un clic sobre
+    el dibujo y ahí volver a apretar la B». Medido en la app real con
+    GetGUIThreadInfo: después de apretar y soltar Alt SOLO, el hilo de la ventana
+    queda en modo menú del sistema (GUI_INMENUMODE | GUI_SYSTEMMENUMODE, dueño =
+    la ventana de LOW). En ese modo la letra siguiente no le llega a la página y
+    Windows suena; un clic lo cancela. LOW usa Alt todo el tiempo (Alt+arrastrar
+    duplica, Alt en el marco, Alt+C, Alt+1…7), así que pasaba a cada rato.
+
+    El modo menú lo arranca DefWindowProc con WM_SYSCOMMAND/SC_KEYMENU en la
+    ventana de arriba. Se lo ignora (salvo Alt+Espacio, el menú de la ventana):
+    la página sigue recibiendo Alt para sus atajos, que es lo único que importa.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+    import ctypes.wintypes as wt
+
+    def enganchar(*_):
+        try:
+            form = window.native
+            hwnd = int(form.Handle.ToInt64())
+        except Exception as e:  # noqa: BLE001 — sin esto la app anda igual
+            log(f"sin modo menú: no encontré la ventana ({e})")
+            return
+        user32 = ctypes.WinDLL("user32")
+        LRESULT = ctypes.c_ssize_t
+        WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+        user32.SetWindowLongPtrW.restype = ctypes.c_void_p
+        user32.SetWindowLongPtrW.argtypes = (wt.HWND, ctypes.c_int, ctypes.c_void_p)
+        user32.CallWindowProcW.restype = LRESULT
+        user32.CallWindowProcW.argtypes = (ctypes.c_void_p, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+        anterior = {"proc": None}
+        WM_SYSCOMMAND, SC_KEYMENU, VK_SPACE = 0x0112, 0xF100, 0x20
+
+        def proc(h, msg, wp, lp):
+            try:
+                if msg == WM_SYSCOMMAND and (wp & 0xFFF0) == SC_KEYMENU and lp != VK_SPACE:
+                    return 0
+            except Exception:  # noqa: BLE001 — nunca romper la cadena de mensajes
+                pass
+            return user32.CallWindowProcW(anterior["proc"], h, msg, wp, lp)
+
+        cb = WNDPROC(proc)
+        _SIN_MENU_VIVOS.append(cb)
+        anterior["proc"] = user32.SetWindowLongPtrW(hwnd, -4, ctypes.cast(cb, ctypes.c_void_p))   # GWLP_WNDPROC
+        if not anterior["proc"]:
+            _SIN_MENU_VIVOS.remove(cb)
+            log("sin modo menú: no pude engancharme a la ventana")
+
+    try:
+        window.events.shown += enganchar
+    except Exception as e:  # noqa: BLE001
+        log(f"sin modo menú: {e}")
 
 
 def _puerto_libre(puerto: int) -> bool:
@@ -546,6 +608,7 @@ class Api:
                 min_size=spec["min"],
                 background_color="#151514")
             s._aux_windows[kind] = win
+            _sin_modo_menu(win)
             s._dock_armed.discard(kind)   # recién abierto: todavía no "salió"
             s._track_geometry(win, kind, on_close=lambda: s._panel_forget(kind))
             return {"ok": True}
@@ -6252,6 +6315,7 @@ def main():
     )
     api._window = window
     api._track_geometry(window, "main", store_name="windows")
+    _sin_modo_menu(window)   # Alt solo no deja la ventana en modo menú (el «ding» al apretar una letra)
     # ── EL ALMACENAMIENTO DE LA INTERFAZ TIENE QUE SOBREVIVIR AL CIERRE ──────
     #
     # Y no sobrevivía. pywebview 6.x viene con `private_mode=True` —perfil
