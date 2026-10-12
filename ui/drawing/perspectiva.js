@@ -30,6 +30,7 @@
   const AGARRE_PX = 11;                     // radio para agarrar un punto con el mouse
 
   let editando = false;                     // la barra abierta: puntos arrastrables
+  let marcando = false;                     // «Líneas desde un punto»: el clic marca un punto
   let barra = null, arrastre = null, docOido = null;
 
   const escena = () => (typeof DZ !== "undefined" && DZ.doc && DZ.doc.scene) || null;
@@ -57,7 +58,9 @@
 
   /* ── el horizonte: recta por el 1 y el 2, o horizontal por el 1 ── */
   function horizonte(p) {
-    const a = p.vps[0], b = p.vps[1];
+    const hz = p.vps.filter((v) => v.eje !== "y");
+    if (!hz.length) return null;                 // mirando derecho abajo o arriba: no hay horizonte
+    const a = hz[0], b = hz[1];
     if (!b || Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) return { a, ux: 1, uy: 0 };
     const n = Math.hypot(b.x - a.x, b.y - a.y);
     return { a, ux: (b.x - a.x) / n, uy: (b.y - a.y) / n };
@@ -86,7 +89,7 @@
       borde.push([x, -my], [x, H + my], [-mx, y], [W + mx, y]);
     }
     p.vps.forEach((v, i) => {
-      const color = COLORES[i] || COLORES[0];
+      const color = colorDe(v, i);
       const capa = el("g", { stroke: color, opacity: editando ? "0.42" : "0.3", ...fino }, g);
       const vistos = new Set();
       for (const [bx, by] of borde) {
@@ -98,17 +101,28 @@
       }
     });
     const h = horizonte(p);
-    el("line", { x1: h.a.x - h.ux * L, y1: h.a.y - h.uy * L, x2: h.a.x + h.ux * L, y2: h.a.y + h.uy * L,
+    if (h) el("line", { x1: h.a.x - h.ux * L, y1: h.a.y - h.uy * L, x2: h.a.x + h.ux * L, y2: h.a.y + h.uy * L,
       stroke: HORIZONTE, "stroke-width": editando ? "2" : "1.4", opacity: "0.85", "data-p": "horizonte", ...fino }, g);
+    // «Líneas desde un punto»: de cada punto de fuga, pasando EXACTO por el punto marcado
+    if ((p.lineas || []).length) {
+      const cons = el("g", { "data-p": "lineas", opacity: "0.85", ...fino }, g);
+      for (const q of p.lineas) {
+        for (const u of direcciones(p, q.x, q.y)) {
+          el("line", { x1: q.x - u.ux * L, y1: q.y - u.uy * L, x2: q.x + u.ux * L, y2: q.y + u.uy * L,
+            stroke: u.color, "stroke-width": "1.2", "stroke-dasharray": "7 4", "vector-effect": "non-scaling-stroke" }, cons);
+        }
+        el("circle", { cx: q.x, cy: q.y, r: 4 / k, fill: "#fff", stroke: HORIZONTE, "stroke-width": "2", "vector-effect": "non-scaling-stroke" }, cons);
+      }
+    }
     if (editando) {
       const r = 7 / k;
       p.vps.forEach((v, i) => {
-        const color = COLORES[i] || COLORES[0];
+        const color = colorDe(v, i);
         el("circle", { cx: v.x, cy: v.y, r: r * 1.6, fill: color, opacity: "0.18", stroke: "none" }, g);
         el("circle", { cx: v.x, cy: v.y, r, fill: "#fff", stroke: color, "stroke-width": "2.5", "data-p": "vp" + i, "vector-effect": "non-scaling-stroke" }, g);
         const t = el("text", { x: v.x + r * 1.5, y: v.y - r * 1.3, fill: color, "font-size": 13 / k,
           "font-family": "Figtree, sans-serif", "font-weight": "700" }, g);
-        t.textContent = String(i + 1);
+        t.textContent = v.eje ? v.eje.toUpperCase() : String(i + 1);
       });
     }
     if (g.parentNode !== svg || svg.lastElementChild !== g) svg.appendChild(g);
@@ -162,7 +176,8 @@
       : n === 2 ? [{ x: -0.3 * W, y }, { x: 1.3 * W, y }]
       : [{ x: -0.3 * W, y }, { x: 1.3 * W, y }, { x: W / 2, y: Math.round(H * 2.6) }];
     const antes = sc.perspective || {};
-    guardar({ ...copia(antes), vps, visible: true, iman: antes.iman !== false, origen: "manual" },
+    const base = copia(antes); delete base.paralelas; delete base.camara;
+    guardar({ ...base, vps, visible: true, iman: antes.iman !== false, origen: "manual" },
       "Perspectiva de " + n + (n === 1 ? " punto" : " puntos"));
     dzAviso(n === 1 ? "Perspectiva de 1 punto: calles y pasillos de frente"
       : n === 2 ? "Perspectiva de 2 puntos: esquinas de casas y edificios"
@@ -175,12 +190,17 @@
     const out = [];
     p.vps.forEach((v, i) => {
       const dx = v.x - sx, dy = v.y - sy, n = Math.hypot(dx, dy);
-      if (n > 1e-6) out.push({ ux: dx / n, uy: dy / n, color: COLORES[i] || COLORES[0] });
+      if (n > 1e-6) out.push({ ux: dx / n, uy: dy / n, color: colorDe(v, i) });
     });
-    if (p.vps.length < 3) out.push({ ux: 0, uy: 1, color: "#9aa0a6" });       // verticales
-    if (p.vps.length === 1) out.push({ ux: 1, uy: 0, color: HORIZONTE });      // horizontales
+    if (Array.isArray(p.paralelas)) {                                           // del estudio 3D
+      for (const u of p.paralelas) out.push({ ux: u.ux, uy: u.uy, color: Math.abs(u.ux) < Math.abs(u.uy) ? "#9aa0a6" : HORIZONTE });
+    } else {
+      if (p.vps.length < 3) out.push({ ux: 0, uy: 1, color: "#9aa0a6" });     // verticales
+      if (p.vps.length === 1) out.push({ ux: 1, uy: 0, color: HORIZONTE });    // horizontales
+    }
     return out;
   }
+  const colorDe = (v, i) => v.color || COLORES[i] || COLORES[0];
   /** Decide hacia dónde va el trazo y proyecta el punto ahí. La dirección es
    *  PROVISORIA hasta FIJAR_PX: se mide del arranque al punto actual (no del
    *  primer tramito, que con el pulso temblando apunta a cualquier lado) y, si
@@ -261,9 +281,20 @@
     p.vps.forEach((v, i) => { const s = aPantalla(svg, v), d = Math.hypot(s.x - cx, s.y - cy); if (d < mejor) { mejor = d; cual = i; } });
     if (cual === null) {
       // ¿sobre el horizonte? (distancia a la recta, en pantalla)
-      const h = horizonte(p), a = aPantalla(svg, h.a), b = aPantalla(svg, { x: h.a.x + h.ux * 100, y: h.a.y + h.uy * 100 });
-      const n = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-      if (Math.abs((cx - a.x) * (b.y - a.y) - (cy - a.y) * (b.x - a.x)) / n < 6) cual = "h";
+      const h = horizonte(p);
+      if (h) {
+        const a = aPantalla(svg, h.a), b = aPantalla(svg, { x: h.a.x + h.ux * 100, y: h.a.y + h.uy * 100 });
+        const n = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        if (Math.abs((cx - a.x) * (b.y - a.y) - (cy - a.y) * (b.x - a.x)) / n < 6) cual = "h";
+      }
+    }
+    if (cual === null && marcando) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const inv0 = svg.getScreenCTM().inverse();
+      const q = { x: inv0.a * cx + inv0.c * cy + inv0.e, y: inv0.b * cx + inv0.d * cy + inv0.f };
+      const sc = escena();
+      guardar({ ...copia(sc.perspective), lineas: (sc.perspective.lineas || []).concat([q]).slice(-60) }, "Agregar líneas desde un punto");
+      return;
     }
     if (cual === null) return;
     e.preventDefault(); e.stopImmediatePropagation();
@@ -280,8 +311,7 @@
     const q = arrastre.aLienzo(e.clientX, e.clientY), dx = q.x - arrastre.desde.x, dy = q.y - arrastre.desde.y;
     const vps = arrastre.antes.vps.map((v) => ({ ...v }));
     if (arrastre.cual === "h") {
-      const n = Math.min(2, vps.length);
-      for (let i = 0; i < n; i++) vps[i].y += dy;
+      vps.forEach((v) => { if (v.eje !== "y") v.y += dy; });
     } else {
       const i = arrastre.cual;
       vps[i].x += dx; vps[i].y += dy;
@@ -313,6 +343,8 @@
         <span class="lowpersp-sep"></span>
         <label title="El lápiz sigue al punto de fuga hacia donde arranca el trazo"><input type="checkbox" id="lowPerspIman"> Imán</label>
         <label><input type="checkbox" id="lowPerspVer"> Ver guías</label>
+        <button type="button" data-p="marcar" title="Clic en la mesa: salen las rectas de cada punto de fuga pasando por ahí">Líneas desde un punto</button>
+        <button type="button" data-p="borrar-lineas" title="Borrar las líneas de construcción">Borrar líneas</button>
         <button type="button" data-p="quitar" title="Sacar los puntos de fuga de la escena">Quitar</button>
         <button type="button" data-p="listo" class="lowpersp-listo" title="Cerrar la barra: las guías y el imán siguen">Listo</button>
         <div class="lowpersp-ayuda" id="lowPerspAyuda"></div>`;
@@ -321,6 +353,14 @@
       barra.querySelectorAll("[data-p]").forEach((b) => b.onclick = () => {
         const q = b.dataset.p;
         if (q === "listo") return cerrar();
+        if (q === "marcar") {
+          marcando = !marcando; sincronizarBarra();
+          return dzAviso(marcando ? "Clic en la mesa: salen las rectas de cada punto de fuga pasando por ahí" : "");
+        }
+        if (q === "borrar-lineas") {
+          const sc = escena(); if (!sc) return;
+          return guardar({ ...copia(sc.perspective), lineas: [] }, "Borrar las líneas desde un punto");
+        }
         if (q === "quitar") {
           const sc = escena(); if (!sc) return;
           guardar({ ...copia(sc.perspective), vps: [], origen: "manual" }, "Quitar la perspectiva");
@@ -343,7 +383,7 @@
     if (!datos()) dzAviso("Perspectiva: elegí 1, 2 o 3 puntos de fuga");
   }
   function cerrar() {
-    editando = false;
+    editando = false; marcando = false;
     if (barra) barra.hidden = true;
     pintar();
   }
@@ -362,6 +402,9 @@
     barra.querySelector("#lowPerspIman").disabled = !hay;
     barra.querySelector("#lowPerspVer").disabled = !hay;
     barra.querySelector('[data-p="quitar"]').disabled = !hay;
+    barra.querySelector('[data-p="marcar"]').disabled = !hay;
+    barra.querySelector('[data-p="marcar"]').classList.toggle("activo", hay && marcando);
+    barra.querySelector('[data-p="borrar-lineas"]').disabled = !hay || !((p.lineas || []).length);
     barra.querySelectorAll("[data-p='1'],[data-p='2'],[data-p='3']").forEach((b) =>
       b.classList.toggle("activo", hay && p.vps.length === +b.dataset.p));
     barra.querySelector("#lowPerspAyuda").textContent = hay
@@ -389,10 +432,10 @@
     return true;
   };
   /** Del estudio 3D: los puntos de fuga de su cámara, ya en unidades del lienzo. */
-  global.dzPerspectivaDesde3D = (vps, camara) => {
+  global.dzPerspectivaDesde3D = (vps, extra = {}) => {
     const sc = escena(); if (!sc) return false;
-    return guardar({ ...copia(sc.perspective), vps: (vps || []).slice(0, 3), visible: true, iman: true, origen: "3d", camara },
-      "Perspectiva desde el estudio 3D");
+    return guardar({ ...copia(sc.perspective), vps: (vps || []).slice(0, 3), paralelas: extra.paralelas || [],
+      visible: true, iman: true, origen: "3d", camara: extra.ajustes || null, lineas: [] }, "Perspectiva desde el estudio 3D");
   };
   global.dzPerspectivaAbrir = abrir;
   global.LOW = global.LOW || {};

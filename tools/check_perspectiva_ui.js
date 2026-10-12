@@ -205,6 +205,40 @@ async function main() {
   await w(200);
   if ((await ev(`DZ.doc.scene.perspective.vps.length`)) !== 2) mal("el clic derecho sobre el punto no lo sacó", {});
 
+  // ── 4b. «Líneas desde un punto»: de cada punto de fuga, pasando EXACTO por el clic
+  await ev(`dzMenuAction("perspectiva")`); await w(150);
+  await clickEn('#lowPersp [data-p="marcar"]');
+  const Q = { x: W * 0.62, y: H * 0.72 }, sq = await aPantalla(Q.x, Q.y);
+  const trazosAntes = await ev(`document.querySelectorAll("#dzCanvas > svg path").length`);
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: sq.x, y: sq.y, buttons: 0 });
+  await raton("mousePressed", sq.x, sq.y); await w(40); await raton("mouseReleased", sq.x, sq.y); await w(250);
+  const cons = await ev(`(()=>{ const p = DZ.doc.scene.perspective; const g = document.querySelector("#dzCanvas > svg g[data-p='lineas']");
+    return { lineas: p.lineas, vps: p.vps, rectas: g ? [...g.querySelectorAll("line")].map(l => ["x1","y1","x2","y2"].map(k => +l.getAttribute(k))) : [],
+      paths: document.querySelectorAll("#dzCanvas > svg path").length }; })()`);
+  if (cons.lineas.length !== 1 || Math.hypot(cons.lineas[0].x - Q.x, cons.lineas[0].y - Q.y) > 2) mal("el clic no marcó el punto de las líneas", cons);
+  if (cons.paths !== trazosAntes) mal("marcar el punto dibujó un trazo", cons);
+  if (cons.rectas.length !== cons.vps.length + 1) mal("no salieron las rectas de cada punto de fuga más la vertical", cons);
+  const q0 = cons.lineas[0];
+  const dist = (r, p) => { const dx = r[2] - r[0], dy = r[3] - r[1]; return Math.abs((p.x - r[0]) * dy - (p.y - r[1]) * dx) / Math.hypot(dx, dy); };
+  for (const r of cons.rectas) if (dist(r, q0) > 0.01) mal("una recta de construcción no pasa por el punto marcado", { r, q0 });
+  for (const v of cons.vps) if (!cons.rectas.some(r => dist(r, v) < 0.01)) mal("falta la recta hacia un punto de fuga", { v });
+  await clickEn('#lowPersp [data-p="borrar-lineas"]');
+  if ((await ev(`DZ.doc.scene.perspective.lineas.length`)) !== 0) mal("«Borrar líneas» no las borró", {});
+  await clickEn('#lowPersp [data-p="listo"]');
+
+  // ── 4c. puntos que vienen del 3D: el horizonte pasa por los HORIZONTALES, no por el vertical
+  const hz = await ev(`(()=>{ const antes = JSON.parse(JSON.stringify(DZ.doc.scene.perspective));
+    const leer = () => { const l = document.querySelector("#dzCanvas > svg g[data-low='perspectiva'] [data-p='horizonte']");
+      return l ? ["y1","y2"].map(k => +l.getAttribute(k)) : null; };
+    dzPerspectivaDesde3D([{x:-500,y:400,eje:"x"},{x:2500,y:400,eje:"z"},{x:960,y:4000,eje:"y"}], { paralelas: [] });
+    const tres = leer();
+    dzPerspectivaDesde3D([{x:960,y:420,eje:"z"},{x:960,y:3000,eje:"y"}], { paralelas: [{ux:1,uy:0}] });
+    const inclinada = leer(); const dirs = DZ.doc.scene.perspective.paralelas;
+    DZ.doc.setPerspective(antes); return { tres, inclinada, dirs }; })()`);
+  if (!hz.tres || Math.abs(hz.tres[0] - 400) > 0.01 || Math.abs(hz.tres[1] - 400) > 0.01) mal("con 3 puntos del 3D el horizonte no pasa por X y Z", hz);
+  if (!hz.inclinada || Math.abs(hz.inclinada[0] - 420) > 0.01 || Math.abs(hz.inclinada[1] - 420) > 0.01) mal("con la vista inclinada el horizonte quedó atravesado por el punto vertical", hz);
+  if (!hz.dirs || hz.dirs.length !== 1) mal("las direcciones paralelas del 3D no se guardaron", hz);
+
   // ── 5. viaja con el documento
   const viaje = await ev(`(()=>{ const j = JSON.parse(JSON.stringify(DZ.doc.toJSON()));
     const sc = j.scene || j; const otra = new LOW.animation.Scene(sc);

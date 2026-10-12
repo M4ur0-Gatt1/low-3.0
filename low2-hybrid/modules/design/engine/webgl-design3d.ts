@@ -23,6 +23,9 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { Joystick3D, type JoyMode } from './joystick3d';
 import { NavCubo3D, type NavVista } from './navcubo3d';
 import { frameGeometry } from './frame-content';
+import { Perspectiva3D, AJUSTES_INICIALES, ajustesValidos, posicionCamara, leerCamara, marcoEnVista,
+  fovVista, fovRender, puntosDeFuga, pintarSuperposicion, direccion, type Perspectiva3DAjustes,
+  type PuntoDeFuga, type Eje } from './perspectiva3d';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
@@ -103,7 +106,9 @@ export interface Low3DProject {
   savedAt: string;
   camera: { view: ViewName; position: number[]; target: number[]; orthoSize: number };
   settings: { brush: BrushSettings; mirror: { x: boolean; y: boolean; z: boolean }; theme: Theme;
-    activeSurface: ReturnType<typeof lowStore.getState>['activeSurface'] };
+    activeSurface: ReturnType<typeof lowStore.getState>['activeSurface'];
+    /** la perspectiva para layouts (esquema, puntos, horizonte, lente…) */
+    perspectiva?: Partial<Perspectiva3DAjustes> };
   layers: ReturnType<typeof lowStore.getState>['layers'];
   activeLayerId: string | null;
   strokes: Array<{
@@ -242,6 +247,11 @@ export class WebGLDesign3D {
   private axesHelper!: THREE.AxesHelper;
   private showAxes = false;
   private vpEl!: SVGSVGElement;
+  // perspectiva para layouts de fondo (engine/perspectiva3d.ts)
+  private persp3d = new Perspectiva3D();
+  private perspAjustes: Perspectiva3DAjustes = { ...AJUSTES_INICIALES };
+  private aspecto2D = 16 / 9;
+  private perspFirma = '';
 
   // edición de nodos (herramienta 'select'): un trazo a la vez, sus puntos de
   // control se muestran como esferitas arrastrables en 3D.
@@ -351,6 +361,7 @@ export class WebGLDesign3D {
     this.strokesGroup = new THREE.Group();
     this.handlesGroup = new THREE.Group();
     this.scene.add(this.surfacesGroup, this.guidesGroup, this.strokesGroup, this.handlesGroup);
+    this.scene.add(this.persp3d.group);
 
     // marcador del eje móvil de rotación: mismo estilo que los handles de
     // edición de puntos, pero en un color distinto para no confundirlo con
@@ -530,6 +541,7 @@ export class WebGLDesign3D {
 
   dispose(): void {
     this.disposed = true;
+    this.persp3d.dispose();
     cancelAnimationFrame(this.raf);
     this.unsub?.();
     this.ro?.disconnect();
@@ -615,6 +627,7 @@ export class WebGLDesign3D {
 
   setTheme(theme: Theme): void {
     this.theme = theme;
+    this.persp3d.actualizar(this.perspAjustes, theme === 'dark');
     const dark = theme === 'dark';
     this.scene.fog = dark ? new THREE.FogExp2(0x34383a, 0.025) : null;
     const gm = this.grid.material as THREE.LineBasicMaterial;
@@ -704,6 +717,125 @@ export class WebGLDesign3D {
       g.appendChild(dot);
       this.vpEl.appendChild(g);
     }
+  }
+
+  // ---------------------------------------------------------------- perspectiva para layouts
+
+  getPerspectiva(): Perspectiva3DAjustes { return { ...this.perspAjustes }; }
+  lineasDePerspectiva(): number { return this.perspAjustes.activa ? this.persp3d.cantidadDeLineas() : 0; }
+
+  /** Cambia la perspectiva. Elegir esquema o 1/2/3 puntos lleva la cámara a la
+   *  estación del esquema; mover el horizonte, el giro o la inclinación la
+   *  ajusta DESDE donde está (no salta si orbitaste); el lente sólo cambia el
+   *  campo de visión. */
+  setPerspectiva(cambios: Partial<Perspectiva3DAjustes>, opciones: { mover?: boolean } = {}): Perspectiva3DAjustes {
+    const antes = this.perspAjustes;
+    const a = ajustesValidos({ ...antes, ...cambios });
+    if (JSON.stringify(a) === JSON.stringify(antes)) return { ...a };
+    this.perspAjustes = a;
+    if (a.activa && this.view !== 'persp') this.setView('persp');
+    this.persp3d.actualizar(a, this.theme === 'dark');
+    const toca = (k: keyof Perspectiva3DAjustes) => k in cambios && cambios[k] !== antes[k];
+    if (opciones.mover !== false && a.activa) {
+      if ((a.activa && !antes.activa) || toca('esquema') || toca('puntos')) {
+        const { pos, target } = posicionCamara(a);
+        this.camera.position.copy(pos);
+        this.controls.target.copy(target);
+      } else if (toca('altura') || toca('giro') || toca('inclinacion')) {
+        const pos = this.camera.position.clone().setY(a.altura);
+        this.camera.position.copy(pos);
+        this.controls.target.copy(pos.clone().add(direccion(a.giro, a.inclinacion).multiplyScalar(10)));
+      }
+      this.camera.lookAt(this.controls.target);
+      this.controls.update();
+      this.refrescarNavCubo();
+    }
+    if (!a.activa) {
+      this.perspCamera.fov = 45;
+      this.perspCamera.updateProjectionMatrix();
+      this.perspFirma = '';
+      this.updateVPOverlay();
+    } else this.perspFirma = '';
+    this.scheduleAutosave();
+    window.dispatchEvent(new Event('low3d:persp'));
+    return { ...a };
+  }
+
+  /** Lo que muestra la cámara ahora (por ejemplo tras orbitar con el mouse). */
+  leerPerspectiva(): { altura: number; giro: number; inclinacion: number } { return leerCamara(this.camera as THREE.Camera); }
+
+  /** El tamaño del cuadro del 2D: la forma del marco y del render. */
+  setAspecto2D(w: number, h: number): void {
+    if (w > 0 && h > 0) { this.aspecto2D = w / h; this.perspFirma = ''; }
+  }
+
+  /** El campo de visión de la vista, para que el MARCO muestre justo el lente. */
+  private perspPreRender(): void {
+    if (!this.perspAjustes.activa || this.view !== 'persp') return;
+    const w = this.canvas.clientWidth || 1, h = this.canvas.clientHeight || 1;
+    const fov = fovVista(this.perspAjustes.lente, h, marcoEnVista(w, h, this.aspecto2D).w);
+    if (Math.abs(this.perspCamera.fov - fov) > 1e-6) {
+      this.perspCamera.fov = fov;
+      this.perspCamera.updateProjectionMatrix();
+    }
+  }
+
+  /** Marco, horizonte y puntos de fuga encima de la vista. Sólo se rehace si
+   *  cambió la cámara o el tamaño: no se reescribe el SVG en cada cuadro. */
+  private perspSuperponer(): void {
+    if (!this.vpEl) return;
+    const w = this.canvas.clientWidth || 1, h = this.canvas.clientHeight || 1;
+    const c = this.perspCamera;
+    const firma = [w, h, this.aspecto2D, c.fov, ...c.position.toArray(), ...c.quaternion.toArray()]
+      .map((n) => Number(n).toFixed(4)).join(',');
+    if (firma === this.perspFirma) return;
+    this.perspFirma = firma;
+    this.vpEl.style.display = 'block';
+    pintarSuperposicion(this.vpEl, c, w, h, this.aspecto2D);
+  }
+
+  /** «Mandar al 2D»: las líneas y lo modelado, renderizados del tamaño del
+   *  cuadro del 2D con fondo transparente, y los puntos de fuga en esos mismos
+   *  píxeles. La cuadrícula, los ejes, el control de transformar y las
+   *  superficies-guía son ayudas del 3D: no van al layout. */
+  mandarAl2D(W: number, H: number): { png: string; width: number; height: number; vps: PuntoDeFuga[];
+    paralelas: { ux: number; uy: number; eje: Eje }[]; ajustes: Perspectiva3DAjustes } | null {
+    if (!this.perspAjustes.activa || !(W > 0) || !(H > 0)) return null;
+    this.detachRig();
+    const cam = new THREE.PerspectiveCamera(fovRender(this.perspAjustes.lente, W / H), W / H,
+      this.perspCamera.near, this.perspCamera.far);
+    cam.position.copy(this.perspCamera.position);
+    cam.quaternion.copy(this.perspCamera.quaternion);
+    cam.updateMatrixWorld(true);
+    cam.updateProjectionMatrix();
+    const antes = new Map<THREE.Object3D, boolean>();
+    for (const o of this.scene.children) {
+      antes.set(o, o.visible);
+      o.visible = o === this.persp3d.group || o === this.strokesGroup || (o as THREE.Light).isLight === true;
+    }
+    const fondo = this.scene.background, niebla = this.scene.fog;
+    this.scene.background = null;
+    this.scene.fog = null;
+    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    let png = '';
+    try {
+      r.setPixelRatio(1);
+      r.setSize(W, H, false);
+      r.outputColorSpace = this.renderer.outputColorSpace;
+      r.toneMapping = this.renderer.toneMapping;
+      r.toneMappingExposure = this.renderer.toneMappingExposure;
+      r.setClearColor(0x000000, 0);
+      r.render(this.scene, cam);
+      png = r.domElement.toDataURL('image/png');
+    } finally {
+      r.dispose();
+      r.forceContextLoss();
+      for (const [o, v] of antes) o.visible = v;
+      this.scene.background = fondo;
+      this.scene.fog = niebla;
+    }
+    const { vps, paralelas } = puntosDeFuga(cam, W, H);
+    return { png, width: W, height: H, vps, paralelas, ajustes: { ...this.perspAjustes } };
   }
 
   // ---------------------------------------------------------------- vistas orto / persp
@@ -4785,6 +4917,7 @@ export class WebGLDesign3D {
     this.clear();
     this.lastSurfaceKey = '';
     lowStore.setActiveSurface(null);
+    this.setPerspectiva({ ...AJUSTES_INICIALES }, { mover: false });   // un proyecto nuevo arranca con la perspectiva de fábrica
     this.setView('persp');
   }
 
@@ -4940,6 +5073,7 @@ export class WebGLDesign3D {
       camera: { view: this.view, position: this.camera.position.toArray(),
         target: this.controls.target.toArray(), orthoSize: this.orthoSize },
       settings: { brush: { ...this.brush }, mirror: { ...this.mirror }, theme: this.theme,
+        perspectiva: { ...this.perspAjustes },
         activeSurface: state.activeSurface ? { type: state.activeSurface.type, params: { ...state.activeSurface.params } } : null },
       layers: state.layers.map((l) => ({ ...l })), activeLayerId: state.activeLayerId,
       strokes: this.strokes.map((rec) => ({
@@ -5043,6 +5177,8 @@ export class WebGLDesign3D {
       this.camera.lookAt(this.controls.target);
       this.controls.update();
     }
+    // la perspectiva vuelve como estaba, SIN mover la cámara que se acaba de restaurar
+    this.setPerspectiva(ajustesValidos(doc.settings?.perspectiva), { mover: false });
     this.applyLayerStyles();
     this.undoStack = [];
     this.redoStack = [];
@@ -5082,11 +5218,13 @@ export class WebGLDesign3D {
     this.resize();
     this.controls.update();
     this.joyRefresh();
+    this.perspPreRender();
     this.renderer.render(this.scene, this.camera as THREE.Camera);
     // el cubo copia la orientación de la cámara y se dibuja aparte: su canvas
     // no entra en el picking del dibujo ni en el export
     this.refrescarNavCubo();
-    if (this.showAxes) this.updateVPOverlay();
+    if (this.perspAjustes.activa && this.view === 'persp') this.perspSuperponer();
+    else if (this.showAxes) this.updateVPOverlay();
     // onion-skin por profundidad (depende de la cámara): solo si la vista es
     // ortogonal Y la cámara/target/cantidad de trazos cambió desde el frame
     // anterior.

@@ -1199,6 +1199,50 @@
     /** Crea una columna de referencia a partir de imágenes por cuadro. Es una
      *  operación atómica: Undo quita nivel y capa; Redo restaura exactamente
      *  dibujos y exposiciones, sin tocar el resto de la escena. */
+    /** El layout del estudio 3D como capa de calco al FONDO, con UN dibujo
+     *  expuesto en toda la escena. Si ya hay uno de un envío anterior (se
+     *  reconoce por la marca data-low="layout-3d"), se reemplaza su imagen:
+     *  volver a mandar no apila capas. Todo es un paso de Ctrl+Z. */
+    setLayout3D(content, { nombre = "Layout 3D" } = {}) {
+      const sc = this.scene, marca = 'data-low="layout-3d"';
+      const foto = () => {
+        const lv = sc.levels.find((l) => l.type === "reference" && l.drawings.some((d) => String(d.content || "").includes(marca)));
+        const ly = lv ? sc.layers.find((l) => l.levelId === lv.id) : null;
+        return { level: lv ? lv.toJSON() : null, levelIndex: lv ? sc.levels.indexOf(lv) : -1,
+                 layer: ly ? ly.toJSON() : null, layerIndex: ly ? sc.layers.indexOf(ly) : -1 };
+      };
+      const before = foto();
+      let lv = before.level ? sc.level(before.level.id) : null;
+      if (!lv) lv = sc.addLevel(nombre, "reference");
+      const d = lv.byNumber(1) || lv.addDrawing(1, "");
+      d.content = String(content);
+      let ly = sc.layers.find((l) => l.levelId === lv.id);
+      if (!ly) {
+        ly = sc.addLayer(lv.id, nombre); ly.opacity = 0.7;
+        sc.layers.splice(sc.layers.indexOf(ly), 1); sc.layers.unshift(ly);   // al fondo: es el fondo
+      }
+      const n = Math.max(1, sc.lastFrame(), Number(sc.range && sc.range.out) || 0);
+      for (let f = 1; f <= n; f++) ly.setCell(f, 1);
+      const after = foto();
+      this.touch(); this.emit("layers"); this.emit("level"); this.emit("cells"); this.emit("frame");
+      if (this.history) {
+        const doc = this;
+        const ids = [before.level && before.level.id, after.level && after.level.id].filter(Boolean);
+        const lyIds = [before.layer && before.layer.id, after.layer && after.layer.id].filter(Boolean);
+        this.history.push({ label: "Layout desde el estudio 3D", domain: "layout3d", before, after,
+          apply: (_dir, v) => {
+            const s = doc.scene;
+            s.levels = s.levels.filter((l) => !ids.includes(l.id));
+            s.layers = s.layers.filter((l) => !lyIds.includes(l.id));
+            if (v.level) s.levels.splice(Math.max(0, Math.min(s.levels.length, v.levelIndex)), 0, new animation.Level(v.level));
+            if (v.layer) s.layers.splice(Math.max(0, Math.min(s.layers.length, v.layerIndex)), 0, new animation.Layer(v.layer));
+            if (doc.layerId && !s.layer(doc.layerId)) doc.layerId = s.layers.length ? s.layers[s.layers.length - 1].id : null;
+            doc.touch(); doc.emit("layers"); doc.emit("level"); doc.emit("cells"); doc.emit("frame");
+          } });
+      }
+      return ly;
+    }
+
     addReferenceSequence(items, nombre) {
       const valid=(items||[]).filter(x=>x&&Number(x.frame)>0&&x.content!=null);
       if(!valid.length)return null;

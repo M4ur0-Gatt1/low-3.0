@@ -1258,10 +1258,25 @@
   function perspectiveData(data) {
     const d = data && typeof data === "object" ? data : {};
     const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+    const color = (c) => (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c : null);
     const vps = (Array.isArray(d.vps) ? d.vps : []).slice(0, 3)
-      .filter((v) => v && typeof v === "object").map((v) => ({ x: num(v.x), y: num(v.y) }));
+      .filter((v) => v && typeof v === "object").map((v) => {
+        const out = { x: num(v.x), y: num(v.y) };
+        if (v.eje === "x" || v.eje === "y" || v.eje === "z") out.eje = v.eje;   // del estudio 3D: qué eje fuga ahí
+        if (color(v.color)) out.color = color(v.color);
+        return out;
+      });
     const out = { vps, visible: d.visible !== false, iman: d.iman !== false,
-                  origen: d.origen === "3d" ? "3d" : "manual" };
+                  origen: d.origen === "3d" ? "3d" : "manual",
+                  // «Líneas desde un punto»: rectas de construcción que salen de
+                  // cada punto de fuga y pasan por estos puntos
+                  lineas: (Array.isArray(d.lineas) ? d.lineas : []).slice(0, 60)
+                    .filter((q) => q && typeof q === "object").map((q) => ({ x: num(q.x), y: num(q.y) })) };
+    // Direcciones que NO fugan (paralelas a la imagen), en pantalla. Las manda
+    // el estudio 3D; sin ellas valen las de siempre (vertical, y horizontal con 1 punto).
+    if (Array.isArray(d.paralelas)) out.paralelas = d.paralelas.slice(0, 3)
+      .filter((u) => u && Number.isFinite(Number(u.ux)) && Number.isFinite(Number(u.uy)) && Math.hypot(u.ux, u.uy) > 1e-6)
+      .map((u) => { const n = Math.hypot(u.ux, u.uy); return { ux: u.ux / n, uy: u.uy / n }; });
     if (d.camara && typeof d.camara === "object") out.camara = clone(d.camara);
     return out;
   }

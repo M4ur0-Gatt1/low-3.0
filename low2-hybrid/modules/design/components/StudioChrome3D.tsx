@@ -6,9 +6,10 @@ import { Toolbar3D } from './Toolbar3D';
 import { PropertiesPanel3D } from './PropertiesPanel3D';
 import { LayerManager3D } from './LayerManager3D';
 import { ObjectList3D } from './ObjectList3D';
+import { PerspectivaPanel3D } from './PerspectivaPanel3D';
 import './studio-chrome.css';
 
-type Panel = 'brush' | 'scene' | 'tools' | 'guides' | null;
+type Panel = 'brush' | 'scene' | 'tools' | 'guides' | 'persp' | null;
 const paths: Record<string,string> = {
  pencil:'M4 17 16 5l3 3L7 20H4v-3ZM14 7l3 3', guide:'M3 17 11 5l10 4-8 12L3 17ZM8 11l10 4',
  move:'M12 3v18M3 12h18M9 6l3-3 3 3M6 9l-3 3 3 3M18 9l3 3-3 3M9 18l3 3 3-3',
@@ -72,6 +73,7 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
        <button className="studio-text-button" onClick={()=>toggle('brush')} aria-pressed={panel==='brush'}>Pincel</button>
        <button className="studio-text-button" onClick={()=>toggle('guides')} aria-pressed={panel==='guides'}>Guías</button>
        <button className="studio-text-button" onClick={()=>toggle('scene')} aria-pressed={panel==='scene'}><StudioIcon name="layers"/>Escena <span className="studio-count">{state.objects.length}</span></button>
+       <button className="studio-text-button" data-panel="persp" title="Esquemas de perspectiva para dibujar fondos en el 2D" onClick={()=>toggle('persp')} aria-pressed={panel==='persp'}>Perspectiva</button>
        {iconButton('sun',dark?'Usar fondo claro':'Usar fondo oscuro',onTheme)}
        {iconButton('help','Ayuda y atajos (?)',()=>{setHelp(v=>!v);setMenu(false);},help)}
        {iconButton('focus','Concentración (Tab)',()=>setFocus(true))}
@@ -91,9 +93,10 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <button aria-pressed={joystick} onClick={()=>{engine.current?.setJoystick(!joystick);setJoystick(!joystick);}}>Joystick</button>
    </div>}
    {panel&&<aside className="studio-inspector studio-surface" aria-label="Inspector 3D">
-     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
+     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Perspectiva para layouts'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
      <div className="studio-inspector-content">
        {panel==='tools'&&<Toolbar3D engine={engine}/>}
+       {panel==='persp'&&<PerspectivaPanel3D engine={engine}/>}
        {panel==='brush'&&<PropertiesPanel3D section="brush"/>}
        {panel==='guides'&&<><div className="studio-guide-tools"><p>Una superficie orienta los trazos en el espacio.</p><div className="studio-option-grid">{(['plane','cylinder','sphere','torus','loft'] as const).map((type,i)=><button key={type} aria-pressed={state.activeSurface?.type===type} onClick={()=>state.setActiveSurface(state.activeSurface?.type===type?null:{type,params:{}})}>{['Plano','Cilindro','Esfera','Toro','Loft'][i]}</button>)}</div><label>Visibilidad de guías <output>{guideOpacity}%</output><input aria-label="Visibilidad de guías" type="range" min="0" max="100" value={guideOpacity} onChange={e=>onGuideOpacity(Number(e.target.value))}/></label><button className="studio-text-button" onClick={()=>engine.current?.deleteGuide()}>Quitar última guía</button></div><PropertiesPanel3D section="surface"/></>}
        {panel==='scene'&&<><div className="studio-scene-section"><h3>Objetos</h3><ObjectList3D engine={engine}/><div className="studio-selection-actions"><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.groupSelection()}>Agrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.ungroupSelection()}>Desagrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.solidifySelection()}>Crear volumen</button></div></div><div className="studio-scene-section"><h3>Capas</h3><LayerManager3D engine={engine}/></div></>}
