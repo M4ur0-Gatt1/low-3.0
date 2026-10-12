@@ -1338,3 +1338,19 @@ LOW_I18N.registrar("en", "English", {
   "Quité el diálogo y sus claves de boca · Ctrl+Z lo devuelve": "Removed the dialogue and its mouth keys · Ctrl+Z brings it back",
   "Escribí el diálogo antes de crear las claves": "Type the dialogue before creating the keys",
 });
+
+/* Lipsync sincronizado con el audio (animation/lipsync-audio.js) */
+LOW_I18N.registrar("en", "English", {
+ "Sincronizar con el audio de la toma": "Sync with the take's audio",
+ "Hasta": "Until",
+ "cuadro": "frame",
+ "· sin audio": "· no audio",
+ "· volvé a cargar el audio": "· load the audio again",
+ "· «{}»": "· «{}»",
+ "Sincronizado con «{}» · la voz va de F{} a F{}": "Synced with «{}» · the voice runs from F{} to F{}",
+ "No hay audio cargado para sincronizar. Cargalo con Animación → Cargar audio (al reabrir una escena hay que volver a cargarlo: el archivo guarda la onda, no el sonido).": "There's no audio loaded to sync. Load it with Animation → Load audio (after reopening a scene you need to load it again: the file keeps the waveform, not the sound).",
+ "No encontré voz en ese tramo del audio: revisá el Inicio y el Hasta.": "I couldn't find voice in that part of the audio: check Start and Until.",
+ "Cargá el audio de la toma para sincronizar (Animación → Cargar audio)": "Load the take's audio to sync (Animation → Load audio)",
+ "No encontré voz en ese tramo del audio: revisá el Inicio y el Hasta": "I couldn't find voice in that part of the audio: check Start and Until",
+ "Lipsync desde el texto, sincronizado con «{}»: {} cambios de boca entre F{} y F{} · corregí desde la X-sheet · Ctrl+Z lo saca entero": "Lip sync from text, synced with «{}»: {} mouth changes between F{} and F{} · adjust in the X-sheet · Ctrl+Z removes it all"
+});

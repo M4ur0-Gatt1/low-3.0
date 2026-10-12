@@ -225,14 +225,11 @@
    * Fonemas → tramos de visema en cuadros.
    * @returns {{tramos: {visema, desde, hasta, fonemas}[], fin: number, segundos: number}}
    */
-  function tramos(fonemas, opciones = {}) {
-    const fps = Math.max(1, +opciones.fps || 24);
-    const vel = Math.max(0.2, Math.min(4, +opciones.velocidad || 1));
-    const inicio = Math.max(1, Math.round(+opciones.inicio || 1));
-    const sosten = Math.max(1, Math.round(+opciones.sosten || (fps >= 18 ? 2 : 1)));
-    // 1) visema y duración de cada fonema
-    const lista = fonemas.map((t, i) => {
-      if (t.pausa) return { visema: t.pausa === "espacio" ? null : "V0_Rest", seg: PAUSA[t.pausa] || 0, fon: "·" };
+  /** Cada fonema con su visema y su duración estimada (segundos, a velocidad 1).
+   *  Las pausas «espacio» no cambian de boca (visema null). */
+  function conVisemas(fonemas) {
+    return fonemas.map((t, i) => {
+      if (t.pausa) return { visema: t.pausa === "espacio" ? null : "V0_Rest", seg: PAUSA[t.pausa] || 0, fon: "·", pausa: t.pausa };
       let v = FONEMA_VISEMA[t.f] || "V5_L_N";
       if (v === "@vocal") {   // la vocal de adelante, o la de atrás, o reposo
         const vocal = fonemas.slice(i + 1).find((x) => x.pausa || x.tipo === "vocal" || x.tipo === "semivocal")
@@ -240,20 +237,29 @@
         v = vocal && !vocal.pausa ? FONEMA_VISEMA[vocal.f] : "V5_L_N";
       }
       const seg = t.tipo === "vocal" && t.tonica ? DURACION.tonica : (DURACION[t.tipo] || 0.07);
-      return { visema: v, seg, fon: t.f };
+      return { visema: v, seg, fon: t.f, tipo: t.tipo, f: t.f };
     });
-    // 2) a cuadros, acumulando el tiempo (sin deriva); el espacio no cambia de boca
-    let t = 0;
+  }
+
+  /**
+   * Segmentos con TIEMPO ({visema, t0, t1} en segundos desde el inicio) → tramos
+   * en cuadros: acumula sin deriva, junta los iguales seguidos, absorbe lo que
+   * dura menos que el sostén (menos el cierre de labios) y termina en reposo.
+   * Lo usan la estimación por texto y la sincronización con el audio.
+   */
+  function aCuadros(segmentos, opciones = {}) {
+    const fps = Math.max(1, +opciones.fps || 24);
+    const inicio = Math.max(1, Math.round(+opciones.inicio || 1));
+    const sosten = Math.max(1, Math.round(+opciones.sosten || (fps >= 18 ? 2 : 1)));
     const crudos = [];
-    for (const x of lista) {
-      const ini = t; t += x.seg / vel;
+    for (const x of segmentos) {
       if (!x.visema) continue;
-      const desde = inicio + Math.round(ini * fps), hasta = inicio + Math.round(t * fps) - 1;
+      const desde = inicio + Math.round(x.t0 * fps), hasta = inicio + Math.round(x.t1 * fps) - 1;
       const ult = crudos[crudos.length - 1];
       if (ult && ult.visema === x.visema && ult.hasta >= desde - 1) { ult.hasta = Math.max(ult.hasta, hasta); ult.fonemas += x.fon; continue; }
       crudos.push({ visema: x.visema, desde, hasta, fonemas: x.fon });
     }
-    // 3) sostén mínimo: lo más corto se absorbe en el anterior (menos el cierre de labios)
+    // sostén mínimo: lo más corto se absorbe en el anterior (menos el cierre de labios)
     const res = [];
     for (const c of crudos) {
       if (c.hasta < c.desde) c.hasta = c.desde;   // lo que no llegó a un cuadro: uno
@@ -267,7 +273,18 @@
     // la boca termina en reposo
     const ult = res[res.length - 1];
     if (ult && ult.visema !== "V0_Rest") res.push({ visema: "V0_Rest", desde: ult.hasta + 1, hasta: ult.hasta + 1, fonemas: "·" });
-    return { tramos: res, fin: res.length ? res[res.length - 1].desde : inicio, segundos: t };
+    return { tramos: res, fin: res.length ? res[res.length - 1].desde : inicio };
+  }
+
+  /**
+   * Fonemas → tramos de visema en cuadros, con las duraciones ESTIMADAS.
+   * @returns {{tramos: {visema, desde, hasta, fonemas}[], fin: number, segundos: number}}
+   */
+  function tramos(fonemas, opciones = {}) {
+    const vel = Math.max(0.2, Math.min(4, +opciones.velocidad || 1));
+    let t = 0;
+    const segs = conVisemas(fonemas).map((x) => { const t0 = t; t += x.seg / vel; return { ...x, t0, t1: t }; });
+    return { ...aCuadros(segs, opciones), segundos: t };
   }
 
   /* ── mapa visema → dibujo del personaje ────────────────────────────────── */
@@ -318,7 +335,8 @@
    */
   function clavesDeTexto(texto, opciones = {}) {
     const fon = (g2p[opciones.idioma || "es"] || g2p.es)(texto);
-    const r = tramos(fon, opciones);
+    // con audio, los tramos vienen ya ubicados en la voz (lipsync-audio.js); si no, se estiman
+    const r = opciones.alineado || tramos(fon, opciones);
     const limite = Math.round(+opciones.limite || 0);
     const keys = {}, avisos = [];
     let anterior = opciones.antes || null, cortados = 0;
@@ -332,5 +350,5 @@
   }
 
   animation.lipsyncTexto = { g2p, g2pEspanol, tonica, trozos, numeroEnPalabras, VISEMAS, FONEMA_VISEMA, PARECIDO,
-    DURACION, PAUSA, tramos, resolverMapa, dibujoDe, clavesDeTexto };
+    DURACION, PAUSA, conVisemas, aCuadros, tramos, resolverMapa, dibujoDe, clavesDeTexto };
 })(typeof window !== "undefined" ? window : globalThis);

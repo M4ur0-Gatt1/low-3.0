@@ -51,6 +51,8 @@
       <textarea id="rigLipTexto" class="rig2-lip-dialogo" rows="3" spellcheck="true" placeholder="Escribí o pegá el diálogo… (por ejemplo: ¡Hola! ¿Cómo estás?)"></textarea>
       <label class="rig2-lip-ctl">Inicio<input id="rigLipInicio" type="number" min="1" step="1" value="1"><button id="rigLipAqui" type="button" title="Empezar en el cuadro actual">aquí</button></label>
       <label class="rig2-lip-ctl">Velocidad<input id="rigLipVel" type="range" min="50" max="200" step="5" value="100"><output id="rigLipVelVal">100 %</output></label>
+      <label class="rig2-lip-sinc"><input id="rigLipSinc" type="checkbox"> Sincronizar con el audio de la toma <small id="rigLipSincInfo"></small></label>
+      <label class="rig2-lip-ctl rig2-lip-hasta" hidden>Hasta<input id="rigLipHasta" type="number" min="1" step="1"><small>cuadro</small></label>
       <div class="rig2-lip-previa" id="rigLipPrevia" aria-live="polite"></div>
       <div class="rig2-lip-acciones rig2-lip-acciones-texto">
         <button id="rigLipTextoGen" title="Crear las claves de boca del diálogo (un paso de Ctrl+Z)">Crear las claves</button>
@@ -66,6 +68,8 @@
     $("#rigLipInicio").addEventListener("input", previaLuego);
     $("#rigLipVel").addEventListener("input", () => { $("#rigLipVelVal").textContent = $("#rigLipVel").value + " %"; previaLuego(); });
     $("#rigLipAqui").onclick = () => { const D = dz(); if (D && D.doc) { $("#rigLipInicio").value = D.doc.frame; previa(); } };
+    $("#rigLipSinc").onchange = () => { $(".rig2-lip-hasta").hidden = !$("#rigLipSinc").checked; previa(); };
+    $("#rigLipHasta").addEventListener("input", previaLuego);
     $("#rigLipTextoGen").onclick = generar;
     $("#rigLipTextoPlay").onclick = reproducir;
     $("#rigLipTextoQuitar").onclick = quitar;
@@ -84,6 +88,41 @@
     return mejor;
   }
 
+  /* ── SINCRONIZAR CON EL AUDIO (animation/lipsync-audio.js) ───────────────
+     El texto dice qué sonidos hay; la toma, cuándo. La ventana de búsqueda va
+     del Inicio al Hasta (por omisión, todo el audio), respetando el
+     desplazamiento de la pista. Hace falta el SONIDO decodificado: el .low
+     guarda la onda (los picos), no el audio; al reabrir hay que cargarlo de
+     nuevo. */
+  const mezclas = new WeakMap();
+  function mono(buf) {
+    let m = mezclas.get(buf);
+    if (m) return m;
+    const n = buf.length, k = buf.numberOfChannels || 1;
+    if (k === 1) m = buf.getChannelData(0);
+    else { m = new Float32Array(n); for (let c = 0; c < k; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) m[i] += d[i] / k; } }
+    mezclas.set(buf, m);
+    return m;
+  }
+  let ultimaSinc = null;
+  function sincronizacion(D, texto, inicio) {
+    const caja = $("#rigLipSinc");
+    if (!caja || !caja.checked) return null;
+    const pista = D.doc.audio, A = global.LOW && LOW.animation && LOW.animation.lipsyncAudio;
+    if (!pista || !pista.buffer || !A) return { error: "audio" };
+    const f = fps(), off = Math.round(pista.offset || 0);
+    const finAudio = off + Math.ceil(pista.buffer.duration * f);
+    const hasta = Math.max(inicio, Math.round(+$("#rigLipHasta").value || finAudio));
+    const desdeSeg = Math.max(0, (inicio - 1 - off) / f), hastaSeg = Math.min(pista.buffer.duration, Math.max(desdeSeg, (hasta - off) / f));
+    const clave = [texto, inicio, hasta, f, off, pista.buffer.length].join("|");
+    if (ultimaSinc && ultimaSinc.clave === clave && ultimaSinc.buffer === pista.buffer) return ultimaSinc.valor;
+    const inicioVentana = Math.round(off + 1 + desdeSeg * f);
+    const al = A.sincronizar(texto, { idioma: "es", fps: f, inicio: inicioVentana, muestras: mono(pista.buffer), tasa: pista.buffer.sampleRate, desdeSeg, hastaSeg });
+    const valor = al ? { alineado: al, hasta, pista: pista.name || "audio", vozDesde: inicioVentana + Math.round(al.voz[0] * f), vozHasta: inicioVentana + Math.round(al.voz[1] * f) } : { error: "sin-voz" };
+    ultimaSinc = { clave, buffer: pista.buffer, valor };
+    return valor;
+  }
+
   /** Lo que saldría con el texto y los ajustes de ahora (sin tocar nada). */
   function calcular() {
     const lt = L(), D = dz();
@@ -98,8 +137,11 @@
     // claves de la versión anterior de ESTE diálogo, que se van a borrar
     // (medido: al regenerar desde F30, la O vieja de F29 tapaba la O nueva de F30)
     const antes = bocaAntes(D, slotId, inicio);
-    const r = lt.clavesDeTexto(texto, { idioma: "es", fps: fps(), inicio, velocidad, limite: limite(), mapa, antes });
-    return { slotId, variantes, texto, inicio, velocidad, mapa, guardado, r };
+    const sinc = sincronizacion(D, texto, inicio);
+    if (sinc && sinc.error) return { slotId, variantes, texto, inicio, velocidad, error: sinc.error };
+    const r = lt.clavesDeTexto(texto, { idioma: "es", fps: fps(), inicio, velocidad, limite: limite(), mapa, antes, alineado: sinc && sinc.alineado });
+    if (sinc) r.segundos = sinc.alineado.voz[1] - sinc.alineado.voz[0];
+    return { slotId, variantes, texto, inicio, velocidad, mapa, guardado, r, sinc };
   }
 
   function previa() {
@@ -111,6 +153,12 @@
       caja.innerHTML = '<span class="rig2-lip-vacio">Elegí la pieza de la boca: sus dibujos son las bocas de los visemas.</span>';
       if (btn) btn.disabled = true; return;
     }
+    if (c.error === "audio" || c.error === "sin-voz") {
+      caja.innerHTML = '<span class="rig2-lip-vacio">' + (c.error === "audio"
+        ? "No hay audio cargado para sincronizar. Cargalo con Animación → Cargar audio (al reabrir una escena hay que volver a cargarlo: el archivo guarda la onda, no el sonido)."
+        : "No encontré voz en ese tramo del audio: revisá el Inicio y el Hasta.") + "</span>";
+      if (btn) btn.disabled = true; return;
+    }
     if (!c.texto.trim() || !Object.keys(c.r.keys).length) {
       caja.innerHTML = '<span class="rig2-lip-vacio">Escribí el diálogo para ver los visemas.</span>';
       if (btn) btn.disabled = true; return;
@@ -119,7 +167,8 @@
     const nombre = Object.fromEntries(lt.VISEMAS.map((v) => [v.id, v.nombre]));
     const dibujo = Object.fromEntries(c.variantes.map((v) => [v.id, v.name || v.elementId]));
     const seg = c.r.segundos;
-    caja.innerHTML = `<div class="rig2-lip-resumen">≈ ${seg.toFixed(1).replace(".", ",")} s · F${c.inicio}–F${c.r.fin} · ${Object.keys(c.r.keys).length} cambios de boca</div>` +
+    const sincTxt = c.sinc ? `<div class="rig2-lip-resumen rig2-lip-sincronizado">Sincronizado con «${esc(c.sinc.pista)}» · la voz va de F${c.sinc.vozDesde} a F${c.sinc.vozHasta}</div>` : "";
+    caja.innerHTML = sincTxt + `<div class="rig2-lip-resumen">${c.sinc ? "" : "≈ "}${seg.toFixed(1).replace(".", ",")} s · F${(c.r.tramos[0] || {}).desde || c.inicio}–F${c.r.fin} · ${Object.keys(c.r.keys).length} cambios de boca</div>` +
       `<div class="rig2-lip-tramos">${c.r.tramos.filter((t) => !limite() || t.desde <= limite()).map((t) =>
         `<span class="rig2-lip-tramo v-${esc(t.visema)}" title="${esc(nombre[t.visema])} · «${esc(t.fonemas)}» · dibujo: ${esc(dibujo[lt.dibujoDe(t.visema, c.mapa)] || "—")}">F${t.desde} ${esc(nombre[t.visema])}</span>`).join("")}</div>` +
       (c.r.avisos.length ? `<div class="rig2-lip-aviso">${esc(c.r.avisos.join(" · "))}</div>` : "");
@@ -128,18 +177,21 @@
   function generar() {
     const D = dz(), c = calcular();
     if (c.error === "boca") return avisar("Elegí la pieza de la boca, con dos dibujos o más");
+    if (c.error === "audio") return avisar("Cargá el audio de la toma para sincronizar (Animación → Cargar audio)");
+    if (c.error === "sin-voz") return avisar("No encontré voz en ese tramo del audio: revisá el Inicio y el Hasta");
     if (!c.texto.trim() || !Object.keys(c.r.keys).length) return avisar("Escribí el diálogo antes de crear las claves");
     // el diálogo que se edita; si no hay, uno guardado con el MISMO texto (regenerarlo, no duplicarlo)
     const mismo = Object.values(D.doc.lipsyncTexto(c.slotId).dialogos).find((d) => d.texto.trim() === c.texto.trim());
     const id = (dialogoSlot === c.slotId && dialogoId) || (mismo && mismo.id) || ("d" + Date.now().toString(36));
-    const dialogo = { id, texto: c.texto, idioma: "es", inicio: c.inicio, fin: c.r.fin, velocidad: c.velocidad, fps: fps() };
+    const dialogo = { id, texto: c.texto, idioma: "es", inicio: c.inicio, fin: Math.max(c.r.fin, c.sinc ? c.sinc.hasta : 0), velocidad: c.velocidad, fps: fps(),
+      ...(c.sinc ? { sincronizado: true, hasta: c.sinc.hasta, audio: c.sinc.pista } : {}) };
     const puestas = D.doc.applyLipsyncTexto(c.slotId, dialogo, c.r.keys);
     dialogoId = id; dialogoSlot = c.slotId;
     if (typeof global.dzRigApplyLive === "function" && typeof global.dzRigCur === "function") global.dzRigApplyLive(global.dzRigCur());
     if (typeof global.dzRigPanelSync === "function") global.dzRigPanelSync();
     if (D.xsView) D.xsView.render();
     dialogos();
-    avisar(`Lipsync desde el texto: ${puestas} cambios de boca entre F${c.inicio} y F${c.r.fin}` +
+    avisar(`Lipsync desde el texto${c.sinc ? ", sincronizado con «" + c.sinc.pista + "»" : ""}: ${puestas} cambios de boca entre F${(c.r.tramos[0] || {}).desde || c.inicio} y F${c.r.fin}` +
       (c.r.avisos.length ? " · " + c.r.avisos[0] : "") + " · corregí desde la X-sheet · Ctrl+Z lo saca entero");
   }
 
@@ -172,6 +224,7 @@
       dialogoId = d.id; dialogoSlot = slotId;
       $("#rigLipTexto").value = d.texto; $("#rigLipInicio").value = d.inicio;
       $("#rigLipVel").value = Math.round((d.velocidad || 1) * 100); $("#rigLipVelVal").textContent = $("#rigLipVel").value + " %";
+      $("#rigLipSinc").checked = !!d.sincronizado; $(".rig2-lip-hasta").hidden = !d.sincronizado; if (d.hasta) $("#rigLipHasta").value = d.hasta;
       dialogos(); previa();
     });
   }
@@ -196,6 +249,9 @@
   function sync() {
     if (!montar()) return;
     const { slotId, variantes } = boca();
+    const D0 = dz(), pista = D0 && D0.doc && D0.doc.audio, info = $("#rigLipSincInfo"), tilde = $("#rigLipSinc");
+    if (info) info.textContent = !pista ? "· sin audio" : !pista.buffer ? "· volvé a cargar el audio" : "· «" + (pista.name || "audio") + "»";
+    if (tilde) { tilde.disabled = !(pista && pista.buffer); if (tilde.disabled && tilde.checked) { tilde.checked = false; $(".rig2-lip-hasta").hidden = true; } }
     const est = $("#rigLipTextoEstado");
     if (est) est.textContent = slotId && variantes.length >= 2 ? variantes.length + " bocas · " + fps() + " fps" : "falta la boca";
     // el diálogo en edición se olvida al cambiar de boca, NO cuando desaparece un momento:

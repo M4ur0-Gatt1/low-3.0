@@ -22,3 +22,7 @@
 .rig2-lip-mapa summary { cursor: pointer; color: var(--mut, #999); }
 .rig2-lip-visema { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; margin: 3px 0; }
 .rig2-lip-visema select { min-width: 0; font-size: 10px; }
+.rig2-lip-sinc { display: flex; align-items: center; gap: 6px; margin: 6px 0 2px; font-size: 10.5px; color: var(--fg2, #bbb); }
+.rig2-lip-sinc small { color: var(--mut, #888); }
+.rig2-lip-hasta small { font-size: 9.5px; color: var(--mut, #888); }
+.rig2-lip-sincronizado { color: var(--ok, #6c6); }

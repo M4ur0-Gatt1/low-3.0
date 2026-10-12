@@ -1311,3 +1311,19 @@ LOW_I18N.registrar("pt", "Português", {
   "Quité el diálogo y sus claves de boca · Ctrl+Z lo devuelve": "Removi o diálogo e suas chaves de boca · Ctrl+Z traz de volta",
   "Escribí el diálogo antes de crear las claves": "Escreva o diálogo antes de criar as chaves",
 });
+
+/* Lipsync sincronizado con el audio (animation/lipsync-audio.js) */
+LOW_I18N.registrar("pt", "Português", {
+ "Sincronizar con el audio de la toma": "Sincronizar com o áudio da tomada",
+ "Hasta": "Até",
+ "cuadro": "quadro",
+ "· sin audio": "· sem áudio",
+ "· volvé a cargar el audio": "· carregue o áudio de novo",
+ "· «{}»": "· «{}»",
+ "Sincronizado con «{}» · la voz va de F{} a F{}": "Sincronizado com «{}» · a voz vai de F{} a F{}",
+ "No hay audio cargado para sincronizar. Cargalo con Animación → Cargar audio (al reabrir una escena hay que volver a cargarlo: el archivo guarda la onda, no el sonido).": "Não há áudio carregado para sincronizar. Carregue em Animação → Carregar áudio (ao reabrir uma cena é preciso carregá-lo de novo: o arquivo guarda a onda, não o som).",
+ "No encontré voz en ese tramo del audio: revisá el Inicio y el Hasta.": "Não encontrei voz nesse trecho do áudio: confira o Início e o Até.",
+ "Cargá el audio de la toma para sincronizar (Animación → Cargar audio)": "Carregue o áudio da tomada para sincronizar (Animação → Carregar áudio)",
+ "No encontré voz en ese tramo del audio: revisá el Inicio y el Hasta": "Não encontrei voz nesse trecho do áudio: confira o Início e o Até",
+ "Lipsync desde el texto, sincronizado con «{}»: {} cambios de boca entre F{} y F{} · corregí desde la X-sheet · Ctrl+Z lo saca entero": "Lipsync a partir do texto, sincronizado com «{}»: {} trocas de boca entre F{} e F{} · ajuste na X-sheet · Ctrl+Z desfaz tudo"
+});
