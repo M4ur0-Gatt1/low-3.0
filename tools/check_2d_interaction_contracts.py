@@ -1067,7 +1067,7 @@ EXPORT_CUADROS = (ROOT / "ui" / "animation" / "export-cuadros.js").read_text(enc
 require('src="animation/export-cuadros.js' in INDEX,
         "el modulo del cuadro en blanco no se carga: dzExportCuadroEnBlanco queda "
         "sin definir y la exportacion tira ReferenceError en el primer cuadro vacio")
-_export_doc = APP[APP.index("async function dzDoExportDoc(kind)"):]
+_export_doc = APP[APP.index("async function dzDoExportDoc(kind"):]
 _export_doc = _export_doc[:_export_doc.index("async function dzExportSpritesheet")]
 require("dzExportCuadroEnBlanco(DZ.doc.scene)" in _export_doc and "continue;" not in _export_doc,
         "volvio el `continue` del cuadro vacio en dzDoExportDoc: un cuadro en blanco "
@@ -1371,7 +1371,7 @@ require("api.export_anim(DZ.path" not in APP and "api.export_premiere(DZ.path" n
 require(APP.count("dzRutaDeSalida(DZ)") >= 5,
         "quedan salidas sin pasar por la ruta del documento: son cinco (MP4/WebM/GIF, "
         "secuencia, hoja de sprites x2 y Premiere)")
-require(all(re.search(r"def " + nombre + r"\(s, path.*?if not path:.*?guarda el documento antes de exportar",
+require(all(re.search(r"def " + nombre + r"\(s, path.*?if not path(?: and not destino)?:.*?guarda el documento antes de exportar",
                       MAIN, re.S) for nombre in ("export_anim", "export_premiere")),
         "el puente volvio a hacer Path(None): revienta con un TypeError que del otro "
         "lado se ve como el programa colgado, en vez de decir que hacer")

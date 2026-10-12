@@ -51,7 +51,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.22.0"
+LOW_VERSION = "3.23.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -1392,15 +1392,64 @@ class Api:
         except (OSError, ValueError, TypeError) as e:
             log(f"shift_scene fallo: {e}")
 
-    def export_premiere(s, path, frames_png, xml, wav_b64=None, name="secuencia"):
+    # Las salidas que son UN archivo se eligen con el diálogo de Guardar; la
+    # secuencia PNG y el paquete de Premiere son muchos archivos y se elige la
+    # carpeta. Sin elección (puente viejo, diálogo que no abre) queda el camino
+    # de siempre: `export/` al lado del documento.
+    _EXPORT_ARCHIVO = {"mp4": ("Video MP4 (*.mp4)", ".mp4"),
+                       "webm": ("Video WebM (*.webm)", ".webm"),
+                       "gif": ("GIF animado (*.gif)", ".gif"),
+                       "sheet": ("Imagen PNG (*.png)", ".png")}
+
+    def _export_stem(s, path, nombre=None):
+        if path:
+            p = Path(path)
+            m = s._FRAME_RX.match(p.name)
+            return Path(m.group(1) if m else p.stem).name
+        return re.sub(r'[<>:"/\\|?*]+', "_", str(nombre or "")).strip(" ._") or "animacion"
+
+    def pick_export_target(s, path=None, kind="mp4", nombre=None):
+        """Pregunta DÓNDE guardar lo exportado, como cualquier programa. Abre en
+        la última carpeta usada (o la del documento) y la recuerda. Devuelve
+        {path, dir}, {cancel} o {error}."""
+        if not s._window:
+            return {"error": "sin ventana"}
+        stem = s._export_stem(path, nombre)
+        candidatas = [s.cfg.data.get("export_dir"), Path(path).parent if path else None,
+                      s.ws, Path.home() / "Documents"]
+        inicio = next((str(c) for c in candidatas if c and Path(c).is_dir()), "")
+        carpeta_sola = kind not in s._EXPORT_ARCHIVO
+        try:
+            if carpeta_sola:
+                r = s._window.create_file_dialog(webview.FOLDER_DIALOG, directory=inicio)
+            else:
+                tipo, ext = s._EXPORT_ARCHIVO[kind]
+                sugerido = stem + ("_sheet" if kind == "sheet" else "") + ext
+                r = s._window.create_file_dialog(webview.SAVE_DIALOG, directory=inicio,
+                                                 save_filename=sugerido, file_types=(tipo,))
+        except Exception as e:  # noqa: BLE001 — el frontend cae al camino de siempre
+            return {"error": str(e)}
+        if not r:
+            return {"cancel": True}
+        elegido = Path(r[0] if isinstance(r, (list, tuple)) else str(r))
+        if not carpeta_sola:
+            ext = s._EXPORT_ARCHIVO[kind][1]
+            if elegido.suffix.lower() != ext:
+                elegido = elegido.with_name(elegido.name + ext)
+        carpeta = elegido if carpeta_sola else elegido.parent
+        s.cfg.data["export_dir"] = str(carpeta)
+        s.cfg.save()
+        return {"path": str(elegido), "dir": str(carpeta)}
+
+    def export_premiere(s, path, frames_png, xml, wav_b64=None, name="secuencia", destino=None):
         """Escribe la carpeta que se importa en Premiere: los cuadros, el audio
         y el XML, TODO junto. Que vivan en la misma carpeta es lo que evita el
-        cartel de «archivo perdido» pidiendo relinkear cuadro por cuadro."""
-        if not path:
+        cartel de «archivo perdido» pidiendo relinkear cuadro por cuadro.
+        `destino` es la carpeta que eligió el usuario; sin ella, export/."""
+        if not path and not destino:
             return {"error": "No se de donde sacar la carpeta de salida: guarda el documento antes de exportar"}
-        p = Path(path)
         limpio = re.sub(r"[^\w.-]+", "_", str(name or "secuencia")).strip("_") or "secuencia"
-        outdir = p.parent / "export" / (limpio + "_premiere")
+        outdir = Path(destino) if destino else Path(path).parent / "export" / (limpio + "_premiere")
         try:
             outdir.mkdir(parents=True, exist_ok=True)
             for i, du in enumerate(frames_png or []):
@@ -1431,19 +1480,26 @@ class Api:
         pregunta para no ofrecer como principal algo que va a fallar."""
         return {"mp4": bool(_ffmpeg_exe())}
 
-    def export_anim(s, path, frames_png, fps=12, kind="gif"):
+    def export_anim(s, path, frames_png, fps=12, kind="gif", destino=None, nombre=None):
         """Exporta la animación: el frontend rasteriza cada cuadro a PNG dataURL
         y acá se arma el archivo final. kind: 'gif' (Pillow) o 'png' (secuencia).
+        `destino` es lo que eligió el usuario con pick_export_target: el archivo,
+        o la carpeta para la secuencia PNG. Sin él, export/ al lado del documento.
         Devuelve {path} del resultado o {error}."""
         # SIN RUTA NO HAY DONDE ESCRIBIR, y `Path(None)` revienta con un
         # TypeError que del otro lado se ve como el programa colgado en
         # «Guardando la secuencia...». Un error legible es parte de la promesa.
-        if not path:
+        if not path and not destino:
             return {"error": "No se de donde sacar la carpeta de salida: guarda el documento antes de exportar"}
-        p = Path(path)
-        m = s._FRAME_RX.match(p.name)
-        stem = m.group(1) if m else p.stem
-        outdir = p.parent / "export"
+        stem = s._export_stem(path, nombre)
+        elegido = Path(destino) if destino else None
+        if elegido is None:
+            outdir = Path(path).parent / "export"
+        else:
+            outdir = elegido if kind == "png" else elegido.parent
+
+        def salida(por_defecto):
+            return elegido if (elegido is not None and kind != "png") else outdir / por_defecto
         try:
             outdir.mkdir(parents=True, exist_ok=True)
             imgs = []
@@ -1470,7 +1526,7 @@ class Api:
                 s._push("ws", {"ws": s.ws, "tree": s._tree(), "branch": s._git_branch()})
                 return {"path": str(outdir), "n": len(imgs)}
             if kind == "sheet":                 # el frontend ya compuso la grilla
-                out = outdir / f"{Path(stem).name}_sheet.png"
+                out = salida(f"{stem}_sheet.png")
                 out.write_bytes(imgs[0])
                 s._push("ws", {"ws": s.ws, "tree": s._tree(), "branch": s._git_branch()})
                 return {"path": str(out), "n": 1}
@@ -1489,7 +1545,7 @@ class Api:
                 try:
                     for i, raw in enumerate(imgs):
                         (tdir / f"f_{i + 1:04d}.png").write_bytes(raw)
-                    out = outdir / f"{Path(stem).name}.{kind}"
+                    out = salida(f"{stem}.{kind}")
                     fps_v = max(1, int(fps or 12))
                     vcodec = "libx264" if kind == "mp4" else "libvpx-vp9"
                     # yuv420p + escala a dimensiones pares = compatible con todos los players
@@ -1514,7 +1570,7 @@ class Api:
             pil = [Image.open(io.BytesIO(raw)).convert("RGB") for raw in imgs]
             if not pil:
                 return {"error": "no llegó ningún cuadro"}
-            out = outdir / f"{Path(stem).name}.gif"
+            out = salida(f"{stem}.gif")
             dur = max(20, round(1000 / max(1, int(fps or 12))))
             pil[0].save(out, save_all=True, append_images=pil[1:],
                         duration=dur, loop=0, optimize=True)

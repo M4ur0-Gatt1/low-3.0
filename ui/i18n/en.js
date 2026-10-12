@@ -531,6 +531,8 @@ LOW_I18N.registrar("en", "English", {
   "Exponer cada dibujo por tres fotogramas": "Expose each drawing for three frames",
   "Exponer cada dibujo por un fotograma": "Expose each drawing for one frame",
   "Exportar animación…": "Export animation…",
+  "Al elegir el formato, elegís dónde guardarlo.": "When you pick the format, you choose where to save it.",
+  "Exportación cancelada": "Export cancelled",
   "Exportar la animación": "Export the animation",
   "Exportar la animación (Alt+E): MP4, GIF, secuencia PNG, spritesheet o XML para Premiere con el audio en sincro — si hay claves de cámara, sale POR LA CÁMARA (con multiplano Z)": "Export the animation (Alt+E): MP4, GIF, PNG sequence, spritesheet or XML for Premiere with audio in sync — if there are camera keys, it renders THROUGH THE CAMERA (with Z multiplane)",
   "Exportar la animación: MP4, GIF, secuencia PNG, spritesheet o XML para Premiere con el audio en sincro — si hay claves de cámara, sale POR LA CÁMARA (con multiplano Z)": "Export the animation: MP4, GIF, PNG sequence, spritesheet or XML for Premiere with audio in sync — if there are camera keys, it renders THROUGH THE CAMERA (with Z multiplane)",

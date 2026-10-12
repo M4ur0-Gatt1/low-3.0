@@ -34,6 +34,10 @@
 
   const impl = {
     log_js: m => console.log("[js→py]", m),
+    // Dónde guardar lo exportado: el mock no tiene diálogo nativo. Una prueba
+    // lo decide con window.__destinoExport; sin eso, {} = export/ como siempre.
+    pick_export_target: async (path, kind, nombre) =>
+      (window.__destinoExport ? window.__destinoExport(path, kind, nombre) : {}),
     export_premiere: async (path, frames, xml, wav, name) => {
       window.__premiere = { path, frames: (frames || []).length, xml, wav: !!wav, name };
       return { path: "C:\\mock\\export\\" + name + "_premiere", name: name + ".xml",

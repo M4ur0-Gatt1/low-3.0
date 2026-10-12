@@ -7368,7 +7368,7 @@ function dzExportModal() {
   const tramo = cuadros && cuadros.length
     ? ` (F${cuadros[0]} a F${cuadros.at(-1)})` : "";
   openModal(`<h2> Exportar animación</h2>
-    <div class="sub">${cuantos} ${cuantos === 1 ? "cuadro" : "cuadros"}${tramo} a ${$("#tlFps").value || 12} fps  carpeta export/ del proyecto.<br>
+    <div class="sub">${cuantos} ${cuantos === 1 ? "cuadro" : "cuadros"}${tramo} a ${$("#tlFps").value || 12} fps.<br><span>Al elegir el formato, elegís dónde guardarlo.</span><br>
       ${DZ.doc && DZ.doc.audio ? "Audio: <b>" + (DZ.doc.audio.name || "cargado") + "</b>  el XML sale sincronizado." : "Sin audio cargado: el XML saldrá solo con los cuadros."}</div>
     <div class="m-actions" style="flex-wrap:wrap">
       <button class="primary" data-x="mp4">Video MP4</button>
@@ -7382,10 +7382,10 @@ function dzExportModal() {
   document.querySelectorAll("#modal [data-x]").forEach(b => b.onclick = () => { closeModal(); dzDoExport(b.dataset.x); });
 }
 async function dzDoExport(kind) {
-  await dzPersist();
+  await dzPersist(); const destino = await dzDestinoExport(kind, DZ); if (!destino) return;   // se elige dónde ANTES de rasterizar (destino-export.js)
   // Escena del modelo nuevo: los cuadros salen de la escena, no de una lista
   // de archivos en disco que ya no se llena.
-  if (DZ.doc) return dzDoExportDoc(kind);
+  if (DZ.doc) return dzDoExportDoc(kind, destino);
   const [lo, hi] = dzPlayRange();                // exporta solo el rango In/Out
   const frames = DZ.anim.frames.slice(lo, hi + 1);
   dzSetStatus(" Rasterizando " + frames.length + " cuadros…");
@@ -7419,14 +7419,14 @@ async function dzDoExport(kind) {
     const ctx = c.getContext("2d");
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c.width, c.height);
     ok.forEach((im, i) => ctx.drawImage(im, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh));
-    const r = await api.export_anim(dzRutaDeSalida(DZ), [c.toDataURL("image/png")], 12, "sheet");
+    const r = await api.export_anim(dzRutaDeSalida(DZ), [c.toDataURL("image/png")], 12, "sheet", destino.path, destino.nombre);
     dzSetStatus(r && r.error ? " " + r.error : " Spritesheet exportado (" + cols + "×" + rows + ")  " + ((r && r.path) || "export/"));
   } else {
     const fps = Math.max(1, Math.min(60, +$("#tlFps").value || 12));
     const label = { mp4: " Codificando MP4 con ffmpeg…", webm: " Codificando WebM…",
                     gif: " Armando el GIF…" }[kind] || " Guardando la secuencia…";
     dzSetStatus(label);
-    const r = await api.export_anim(dzRutaDeSalida(DZ), pngs, fps, kind);
+    const r = await api.export_anim(dzRutaDeSalida(DZ), pngs, fps, kind, destino.path, destino.nombre);
     const done = { mp4: " (MP4 a " + fps + " fps)", webm: " (WebM a " + fps + " fps)",
                    gif: " (GIF a " + fps + " fps)" }[kind] || " (" + pngs.length + " PNGs)";
     dzSetStatus(r && r.error ? " " + r.error : " Exportado  " + ((r && r.path) || "export/") + done + dzExportAvisoFaltantes(pngs.length, frames.length));
@@ -9995,7 +9995,7 @@ function dzExportCuadros() {
    sale como WAV desde el buffer decodificado porque el navegador nunca nos dio
    el archivo original; escribirlo al lado del XML es lo que evita que el
    montaje arranque pidiendo relinkear. */
-async function dzExportPremiere(pngs, fps, cuadros) {
+async function dzExportPremiere(pngs, fps, cuadros, destino) {
   if (!api || !api.export_premiere)
     return dzSetStatus("Esta versión de LOW no puede escribir el XML — reiniciá la app");
   const escena = DZ.doc.scene;
@@ -10016,7 +10016,7 @@ async function dzExportPremiere(pngs, fps, cuadros) {
     frames: archivos, audio,
   });
   dzSetStatus("Escribiendo la carpeta para Premiere…");
-  const r = await api.export_premiere(dzRutaDeSalida(DZ), pngs, xml, wav, nombre);
+  const r = await api.export_premiere(dzRutaDeSalida(DZ), pngs, xml, wav, nombre, destino?.path);
   if (!r || r.error) return dzSetStatus("No pude escribir el XML: " + ((r && r.error) || ""));
   dzSetStatus(`XML listo en ${r.path} · ${r.frames} cuadros a ${fps} fps` +
     (r.audio ? " con audio" : " sin audio (la escena no tiene ninguno cargado)") +
@@ -10032,7 +10032,7 @@ function dzBytesABase64(buffer) {
   return btoa(binario);
 }
 
-async function dzDoExportDoc(kind) {
+async function dzDoExportDoc(kind, destino) {
   dzDocCommit();
   const cuadros = dzExportCuadros();
   if (!cuadros.length) return dzSetStatus("No hay cuadros para exportar");
@@ -10051,11 +10051,11 @@ async function dzDoExportDoc(kind) {
   }
   if (!pngs.length) return dzSetStatus("No pude rasterizar ning\u00fan cuadro");
   const fps = Math.max(1, Math.min(60, +$("#tlFps").value || DZ.doc.scene.fps || 12));
-  if (kind === "sheet") return dzExportSpritesheet(pngs, fps);
-  if (kind === "premiere") return dzExportPremiere(pngs, fps, cuadros);
+  if (kind === "sheet") return dzExportSpritesheet(pngs, fps, destino);
+  if (kind === "premiere") return dzExportPremiere(pngs, fps, cuadros, destino);
   dzSetStatus({ mp4: "Codificando MP4 con ffmpeg\u2026", webm: "Codificando WebM\u2026",
                 gif: "Armando el GIF\u2026" }[kind] || "Guardando la secuencia\u2026");
-  const r = await api.export_anim(dzRutaDeSalida(DZ), pngs, fps, kind);   // la del .low, no la del .svg suelto
+  const r = await api.export_anim(dzRutaDeSalida(DZ), pngs, fps, kind, destino?.path, destino?.nombre);   // la del .low, no la del .svg suelto
   const detalle = { mp4: " (MP4 a " + fps + " fps)", webm: " (WebM a " + fps + " fps)",
                     gif: " (GIF a " + fps + " fps)" }[kind] || " (" + pngs.length + " PNGs)";
   dzSetStatus(r && r.error ? r.error
@@ -10065,7 +10065,7 @@ async function dzDoExportDoc(kind) {
 }
 
 /** La grilla del spritesheet, compartida por los dos caminos. */
-async function dzExportSpritesheet(pngs, fps) {
+async function dzExportSpritesheet(pngs, fps, destino) {
   const imgs = await Promise.all(pngs.map(du => new Promise(res => {
     const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = du;
   })));
@@ -10077,7 +10077,7 @@ async function dzExportSpritesheet(pngs, fps) {
   const ctx = c.getContext("2d");
   ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c.width, c.height);
   ok.forEach((im, i) => ctx.drawImage(im, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh));
-  const r = await api.export_anim(dzRutaDeSalida(DZ), [c.toDataURL("image/png")], fps, "sheet");
+  const r = await api.export_anim(dzRutaDeSalida(DZ), [c.toDataURL("image/png")], fps, "sheet", destino?.path, destino?.nombre);
   dzSetStatus(r && r.error ? r.error
     : "Spritesheet exportado (" + cols + "\u00d7" + rows + ") \u00b7 " + ((r && r.path) || "export/"));
   try { S.tree = (await api.refresh_tree()).tree; renderTree(); } catch (e) { /* */ }

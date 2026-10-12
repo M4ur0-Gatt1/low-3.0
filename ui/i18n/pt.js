@@ -515,6 +515,8 @@ LOW_I18N.registrar("pt", "Português", {
   "Exponer cada dibujo por tres fotogramas": "Expor cada desenho por três quadros",
   "Exponer cada dibujo por un fotograma": "Expor cada desenho por um quadro",
   "Exportar animación…": "Exportar animação…",
+  "Al elegir el formato, elegís dónde guardarlo.": "Ao escolher o formato, você escolhe onde salvar.",
+  "Exportación cancelada": "Exportação cancelada",
   "Exportar la animación": "Exportar a animação",
   "Exportar la animación (Alt+E): MP4, GIF, secuencia PNG, spritesheet o XML para Premiere con el audio en sincro — si hay claves de cámara, sale POR LA CÁMARA (con multiplano Z)": "Exportar a animação (Alt+E): MP4, GIF, sequência PNG, spritesheet ou XML para Premiere com o áudio sincronizado — se houver chaves de câmera, sai PELA CÂMERA (com multiplano Z)",
   "Exportar la animación: MP4, GIF, secuencia PNG, spritesheet o XML para Premiere con el audio en sincro — si hay claves de cámara, sale POR LA CÁMARA (con multiplano Z)": "Exportar a animação: MP4, GIF, sequência PNG, spritesheet ou XML para Premiere com o áudio sincronizado — se houver chaves de câmera, sai PELA CÂMERA (com multiplano Z)",

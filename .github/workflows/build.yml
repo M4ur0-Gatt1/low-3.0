@@ -69,6 +69,7 @@ jobs:
           python tools/check_safe_mode_backend.py
           python tools/check_papelera_backend.py
           python tools/check_export_anim_backend.py
+          python tools/check_export_destino_backend.py
           python tools/check_escena_nueva_backend.py
           python tools/check_export_premiere_backend.py
           python tools/check_diag_log_backend.py
@@ -220,6 +221,7 @@ jobs:
           node tools/check_camara_encuadre_ui.js
           node tools/check_encuadre_alineado_ui.js
           node tools/check_export_anim_ui.js
+          node tools/check_export_destino_ui.js
           node tools/check_escena_nueva_ui.js
           node tools/check_menu_contextual_ui.js
           node tools/check_export_premiere_ui.js
