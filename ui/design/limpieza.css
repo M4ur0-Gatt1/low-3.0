@@ -9,3 +9,7 @@
 .limp-opciones { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .limp-opciones input[type="number"] { width: 54px; }
 .limp-opciones button { padding: 3px 9px; }
+/* La Flecha: Tipo, Alcance, Elegir todo, Mismo color (drawing/seleccion-opciones.js) */
+.sel-opciones { display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; white-space: nowrap; }
+.sel-opciones select { max-width: 130px; }
+.sel-opciones button { padding: 3px 8px; }
