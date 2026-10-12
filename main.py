@@ -51,7 +51,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.24.0"
+LOW_VERSION = "3.24.1"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -2762,7 +2762,7 @@ class Api:
                                              save_filename=filename)
             if not r:
                 return {"cancelado": True}
-            ruta = Path(r[0] if isinstance(r, (list, tuple)) else str(r))
+            ruta = Path(s._con_extension(r[0] if isinstance(r, (list, tuple)) else str(r), filename))
         except Exception as e:
             # el diálogo no abrió (pasa si se lo pide desde el hilo equivocado):
             # se guarda en el workspace o en Documentos y se avisa dónde quedó
@@ -2779,16 +2779,36 @@ class Api:
         log(f"save_binary: {ruta} ({len(datos)} bytes)")
         return {"path": str(ruta), "name": ruta.name, "bytes": len(datos)}
 
+    # Los documentos de LOW se reconocen POR LA EXTENSIÓN: es lo que Windows
+    # asocia al ícono y al doble clic. Un .low guardado como «caminata v2» (sin
+    # extensión) o «caminata.final» deja de ser una escena de LOW para el sistema.
+    _TIPOS_PROPIOS = {".low": "Escena de LOW (*.low)",
+                      ".low3d": "Proyecto 3D de LOW (*.low3d)"}
+
+    @classmethod
+    def _con_extension(cls, elegido, sugerido):
+        """La ruta del diálogo de Guardar con la extensión que corresponde.
+        Para un tipo propio de LOW se agrega siempre que falte; para otros
+        archivos (código) sólo si el nombre no trae ninguna."""
+        p, ext = Path(elegido), Path(sugerido or "").suffix
+        if not ext or p.suffix.lower() == ext.lower():
+            return str(p)
+        if ext.lower() in cls._TIPOS_PROPIOS or not p.suffix:
+            return str(p.with_name(p.name + ext))
+        return str(p)
+
     def save_file(s, path, content, filename="codigo.py"):
         # `filename` = nombre sugerido en el diálogo. Lo usa, por ejemplo, LOW
         # Estudio para proponer "proyecto.low3d" en vez de "codigo.py".
         if not path:
+            tipo = s._TIPOS_PROPIOS.get(Path(filename or "").suffix.lower())
             r = s._window.create_file_dialog(webview.SAVE_DIALOG,
                                             directory=s.ws or "",
-                                            save_filename=filename)
+                                            save_filename=filename,
+                                            file_types=(tipo,) if tipo else ())
             if not r:
                 return None
-            path = r[0] if isinstance(r, (list, tuple)) else str(r)
+            path = s._con_extension(r[0] if isinstance(r, (list, tuple)) else str(r), filename)
         p = Path(path)
         try:
             atomic_write_text(p, content, encoding="utf-8")

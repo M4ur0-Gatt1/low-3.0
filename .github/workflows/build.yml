@@ -70,6 +70,7 @@ jobs:
           python tools/check_papelera_backend.py
           python tools/check_export_anim_backend.py
           python tools/check_export_destino_backend.py
+          python tools/check_guardar_extension_backend.py
           python tools/check_escena_nueva_backend.py
           python tools/check_export_premiere_backend.py
           python tools/check_diag_log_backend.py
