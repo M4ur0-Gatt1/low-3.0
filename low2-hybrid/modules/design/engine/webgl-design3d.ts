@@ -24,7 +24,7 @@ import { Joystick3D, type JoyMode } from './joystick3d';
 import { NavCubo3D, type NavVista } from './navcubo3d';
 import { frameGeometry } from './frame-content';
 import { Perspectiva3D, AJUSTES_INICIALES, ajustesValidos, posicionCamara, leerCamara, marcoEnVista,
-  fovVista, fovRender, puntosDeFuga, pintarSuperposicion, direccion, type Perspectiva3DAjustes,
+  fovVista, fovRender, puntosDeFuga, pintarSuperposicion, direccion, soporte as soporteEsquema, type Perspectiva3DAjustes,
   type PuntoDeFuga, type Eje } from './perspectiva3d';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -733,10 +733,14 @@ export class WebGLDesign3D {
     const a = ajustesValidos({ ...antes, ...cambios });
     if (JSON.stringify(a) === JSON.stringify(antes)) return { ...a };
     this.perspAjustes = a;
-    if (a.activa && this.view !== 'persp') this.setView('persp');
-    this.persp3d.actualizar(a, this.theme === 'dark');
     const toca = (k: keyof Perspectiva3DAjustes) => k in cambios && cambios[k] !== antes[k];
-    if (opciones.mover !== false && a.activa) {
+    // a la vista perspectiva SÓLO si se pidió algo de la perspectiva (prenderla o
+    // tocar un control). Releer la cámara (mover:false) nunca cambia de vista:
+    // antes, con el panel abierto, cada trazo en Frente te devolvía a perspectiva.
+    const pideVista = (a.activa && !antes.activa) || (['esquema', 'puntos', 'altura', 'giro', 'inclinacion', 'lente'] as const).some(toca);
+    if (a.activa && this.view !== 'persp' && pideVista && opciones.mover !== false) this.setView('persp');
+    this.persp3d.actualizar(a, this.theme === 'dark');
+    if (opciones.mover !== false && a.activa && this.view === 'persp') {
       if ((a.activa && !antes.activa) || toca('esquema') || toca('puntos')) {
         const { pos, target } = posicionCamara(a);
         this.camera.position.copy(pos);
@@ -1457,6 +1461,13 @@ export class WebGLDesign3D {
     // único y evidente (es dibujar sobre "papel" en esa vista). Ahí se permite
     // el plano de cámara y, al soltar, `noSupport` auto-genera la guía real
     // desde el propio trazo — el flujo de Feather.
+    // LA PERSPECTIVA PARA LAYOUTS da dónde apoyar: el piso, las paredes y el
+    // techo de su esquema. Sin esto, sobre la calle o la habitación no se podía
+    // dibujar en perspectiva (las líneas del esquema son dibujo, no superficie).
+    if (this.tool !== 'guide' && this.view === 'persp' && this.perspAjustes.activa) {
+      const s = soporteEsquema(this.perspAjustes.esquema, this.raycaster.ray);
+      if (s) return { point: s.point, normal: s.normal, plane: s.plane, kind: 'surface' };
+    }
     if (this.tool !== 'guide' && this.view === 'persp') return null;
     const camDir = new THREE.Vector3();
     (this.camera as THREE.Camera).getWorldDirection(camDir);

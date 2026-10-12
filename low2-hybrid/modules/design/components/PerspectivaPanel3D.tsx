@@ -24,9 +24,12 @@ export function PerspectivaPanel3D({ engine }: { engine: React.MutableRefObject<
   useEffect(() => {
     const sync = () => { const e = engine.current; if (e) { setA(e.getPerspectiva()); setLineas(e.lineasDePerspectiva()); } };
     // al orbitar con el mouse la cámara cambia: los controles muestran lo que se ve
-    const alSoltar = () => {
+    const alSoltar = (ev: PointerEvent) => {
       const e = engine.current;
-      if (e && e.getPerspectiva().activa) e.setPerspectiva(e.leerPerspectiva(), { mover: false });
+      // sólo después de orbitar (botón derecho) o desplazar (medio) en perspectiva:
+      // al terminar un TRAZO (izquierdo) no se toca nada
+      if (!e || ev.button === 0 || e.currentView() !== 'persp' || !e.getPerspectiva().activa) return;
+      e.setPerspectiva(e.leerPerspectiva(), { mover: false });
     };
     const alMensaje = (ev: MessageEvent) => {
       const m = ev.data as { type?: string; width?: number; height?: number; hayDocumento?: boolean; ok?: boolean; error?: string } | null;

@@ -112,6 +112,20 @@ function paredX(f: Familias, z: number, x0: number, x1: number, y0: number, y1: 
   for (const x of rango(x0, x1, px)) seg(f, 'y', [x, y0, z], [x, y1, z]);
 }
 
+/** Las cuadras de la manzana: alrededor de una PLAZA (las cuatro del medio no
+ *  están). Las usan las líneas y los soportes: tienen que coincidir. */
+export function cuadras(): { x0: number; x1: number; z0: number; z1: number; h: number }[] {
+  const alturas = [15, 27, 12, 33, 21, 9, 24, 18, 30, 12, 21, 15, 36, 18, 24, 12];
+  const out: { x0: number; x1: number; z0: number; z1: number; h: number }[] = [];
+  let n = 0;
+  for (const i of [-2, -1, 0, 1]) for (const j of [-2, -1, 0, 1]) {
+    if ((i === -1 || i === 0) && (j === -1 || j === 0)) continue;
+    const x0 = i * 36 + 6, z0 = j * 36 + 6;
+    out.push({ x0, x1: x0 + 24, z0, z1: z0 + 24, h: alturas[n++ % alturas.length] });
+  }
+  return out;
+}
+
 export function construirEsquema(esquema: Esquema3D, densidad: 'pocas' | 'muchas'): Familias {
   const f = nuevas();
   const k = densidad === 'muchas' ? 1 : 2;
@@ -126,11 +140,7 @@ export function construirEsquema(esquema: Esquema3D, densidad: 'pocas' | 'muchas
   } else if (esquema === 'manzana') {
     // cuadras de 24 m con calles de 12 m alrededor de una PLAZA (las cuatro del
     // medio no están): la cámara, en la plaza, ve en diagonal la esquina de una cuadra
-    const alturas = [15, 27, 12, 33, 21, 9, 24, 18, 30, 12, 21, 15, 36, 18, 24, 12];
-    let n = 0;
-    for (const i of [-2, -1, 0, 1]) for (const j of [-2, -1, 0, 1]) {
-      if ((i === -1 || i === 0) && (j === -1 || j === 0)) continue;
-      const x0 = i * 36 + 6, z0 = j * 36 + 6, x1 = x0 + 24, z1 = z0 + 24, h = alturas[n++ % alturas.length];
+    for (const { x0, x1, z0, z1, h } of cuadras()) {
       paredX(f, z0, x0, x1, 0, h, 3 * k, 6 * k); paredX(f, z1, x0, x1, 0, h, 3 * k, 6 * k);
       paredZ(f, x0, z0, z1, 0, h, 3 * k, 6 * k); paredZ(f, x1, z0, z1, 0, h, 3 * k, 6 * k);
       piso(f, x0, x1, z0, z1, h, 24, 24);   // el borde del techo
@@ -155,6 +165,56 @@ export function construirEsquema(esquema: Esquema3D, densidad: 'pocas' | 'muchas
     for (const x of rango(-24, 24, p)) for (const z of rango(-60, 0, p)) seg(f, 'y', [x, -LARGO / 4, z], [x, LARGO / 2, z]);
   }
   return f;
+}
+
+/* ── DÓNDE APOYAR EL TRAZO: el piso, las paredes y el techo del esquema ──
+   En perspectiva el estudio sólo dibuja sobre una superficie (guía, plano o
+   trazo): las líneas del esquema son dibujo, no superficie, y sobre la calle
+   «no se podía dibujar». Cada esquema da sus caras como rectángulos alineados
+   a los ejes; el trazo se apoya en la que está bajo el cursor. */
+type Cara = { eje: Eje; c: number; u: [number, number]; v: [number, number] };   // u,v: los otros dos ejes, en orden x,y,z
+const OTROS: Record<Eje, [Eje, Eje]> = { x: ['y', 'z'], y: ['x', 'z'], z: ['x', 'y'] };
+export function carasDe(esquema: Esquema3D): Cara[] {
+  if (esquema === 'calle') return [
+    { eje: 'y', c: 0, u: [-8, 8], v: [-LARGO, 14] },
+    { eje: 'x', c: -8, u: [0, 60], v: [-LARGO, 14] },
+    { eje: 'x', c: 8, u: [0, 60], v: [-LARGO, 14] },
+  ];
+  if (esquema === 'habitacion') return [
+    { eje: 'y', c: 0, u: [-3, 3], v: [-8, 1] }, { eje: 'y', c: 2.8, u: [-3, 3], v: [-8, 1] },
+    { eje: 'x', c: -3, u: [0, 2.8], v: [-8, 1] }, { eje: 'x', c: 3, u: [0, 2.8], v: [-8, 1] },
+    { eje: 'z', c: -8, u: [-3, 3], v: [0, 2.8] }, { eje: 'z', c: 1, u: [-3, 3], v: [0, 2.8] },
+  ];
+  if (esquema === 'manzana') {
+    const out: Cara[] = [{ eje: 'y', c: 0, u: [-LARGO / 2, LARGO / 2], v: [-LARGO / 2, LARGO / 2] }];
+    for (const b of cuadras()) out.push(
+      { eje: 'x', c: b.x0, u: [0, b.h], v: [b.z0, b.z1] }, { eje: 'x', c: b.x1, u: [0, b.h], v: [b.z0, b.z1] },
+      { eje: 'z', c: b.z0, u: [b.x0, b.x1], v: [0, b.h] }, { eje: 'z', c: b.z1, u: [b.x0, b.x1], v: [0, b.h] },
+      { eje: 'y', c: b.h, u: [b.x0, b.x1], v: [b.z0, b.z1] });
+    return out;
+  }
+  return [{ eje: 'y', c: 0, u: [-LARGO, LARGO], v: [-LARGO, LARGO] }];
+}
+/** La cara del esquema que el rayo toca primero: punto, normal (de cara a la
+ *  cámara) y su plano. Null si no toca ninguna. */
+export function soporte(esquema: Esquema3D, ray: THREE.Ray): { point: THREE.Vector3; normal: THREE.Vector3; plane: THREE.Plane } | null {
+  const k = (e: Eje) => (e === 'x' ? 0 : e === 'y' ? 1 : 2);
+  const o = ray.origin.toArray(), d = ray.direction.toArray();
+  let mejor: { t: number; cara: Cara } | null = null;
+  for (const cara of carasDe(esquema)) {
+    const i = k(cara.eje);
+    if (Math.abs(d[i]) < 1e-9) continue;
+    const t = (cara.c - o[i]) / d[i];
+    if (t <= 1e-4 || (mejor && t >= mejor.t)) continue;
+    const [ea, eb] = OTROS[cara.eje], pa = o[k(ea)] + d[k(ea)] * t, pb = o[k(eb)] + d[k(eb)] * t;
+    if (pa < cara.u[0] || pa > cara.u[1] || pb < cara.v[0] || pb > cara.v[1]) continue;
+    mejor = { t, cara };
+  }
+  if (!mejor) return null;
+  const n = new THREE.Vector3(mejor.cara.eje === 'x' ? 1 : 0, mejor.cara.eje === 'y' ? 1 : 0, mejor.cara.eje === 'z' ? 1 : 0);
+  if (n.dot(ray.direction) > 0) n.negate();               // de cara a la cámara
+  const point = ray.at(mejor.t, new THREE.Vector3());
+  return { point, normal: n, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(n, point) };
 }
 
 /* ── la cámara: dónde mira según altura, giro e inclinación ── */
