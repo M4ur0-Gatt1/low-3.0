@@ -1906,6 +1906,59 @@
       if (enTransaccion) this.history.commit();
       return puestas;
     }
+    /** LIPSYNC DESDE EL TEXTO (animation/lipsync-texto.js). El mapa de
+     *  visemas → dibujos y los diálogos viven en el slot de la boca
+     *  (`rig.slots[slotId].lipsyncTexto`): se guardan con la escena, viajan
+     *  con el personaje y entran en el mismo historial que sus claves. */
+    lipsyncTexto(slotId) {
+      const s = this.scene.rig.slots[slotId], lt = (s && s.lipsyncTexto) || {};
+      return { mapa: { ...(lt.mapa || {}) }, dialogos: { ...(lt.dialogos || {}) } };
+    }
+    _lipsyncTextoGuardar(slotId, cambiar, label) {
+      return this._rigChange(label, (rig) => {
+        const s = rig.slots[slotId];
+        if (!s) return false;
+        const lt = { mapa: {}, dialogos: {}, ...(s.lipsyncTexto || {}) };
+        lt.mapa = { ...(lt.mapa || {}) }; lt.dialogos = { ...(lt.dialogos || {}) };
+        if (cambiar(lt) === false) return false;
+        s.lipsyncTexto = lt;
+        return true;
+      }, { pins: false });
+    }
+    /** Qué dibujo de la boca representa cada visema (lo que eligió el animador). */
+    setLipsyncTextoMapa(slotId, mapa) {
+      return this._lipsyncTextoGuardar(slotId, (lt) => { lt.mapa = { ...(mapa || {}) }; }, "Bocas de los visemas");
+    }
+    /** Un diálogo, en UN paso de historial: borra sus claves de antes (su
+     *  versión anterior y el tramo nuevo), pone las nuevas y lo guarda. Lo que
+     *  hay fuera de ese tramo —otros diálogos, claves a mano— no se toca. */
+    applyLipsyncTexto(slotId, dialogo, keys) {
+      if (!this.scene.rig.slots[slotId] || !dialogo || !dialogo.id) return 0;
+      const h = this.history, tx = !!h && !h.transaction;
+      if (tx) h.begin("Lipsync desde el texto");
+      let puestas = 0;
+      try {
+        const previo = this.lipsyncTexto(slotId).dialogos[dialogo.id];
+        if (previo) this.clearRigSwitchRange(slotId, previo.inicio, previo.fin);
+        this.clearRigSwitchRange(slotId, dialogo.inicio, dialogo.fin);
+        puestas = this.applyLipsync(slotId, keys, "Lipsync desde el texto");
+        this._lipsyncTextoGuardar(slotId, (lt) => { lt.dialogos[dialogo.id] = { ...dialogo }; }, "Guardar el diálogo");
+      } finally { if (tx) h.commit(); }
+      return puestas;
+    }
+    /** Saca un diálogo: sus claves y su registro, en un paso. */
+    removeLipsyncTexto(slotId, id) {
+      const previo = this.lipsyncTexto(slotId).dialogos[id];
+      if (!previo) return false;
+      const h = this.history, tx = !!h && !h.transaction;
+      if (tx) h.begin("Quitar el diálogo");
+      try {
+        this.clearRigSwitchRange(slotId, previo.inicio, previo.fin);
+        this._lipsyncTextoGuardar(slotId, (lt) => { delete lt.dialogos[id]; }, "Quitar el diálogo");
+      } finally { if (tx) h.commit(); }
+      return true;
+    }
+
     /** Borra las claves de boca de un tramo: rehacer un lipsync empieza por
      *  sacar el anterior, o quedan mezcladas dos sincronizaciones distintas. */
     clearRigSwitchRange(slotId, desde, hasta) {

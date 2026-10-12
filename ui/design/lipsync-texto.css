@@ -1,0 +1,24 @@
+/* Lipsync desde el texto (animation/lipsync-texto-panel.js), dentro de la sección Lipsync del rig */
+.rig2-lip-texto { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line, #333); }
+.rig2-lip-dialogo { width: 100%; box-sizing: border-box; min-height: 52px; resize: vertical; margin: 5px 0;
+  background: var(--panel2, #232220); color: var(--txt, #ddd); border: 1px solid var(--line2, #3a3a3a); border-radius: 5px;
+  font: 11px/1.4 inherit; padding: 5px 6px; }
+.rig2-lip-texto .rig2-lip-ctl input[type="number"] { width: 100%; min-width: 0; }
+.rig2-lip-texto .rig2-lip-ctl button { min-height: 20px; padding: 0 6px; font-size: 9.5px; border: 1px solid var(--line2, #3a3a3a);
+  background: transparent; color: inherit; border-radius: 4px; cursor: pointer; }
+.rig2-lip-previa { margin: 6px 0; font-size: 10px; }
+.rig2-lip-resumen { font: 10px 'JetBrains Mono', monospace; color: var(--mut, #999); margin-bottom: 4px; }
+.rig2-lip-tramos { display: flex; flex-wrap: wrap; gap: 3px; max-height: 120px; overflow: auto; }
+.rig2-lip-tramo { font: 9.5px 'JetBrains Mono', monospace; padding: 1px 5px; border-radius: 3px; background: var(--surface-raised, #2a2c31); white-space: nowrap; }
+.rig2-lip-tramo.v-V0_Rest { opacity: .55; }
+.rig2-lip-tramo.v-V7_M_B_P { box-shadow: inset 0 -2px 0 var(--accent, #F0450E); }
+.rig2-lip-aviso { margin-top: 4px; color: var(--warn, #e0a030); font-size: 10px; }
+.rig2-lip-acciones-texto { grid-template-columns: 1fr auto auto; }
+.rig2-lip-dialogos { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.rig2-lip-dlg { text-align: left; font-size: 10px; padding: 3px 6px; border: 1px solid var(--line2, #3a3a3a); border-radius: 4px;
+  background: transparent; color: inherit; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rig2-lip-dlg.activo { border-color: var(--accent, #F0450E); }
+.rig2-lip-mapa { margin-top: 8px; font-size: 10px; }
+.rig2-lip-mapa summary { cursor: pointer; color: var(--mut, #999); }
+.rig2-lip-visema { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; margin: 3px 0; }
+.rig2-lip-visema select { min-width: 0; font-size: 10px; }

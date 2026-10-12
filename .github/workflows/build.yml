@@ -54,6 +54,7 @@ jobs:
           node tools/run_control_sets_tests.js
           node tools/run_premiere_xml_tests.js
           node tools/run_lipsync_tests.js
+          node tools/run_lipsync_texto_tests.js
           node tools/run_arcs_tests.js
           node tools/run_collab_transport_tests.js
       - name: Puentes de guardado e importación
@@ -193,6 +194,7 @@ jobs:
           node tools/check_cortar_pegar_ui.js
           node tools/check_acompanar_ui.js
           node tools/check_insertar_cuadro_ui.js
+          node tools/check_lipsync_texto_ui.js
           node tools/check_esculpir_ui.js
           node tools/check_capa_bitmap_ui.js
           node tools/check_pulsacion_larga_ui.js

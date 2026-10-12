@@ -1295,3 +1295,19 @@ LOW_I18N.registrar("pt", "Português", {
   "Elegí la parte que acompaña (la cabeza) para soltarla del movimiento": "Selecione a parte que acompanha (a cabeça) para soltá-la do movimento",
   "Cuadro vacío en el {} · dibujá": "Quadro vazio no {} · desenhe", "Copia del cuadro {} en el {} · retocala sin tocar el original": "Cópia do quadro {} no {} · ajuste sem mexer no original",
 });
+
+/* Lipsync desde el texto (animation/lipsync-texto-panel.js) */
+LOW_I18N.registrar("pt", "Português", {
+  "Desde el texto": "A partir do texto", "Inicio": "Início", "Velocidad": "Velocidade", "aquí": "aqui", "Crear las claves": "Criar as chaves", "Quitar": "Remover",
+  "Bocas de cada visema": "Boca de cada visema", "falta la boca": "falta a boca",
+  "Escribí o pegá el diálogo… (por ejemplo: ¡Hola! ¿Cómo estás?)": "Escreva ou cole o diálogo… (por exemplo: Olá! Como vai?)",
+  "Elegí la pieza de la boca: sus dibujos son las bocas de los visemas.": "Selecione a peça da boca: seus desenhos são as bocas dos visemas.",
+  "Escribí el diálogo para ver los visemas.": "Escreva o diálogo para ver os visemas.",
+  "Empezar en el cuadro actual": "Começar no quadro atual", "Ir al inicio del diálogo y reproducir": "Ir ao início do diálogo e reproduzir",
+  "Quitar este diálogo y sus claves": "Remover este diálogo e suas chaves", "Volver a editar este diálogo": "Editar este diálogo de novo",
+  "Crear las claves de boca del diálogo (un paso de Ctrl+Z)": "Criar as chaves de boca do diálogo (um passo de Ctrl+Z)",
+  "{} bocas · {} fps": "{} bocas · {} fps", "Reposo": "Repouso",
+  "Lipsync desde el texto: {} cambios de boca entre F{} y F{} · corregí desde la X-sheet · Ctrl+Z lo saca entero": "Lipsync a partir do texto: {} trocas de boca entre F{} e F{} · ajuste na X-sheet · Ctrl+Z desfaz tudo",
+  "Quité el diálogo y sus claves de boca · Ctrl+Z lo devuelve": "Removi o diálogo e suas chaves de boca · Ctrl+Z traz de volta",
+  "Escribí el diálogo antes de crear las claves": "Escreva o diálogo antes de criar as chaves",
+});

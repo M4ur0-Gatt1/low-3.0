@@ -1322,3 +1322,19 @@ LOW_I18N.registrar("en", "English", {
   "Elegí la parte que acompaña (la cabeza) para soltarla del movimiento": "Select the part that follows (the head) to release it from the motion",
   "Cuadro vacío en el {} · dibujá": "Empty frame at {} · draw", "Copia del cuadro {} en el {} · retocala sin tocar el original": "Copy of frame {} at {} · adjust it without touching the original",
 });
+
+/* Lipsync desde el texto (animation/lipsync-texto-panel.js) */
+LOW_I18N.registrar("en", "English", {
+  "Desde el texto": "From text", "Inicio": "Start", "Velocidad": "Speed", "aquí": "here", "Crear las claves": "Create keys", "Quitar": "Remove",
+  "Bocas de cada visema": "Mouth for each viseme", "falta la boca": "no mouth selected",
+  "Escribí o pegá el diálogo… (por ejemplo: ¡Hola! ¿Cómo estás?)": "Type or paste the dialogue… (for example: Hello! How are you?)",
+  "Elegí la pieza de la boca: sus dibujos son las bocas de los visemas.": "Select the mouth piece: its drawings are the viseme mouths.",
+  "Escribí el diálogo para ver los visemas.": "Type the dialogue to see the visemes.",
+  "Empezar en el cuadro actual": "Start at the current frame", "Ir al inicio del diálogo y reproducir": "Go to the start of the dialogue and play",
+  "Quitar este diálogo y sus claves": "Remove this dialogue and its keys", "Volver a editar este diálogo": "Edit this dialogue again",
+  "Crear las claves de boca del diálogo (un paso de Ctrl+Z)": "Create the dialogue's mouth keys (one Ctrl+Z step)",
+  "{} bocas · {} fps": "{} mouths · {} fps", "Reposo": "Rest",
+  "Lipsync desde el texto: {} cambios de boca entre F{} y F{} · corregí desde la X-sheet · Ctrl+Z lo saca entero": "Lip sync from text: {} mouth changes between F{} and F{} · adjust in the X-sheet · Ctrl+Z removes it all",
+  "Quité el diálogo y sus claves de boca · Ctrl+Z lo devuelve": "Removed the dialogue and its mouth keys · Ctrl+Z brings it back",
+  "Escribí el diálogo antes de crear las claves": "Type the dialogue before creating the keys",
+});
