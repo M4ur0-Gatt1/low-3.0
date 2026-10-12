@@ -43,6 +43,19 @@ function dzExportCuadroEnBlanco(escena) {
          `viewBox="0 0 ${w} ${h}">${papel}</svg>`;
 }
 
+/** El SVG de un cuadro TAL COMO SALE: las capas, el papel si está vacío (un
+ *  cuadro en blanco es un cuadro: saltearlo ADELANTA todo lo que sigue), las
+ *  poses del rig y, si hay claves de cámara, el encuadre de la cámara. Lo usan
+ *  la exportación y la vista previa (vista-previa-export.js): si cada una
+ *  armara el cuadro a su manera, la vista previa podría mentir. */
+function dzExportCuadroSvg(f, porCamara) {
+  let txt = dzCuadroSvgTexto(f);
+  if (!txt) txt = dzExportCuadroEnBlanco(DZ.doc.scene);
+  txt = dzRigView(txt, f);
+  if (porCamara) txt = dzCamView(txt, dzCamAt(f));
+  return txt;
+}
+
 /** Lo que hay que decir cuando salieron MENOS cuadros de los pedidos.
  *
  *  Los cuadros vacios ya no se pierden, pero quedan dos maneras de perder uno:

@@ -222,6 +222,7 @@ jobs:
           node tools/check_encuadre_alineado_ui.js
           node tools/check_export_anim_ui.js
           node tools/check_export_destino_ui.js
+          node tools/check_vista_previa_export_ui.js
           node tools/check_escena_nueva_ui.js
           node tools/check_menu_contextual_ui.js
           node tools/check_export_premiere_ui.js

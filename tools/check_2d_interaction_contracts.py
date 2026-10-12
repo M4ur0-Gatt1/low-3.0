@@ -1069,7 +1069,8 @@ require('src="animation/export-cuadros.js' in INDEX,
         "sin definir y la exportacion tira ReferenceError en el primer cuadro vacio")
 _export_doc = APP[APP.index("async function dzDoExportDoc(kind"):]
 _export_doc = _export_doc[:_export_doc.index("async function dzExportSpritesheet")]
-require("dzExportCuadroEnBlanco(DZ.doc.scene)" in _export_doc and "continue;" not in _export_doc,
+require("dzExportCuadroSvg(f, throughCam)" in _export_doc and "continue;" not in _export_doc
+        and "dzExportCuadroEnBlanco(DZ.doc.scene)" in EXPORT_CUADROS.split("function dzExportCuadroSvg")[1][:400],
         "volvio el `continue` del cuadro vacio en dzDoExportDoc: un cuadro en blanco "
         "es un cuadro, y saltearlo ADELANTA un cuadro todo lo que sigue al hueco. "
         "El timing es la materia del oficio y se rompia en silencio, al final del trabajo")

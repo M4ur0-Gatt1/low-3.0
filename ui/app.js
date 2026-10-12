@@ -7370,7 +7370,7 @@ function dzExportModal() {
   openModal(`<h2> Exportar animación</h2>
     <div class="sub">${cuantos} ${cuantos === 1 ? "cuadro" : "cuadros"}${tramo} a ${$("#tlFps").value || 12} fps.<br><span>Al elegir el formato, elegís dónde guardarlo.</span><br>
       ${DZ.doc && DZ.doc.audio ? "Audio: <b>" + (DZ.doc.audio.name || "cargado") + "</b>  el XML sale sincronizado." : "Sin audio cargado: el XML saldrá solo con los cuadros."}</div>
-    <div class="m-actions" style="flex-wrap:wrap">
+    <div class="m-actions" style="flex-wrap:wrap">${DZ.doc ? '<button class="ghost" id="mPrev" title="Mirala acá antes de exportar: el tramo, por la cámara y con el audio">▶ Vista previa</button>' : ""}
       <button class="primary" data-x="mp4">Video MP4</button>
       <button class="ghost" data-x="gif">GIF animado</button>
       <button class="ghost" data-x="png">Secuencia PNG</button>
@@ -7378,7 +7378,7 @@ function dzExportModal() {
       <button class="ghost" data-x="premiere" title="Cuadros + audio + XML: se importa en Premiere, Resolve o Final Cut ya sincronizado">XML para Premiere</button>
       <button class="ghost" id="mCancel">Cancelar</button>
     </div>`);
-  $("#mCancel").onclick = closeModal;
+  $("#mCancel").onclick = closeModal; if ($("#mPrev")) $("#mPrev").onclick = () => dzVistaPreviaExport();
   document.querySelectorAll("#modal [data-x]").forEach(b => b.onclick = () => { closeModal(); dzDoExport(b.dataset.x); });
 }
 async function dzDoExport(kind) {
@@ -10040,10 +10040,7 @@ async function dzDoExportDoc(kind, destino) {
   const pngs = [];
   for (let i = 0; i < cuadros.length; i++) {
     const f = cuadros[i];
-    let txt = dzCuadroSvgTexto(f);
-    if (!txt) txt = dzExportCuadroEnBlanco(DZ.doc.scene);   // un cuadro en blanco es un cuadro: saltearlo ADELANTA todo lo que sigue
-    txt = dzRigView(txt, f);                  // las poses del rig, aplicadas
-    if (throughCam) txt = dzCamView(txt, dzCamAt(f));
+    const txt = dzExportCuadroSvg(f, throughCam);   // export-cuadros.js: el MISMO cuadro que muestra la vista previa
     const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : kind === "gif" ? 1080 : Math.max(DZ.doc?.scene?.width || 1080, DZ.doc?.scene?.height || 1080));   // MP4/PNG/Premiere a la resolución del DOCUMENTO (salía 1080×608 de un 1920×1080); el GIF, topeado para compartir
     if (du) pngs.push(du);
     dzSetStatus("Rasterizando" + (throughCam ? " por c\u00e1mara" : "") +
@@ -11729,7 +11726,7 @@ function dzMenuAction(act) {
     "cerrar-documento": closeDesign,   // el mismo camino que la X: saca la PESTAÑA. dzDocumentClose la dejaba colgada y reabrir el archivo «activaba» una pestaña muerta
     "borrar-documento": dzDocumentTrash,
     importar: dzImportImage,
-    exportar: dzExportModal, exportanim: dzExportModal,
+    exportar: dzExportModal, exportanim: dzExportModal, vistaprevia: () => dzVistaPreviaExport(),
     premiere: dzExportPremiereDirecto,
     navegador: () => api.preview_html(DZ.path || null, $("#dzCanvas").innerHTML),   // idem: NUNCA la ruta del documento
     cerrar: () => closeDesign(),
