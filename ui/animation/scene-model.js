@@ -1250,6 +1250,22 @@
     return { version: 1, planes, camera: clone(data.camera || {}), settings: clone(data.settings || {}) };
   }
 
+  /** La PERSPECTIVA de la escena: hasta tres puntos de fuga (en unidades del
+   *  lienzo; pueden estar fuera del cuadro) para dibujar fondos y layouts. El
+   *  horizonte es la recta por el primero y el segundo (horizontal si hay uno
+   *  solo). `iman`: el lápiz sigue la dirección del punto de fuga. `origen` dice
+   *  si los puso el dibujante o vinieron de la cámara del estudio 3D. */
+  function perspectiveData(data) {
+    const d = data && typeof data === "object" ? data : {};
+    const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+    const vps = (Array.isArray(d.vps) ? d.vps : []).slice(0, 3)
+      .filter((v) => v && typeof v === "object").map((v) => ({ x: num(v.x), y: num(v.y) }));
+    const out = { vps, visible: d.visible !== false, iman: d.iman !== false,
+                  origen: d.origen === "3d" ? "3d" : "manual" };
+    if (d.camara && typeof d.camara === "object") out.camara = clone(d.camara);
+    return out;
+  }
+
   /** La escena: niveles (material) + capas (tiempo) + ajustes. */
   class Scene {
     constructor(data = {}) {
@@ -1269,6 +1285,7 @@
       this.storyboard = storyboardData(data.storyboard);
       this.audio = clone(data.audio || []);
       this.rig = rigData(data.rig);
+      this.perspective = perspectiveData(data.perspective);
       this.revision = Number(data.revision) || 0;
     }
 
@@ -1940,7 +1957,7 @@
                palettes: this.palettes.map((p) => p.toJSON()),
                camera: this.camera, composition: clone(this.composition),
                storyboard: clone(this.storyboard), audio: this.audio,
-               rig: rigToJSON(this.rig), revision: this.revision };
+               rig: rigToJSON(this.rig), perspective: clone(this.perspective), revision: this.revision };
     }
 
     /** Convierte el modelo VIEJO (`frames` = lista de archivos) al nuevo. Cada
@@ -1971,6 +1988,7 @@
   animation.Style = Style;
   animation.clone = clone;
   animation.rigData = rigData;
+  animation.perspectiveData = perspectiveData;
   animation.rigToJSON = rigToJSON;
   animation.rigChannelPath = rigChannelPath;
   animation.rigEaseData = rigEaseData;

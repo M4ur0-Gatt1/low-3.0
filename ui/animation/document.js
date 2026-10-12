@@ -1301,6 +1301,23 @@
       }
     }
 
+    /** Cambia la perspectiva de la escena (puntos de fuga) con deshacer. Un
+     *  arrastre muta en vivo y al soltar llama con `before` = lo de antes del
+     *  arrastre, para que todo el gesto sea UN paso de Ctrl+Z. */
+    setPerspective(value, { label = "Cambiar la perspectiva", before = null } = {}) {
+      const antes = animation.perspectiveData(before || this.scene.perspective);
+      const despues = animation.perspectiveData(value);
+      this.scene.perspective = despues;
+      if (JSON.stringify(antes) === JSON.stringify(despues)) { this.emit("perspective"); return false; }
+      this.touch(); this.emit("perspective");
+      if (this.history) {
+        const doc = this;
+        this.history.push({ label, domain: "perspective", before: antes, after: despues,
+          apply: (_dir, v) => { doc.scene.perspective = animation.perspectiveData(v); doc.touch(); doc.emit("perspective"); } });
+      }
+      return true;
+    }
+
     _rigChange(label, mutate, options = {}) {
       const before = animation.rigToJSON(this.scene.rig);
       const result = mutate(this.scene.rig);

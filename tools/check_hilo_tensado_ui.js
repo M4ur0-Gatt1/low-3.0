@@ -94,7 +94,8 @@ async function main() {
 
     // 4. punto de fuga: clic derecho, y la línea siguiente se tensa hacia él
     await clic(await P(1700, 200), { boton: "right" });
-    assert.equal(await ev("(RULER && RULER.vp && RULER.vp.length) || 0"), 1, "el clic derecho no fijó un punto de fuga");
+    // con un .low el punto va a la ESCENA (v3.25: se guarda); sin documento, a la Regla
+    assert.equal(await ev("((RULER && RULER.vp && RULER.vp.length) || 0) + (window.dzPerspectivaVPs ? dzPerspectivaVPs().length : 0)"), 1, "el clic derecho no fijó un punto de fuga");
     await clic(await P(1100, 800));
     await clic(await P(1300, 760));
     await tecla("Escape", "Escape", 27);

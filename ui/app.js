@@ -6247,7 +6247,7 @@ function dzRulerDown(e) {
     e.preventDefault();
     if (!RULER) RULER = { a: null, el: null, vp: [] };
     // ¿doble clic sobre punto de fuga existente?  borrarlo
-    const R = 12 / (DZ.zoom || 1); // radio en unidades de usuario
+    const R = 12 / (DZ.zoom || 1); if (window.dzPerspectivaQuitarVP?.(p, R)) return;   // radio en unidades de usuario; los de la escena viven en drawing/perspectiva.js
     for (let i = RULER.vp.length - 1; i >= 0; i--) {
       const v = RULER.vp[i];
       if (Math.hypot(p.x - v.x, p.y - v.y) < R) {
@@ -6257,7 +6257,7 @@ function dzRulerDown(e) {
         return;
       }
     }
-    RULER.vp.push({ x: p.x, y: p.y });
+    if (!window.dzPerspectivaAgregarVP?.(p)) RULER.vp.push({ x: p.x, y: p.y });   // con un .low el punto va a la ESCENA y se guarda
     dzRulerRenderVP();
     return;
   }
@@ -6285,7 +6285,7 @@ function dzRulerDown(e) {
     dzSnapshot();
     let bp = p;
     // snapping a punto de fuga si hay
-    if (RULER.vp.length > 0 && !e.shiftKey) {
+    if ((RULER.vp.length > 0 || window.dzPerspectivaVPs?.().length) && !e.shiftKey) {
       bp = dzRulerSnapVP(p);
     }
     // snapping a 15° si Shift
@@ -6314,7 +6314,7 @@ function dzRulerMove(e) {
   const p = dzToUser(e.clientX, e.clientY);
   if (!RULER || !RULER.a) return;
   let bp = p;
-  if (RULER.vp.length > 0 && !e.shiftKey) {
+  if ((RULER.vp.length > 0 || window.dzPerspectivaVPs?.().length) && !e.shiftKey) {
     bp = dzRulerSnapVP(p);
   }
   if (e.shiftKey) {
@@ -6340,14 +6340,14 @@ function dzRulerSnapAngle(a, p) {
 }
 
 function dzRulerSnapVP(p) {
-  if (!RULER || !RULER.vp.length) return p;
-  // snap al punto de fuga más cercano
-  let best = RULER.vp[0], bestD = Math.hypot(p.x - best.x, p.y - best.y);
-  for (let i = 1; i < RULER.vp.length; i++) {
-    const d = Math.hypot(p.x - RULER.vp[i].x, p.y - RULER.vp[i].y);
-    if (d < bestD) { bestD = d; best = RULER.vp[i]; }
-  }
-  return best;
+  // la línea va HACIA el punto de fuga más alineado, no termina en él: se proyecta el cursor
+  // sobre la recta A→punto (antes devolvía el punto mismo y toda línea acababa en el horizonte)
+  const vps = (RULER ? RULER.vp : []).concat(window.dzPerspectivaVPs ? dzPerspectivaVPs() : []);
+  if (!RULER || !RULER.a || !vps.length) return p;
+  const a = RULER.a, dx = p.x - a.x, dy = p.y - a.y, L = Math.hypot(dx, dy) || 1; let best = null, bestC = -1;
+  for (const v of vps) { const ux = v.x - a.x, uy = v.y - a.y, n = Math.hypot(ux, uy); if (n < 1e-6) continue;
+    const c = Math.abs(dx * ux + dy * uy) / (L * n); if (c > bestC) { bestC = c; best = { ux: ux / n, uy: uy / n }; } }
+  if (!best) return p; const t = dx * best.ux + dy * best.uy; return { x: a.x + t * best.ux, y: a.y + t * best.uy };
 }
 
 /* dibuja los puntos de fuga como círculos semitransparentes */
@@ -6359,7 +6359,7 @@ function dzRulerRenderVP() {
   if (g) g.remove();
   if (!RULER || !RULER.vp.length) return;
   g = document.createElementNS(SVGNS, "g");
-  g.setAttribute("class", "dz-vp-guides");
+  g.setAttribute("class", "dz-vp-guides dz-penui");   // guía de pantalla: sin dz-penui dzCanvasInner la GUARDABA en el dibujo del .low
   g.setAttribute("data-low", "vp-guide");
   const R = 7 / (DZ.zoom || 1);
   RULER.vp.forEach(vp => {
@@ -11726,7 +11726,7 @@ function dzMenuAction(act) {
     "cerrar-documento": closeDesign,   // el mismo camino que la X: saca la PESTAÑA. dzDocumentClose la dejaba colgada y reabrir el archivo «activaba» una pestaña muerta
     "borrar-documento": dzDocumentTrash,
     importar: dzImportImage,
-    exportar: dzExportModal, exportanim: dzExportModal, vistaprevia: () => dzVistaPreviaExport(),
+    exportar: dzExportModal, exportanim: dzExportModal, vistaprevia: () => dzVistaPreviaExport(), perspectiva: () => dzPerspectivaAbrir(),
     premiere: dzExportPremiereDirecto,
     navegador: () => api.preview_html(DZ.path || null, $("#dzCanvas").innerHTML),   // idem: NUNCA la ruta del documento
     cerrar: () => closeDesign(),
