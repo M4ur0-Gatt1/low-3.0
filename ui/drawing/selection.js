@@ -88,5 +88,29 @@
     return el ? tocaGeometria(el, selection) : true;
   }
 
-  drawing.selection = { marqueeMode, marqueeHit };
+  /** MOVER CON SHIFT, como Illustrator: el objeto se queda sobre su línea —
+   *  horizontal, vertical o a 45°— la que más se parezca al arrastre. Se
+   *  proyecta el desplazamiento sobre esa dirección (no se recorta un eje):
+   *  así el objeto sigue al mouse a lo largo de la línea, sin saltos. */
+  function moverEnLinea(dx, dy) {
+    const d = Math.hypot(dx, dy);
+    if (!(d > 0)) return [0, 0];
+    const paso = Math.PI / 4;
+    const a = Math.round(Math.atan2(dy, dx) / paso) * paso;
+    const ux = Math.round(Math.cos(a) * 1e9) / 1e9, uy = Math.round(Math.sin(a) * 1e9) / 1e9;
+    const k = dx * ux + dy * uy;
+    return [k * ux, k * uy];
+  }
+
+  /** Shift+clic SIN mover sobre algo ya elegido: lo saca de la selección.
+   *  (Si se arrastra, en cambio, se mueve en línea: ver moverEnLinea.) */
+  function sacarDeLaSeleccion(el) {
+    if (typeof DZ === "undefined") return;
+    let pack = (DZ.multi && DZ.multi.length > 1) ? DZ.multi.slice() : (DZ.sel ? [DZ.sel] : []);
+    pack = pack.filter((n) => n !== el && n && n.isConnected);
+    DZ.multi = pack.length > 1 ? pack : [];
+    if (pack.length) global.dzSelect(pack[pack.length - 1]); else global.dzDeselect();
+  }
+
+  drawing.selection = { marqueeMode, marqueeHit, moverEnLinea, sacarDeLaSeleccion };
 })(typeof window !== "undefined" ? window : globalThis);

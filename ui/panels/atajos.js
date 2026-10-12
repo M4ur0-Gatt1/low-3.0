@@ -65,6 +65,8 @@
     ["handler", "Bomba de grosor", "Herramientas", "shift+q", '[data-tool="handler"]'],
     ["iron", "Plancha (suavizar trazos)", "Herramientas", "y", '[data-tool="iron"]'],
     ["pliers", "Pinza (cortar un trazado)", "Herramientas", "x", '[data-tool="pliers"]'],
+    ["cuchilla", "Cuchilla (borrar tramo hasta los cruces)", "Herramientas", "shift+t", '[data-tool="cuchilla"]'],
+    ["cinta", "Cinta (unir líneas y cerrar huecos)", "Herramientas", "alt+c", '[data-tool="cinta"]'],
     ["warp", "Deformador de caja", "Herramientas", "shift+d", null],
     ["pivot", "Pivote de rig", "Herramientas", "j", '[data-tool="pivot"]'],
     ["rect", "Rectángulo", "Formas", "r", "#dzAddRect"],
@@ -199,6 +201,8 @@
   }
   const ACCIONES = {
     sculpt: () => global.dzSetTool("sculpt"),
+    cuchilla: () => global.dzSetTool("cuchilla"),
+    cinta: () => global.dzSetTool("cinta"),
     prevdrawing: () => global.dzNavegar("prevdrawing"),
     nextdrawing: () => global.dzNavegar("nextdrawing"),
     warp: () => typeof global.dzWarpAlternar === "function" && global.dzWarpAlternar(),

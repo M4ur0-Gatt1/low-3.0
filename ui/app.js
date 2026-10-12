@@ -3866,7 +3866,8 @@ function dzPointerDown(e) {
   // En FK Shift+arrastrar pertenece al rig: rota la pieza sobre su pivote.
   const rigShiftRotate = !!(DZ.rigMode && DZ.rigSubmode === "fk" && el.id
     && DZ.doc?.scene.rigNode(el.id));
-  if (e.shiftKey && !rigShiftRotate) {
+  const yaElegido = e.shiftKey && !rigShiftRotate && (DZ.multi.includes(el) || DZ.sel === el);   // Shift sobre lo elegido: arrastrar lo mueve en línea; un clic sin mover lo saca (como Illustrator)
+  if (e.shiftKey && !rigShiftRotate && !yaElegido) {
     let pack = DZ.multi.length > 1 ? DZ.multi.slice() : (DZ.sel ? [DZ.sel] : []);
     const i = pack.indexOf(el);
     if (i >= 0) pack.splice(i, 1); else pack.push(el);
@@ -3874,7 +3875,6 @@ function dzPointerDown(e) {
     DZ.multi = pack.length > 1 ? pack : [];
     if (pack.length) dzSelect(pack.includes(el) ? el : pack[pack.length - 1]); else dzDeselect();
     dzSetStatus(pack.length > 1 ? " " + pack.length + " elementos seleccionados — Ctrl+G agrupa, arrastrá para moverlos juntos" : "");
-    return;
   }
   // clic normal sobre algo fuera de la multi  limpiarla
   if (DZ.multi.length && !DZ.multi.includes(el)) dzClearMulti();
@@ -3925,7 +3925,7 @@ function dzPointerDown(e) {
   const move = (ev) => {
     if (ev.pointerId !== pointerId) return;
     const p = dzToUser(ev.clientX, ev.clientY);
-    const dx = p.x - start.x, dy = p.y - start.y;
+    let dx = p.x - start.x, dy = p.y - start.y; if (ev.shiftKey && !rigDrag) [dx, dy] = LOW.drawing.selection.moverEnLinea(dx, dy);   // Shift: sobre su línea (0°/45°/90°), como Illustrator; en el rig Shift rota
     if (!moved && Math.abs(dx) + Math.abs(dy) < 1) return;
     if (!moved && !rigDrag) {
       dzSnapshot();                                    // primer movimiento real
@@ -3961,7 +3961,7 @@ function dzPointerDown(e) {
       // casi a la altura del de otro objeto (o del lienzo), se imanta y se
       // dibuja la línea. Con Alt se ignora, para poder colocar algo libre.
       let ax = 0, ay = 0;
-      if (!ev.altKey && alignRefs) {
+      if (!ev.altKey && !ev.shiftKey && alignRefs) {   // con Shift manda la línea: el imán de alineación la torcería
         const r = dzAlignAdjust(alignBase, alignRefs, dx, dy);
         ax = r.ax; ay = r.ay;
         dzAlignRender(r.lineas);
@@ -3989,7 +3989,7 @@ function dzPointerDown(e) {
         dzSetStatus(" pose clavada en el cuadro " + dzRigCur() + " (Shift al arrastrar = rotar)");
       }
     }
-    if (moved) { dzBuildInspector(el); if (!rigDrag) dzMarkDirty(); }
+    if (moved) { dzBuildInspector(el); if (!rigDrag) dzMarkDirty(); } else if (yaElegido) LOW.drawing.selection.sacarDeLaSeleccion(el);
     if (rec && moved) dzRecFinish(rec);
     else if (rec) { DZ.rec = { armed: true }; }        // no arrastró: sigue armada
   };

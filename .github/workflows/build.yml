@@ -36,6 +36,7 @@ jobs:
       - name: Pruebas del modelo 2D
         run: |
           node tools/run_2d_model_tests.js
+          node tools/run_limpieza_tests.js
           node tools/run_undo_estado_tests.js
           node tools/run_trazo_tests.js
           node tools/run_pinceles_tests.js
@@ -195,6 +196,8 @@ jobs:
           node tools/check_hilo_tensado_ui.js
           node tools/check_perspectiva_ui.js
           node tools/check_perspectiva_3d_ui.js
+          node tools/check_limpieza_ui.js
+          node tools/check_mover_en_linea_ui.js
           node tools/check_capa_menu_ui.js
           node tools/check_cortar_pegar_ui.js
           node tools/check_acompanar_ui.js

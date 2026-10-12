@@ -1,0 +1,11 @@
+/* ✂ Limpieza de línea (vector/limpieza.js) */
+/* Los cierres INVISIBLES (sólo para el balde) se ven, punteados, mientras se
+   usa la Cinta o el Balde: como «Mostrar trazos» de Harmony. En el dibujo
+   guardado siguen con opacity="0": no se ven ni salen en el export. */
+#dzCanvas[data-tool="cinta"] [data-low="gap-close"],
+#dzCanvas[data-tool="bucket"] [data-low="gap-close"] {
+  opacity: .9 !important; stroke: #33B5E8 !important; stroke-dasharray: 5 4; stroke-width: 2px; vector-effect: non-scaling-stroke;
+}
+.limp-opciones { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.limp-opciones input[type="number"] { width: 54px; }
+.limp-opciones button { padding: 3px 9px; }

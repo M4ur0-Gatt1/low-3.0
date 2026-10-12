@@ -51,6 +51,8 @@ function dzHitSeleccionable(nodo) {
   if (typeof dzIsCanvasBackground === "function" && dzIsCanvasBackground(nodo)) return false;
   const estilo = nodo.getAttribute && nodo.getAttribute("style");
   if (estilo && /pointer-events\s*:\s*none/.test(estilo)) return false;
+  // los cierres invisibles de la Cinta (sólo para el balde): no son arte que se elige
+  if (nodo.getAttribute && (nodo.getAttribute("pointer-events") === "none" || nodo.getAttribute("data-low") === "gap-close")) return false;
   return true;
 }
 
