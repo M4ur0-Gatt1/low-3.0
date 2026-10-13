@@ -13,3 +13,20 @@
 .sel-opciones { display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; white-space: nowrap; }
 .sel-opciones select { max-width: 130px; }
 .sel-opciones button { padding: 3px 8px; }
+/* el alcance de varios dibujos se ve: que nadie mueva «toda la capa» sin saberlo */
+/* ── el desplegable de herramientas de selección (barra lateral, como Toon Boom) ── */
+#designView .dz-sel-main { position: relative; }
+#designView .dz-sel-badge { position: absolute; left: 2px; top: 2px; min-width: 9px; height: 9px; border-radius: 5px; background: #F0450E; box-shadow: 0 0 0 1.5px var(--panel, #17181b); }
+#designView .dz-sel-badge[hidden] { display: none; }
+#designView .dz-sel-menu { position: fixed; z-index: 800; min-width: 268px; padding: 6px; background: var(--panel, #17181b); border: 1px solid var(--line, #2c2e33); border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.48); font-size: 12.5px; color: var(--txt, #e9ebe8); }
+#designView .dz-sel-menu[hidden] { display: none; }
+#designView .dz-sel-menu h4 { margin: 6px 8px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted, #8b8f97); }
+#designView .dz-sel-menu h4:first-child { margin-top: 2px; }
+#designView .dz-sel-menu button { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; border: 0; border-radius: 7px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+#designView .dz-sel-menu button:hover, #designView .dz-sel-menu button:focus-visible { background: var(--dz-raised, #24262b); outline: none; }
+#designView .dz-sel-menu button.on { color: #F0450E; background: rgba(240,69,14,.12); }
+#designView .dz-sel-menu button .ico { width: 18px; height: 18px; }
+#designView .dz-sel-menu kbd { font: 10.5px/1 inherit; color: var(--muted, #8b8f97); }
+#designView .dz-sel-menu .sel-check { width: 18px; text-align: center; font-weight: 700; }
+#designView .dz-sel-menu hr { border: 0; border-top: 1px solid var(--line, #2c2e33); margin: 5px 4px; }
+.sel-opciones select.sel-alcance-activo { border-color: #F0450E; color: #F0450E; font-weight: 600; box-shadow: 0 0 0 1px #F0450E; }

@@ -67,6 +67,9 @@
     global.showCtxMenu(e, [
       { icon: "✎", label: "Renombrar…", shortcut: "doble clic", action: () => renombrar(doc, ly) },
       { icon: "⧉", label: "Duplicar capa", action: () => { const c = doc.duplicateLayer(ly.id); if (c) avisar("Capa duplicada: «" + c.name + "»"); } },
+      { icon: "⬚", label: "Elegir toda la capa (todos los cuadros)", shortcut: "Ctrl+Shift+A",
+        disabled: !(global.LOW && global.LOW.drawing && global.LOW.drawing.seleccionOpciones),
+        action: () => global.LOW.drawing.seleccionOpciones.elegirCapaEntera(ly.id) },
       "separator",
       { icon: "⤒", label: "Traer al frente", disabled: arriba, action: () => mover(doc, ly, n - 1, "quedó al frente de todo") },
       { icon: "↑", label: "Subir una posición", disabled: arriba, action: () => mover(doc, ly, i + 1, "subió una posición") },

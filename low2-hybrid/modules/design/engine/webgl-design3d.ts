@@ -842,6 +842,72 @@ export class WebGLDesign3D {
     return { png, width: W, height: H, vps, paralelas, ajustes: { ...this.perspAjustes } };
   }
 
+  /** El eje horizontal que más va «hacia atrás» desde la cámara (hacia su
+   *  punto de fuga): la dirección natural para repetir una calle de edificios. */
+  ejeHaciaAtras(): Eje {
+    const f = new THREE.Vector3(); (this.camera as THREE.Camera).getWorldDirection(f);
+    return Math.abs(f.x) > Math.abs(f.z) ? 'x' : 'z';
+  }
+
+  /** Cuánto mide lo elegido a lo largo de un eje (para sugerir la separación). */
+  largoSeleccion(eje: Eje): number {
+    this.detachRig();
+    const box = new THREE.Box3();
+    for (const r of this.selected) if (r.kind === 'stroke') box.expandByObject(r.object);
+    if (box.isEmpty()) return 0;
+    const s = box.getSize(new THREE.Vector3());
+    return eje === 'x' ? s.x : eje === 'y' ? s.y : s.z;
+  }
+
+  /** REPETIR HACIA LA FUGA: copias de lo elegido, corridas a lo largo de un eje
+   *  hacia donde mira la cámara (hacia su punto de fuga). Como son copias en el
+   *  espacio, cada una fuga exacto, y al «Mandar al 2D» llegan al layout.
+   *  Cada copia es un objeto entero (contorno, cara, volumen) con su geometría
+   *  propia; si lo elegido era un grupo, cada copia es su propio grupo. UN
+   *  paso de Ctrl+Z. Devuelve cuántos objetos creó. */
+  repetirHaciaLaFuga(eje: Eje, copias: number, separacion: number): number {
+    this.detachRig();
+    const recs = [...this.selected].filter((r) => r.kind === 'stroke');
+    copias = Math.max(0, Math.min(200, Math.round(copias)));
+    if (!recs.length || !copias || !(Math.abs(separacion) > 1e-6)) return 0;
+    const dir = new THREE.Vector3(eje === 'x' ? 1 : 0, eje === 'y' ? 1 : 0, eje === 'z' ? 1 : 0);
+    const f = new THREE.Vector3(); (this.camera as THREE.Camera).getWorldDirection(f);
+    if (f.dot(dir) < 0) dir.negate();                     // hacia atrás: hacia el punto de fuga que se ve
+    // sin resaltado de selección: si no, las copias nacen con el color de «elegido»
+    const elegidos = [...this.selected];
+    this.setSelection([]);
+    const creados: StrokeRecord[] = [];
+    const grupos = new Map<string, string>();
+    for (let k = 1; k <= copias; k++) {
+      for (const r of recs) {
+        const obj = r.object.clone(true);
+        obj.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (m.geometry) m.geometry = m.geometry.clone();
+          if (m.material) m.material = Array.isArray(m.material) ? m.material.map((x) => x.clone()) : (m.material as THREE.Material).clone();
+        });
+        obj.position.add(dir.clone().multiplyScalar(separacion * k));
+        let groupId: string | undefined;
+        if (r.groupId) {
+          const clave = r.groupId + '#' + k;
+          if (!grupos.has(clave)) grupos.set(clave, `grupo-${this.seq++}`);
+          groupId = grupos.get(clave);
+        }
+        const rec: StrokeRecord = { ...r, id: `stroke-${this.seq++}`, object: obj, points: r.points.map((p) => p.clone()),
+          pressures: [...r.pressures], brush: { ...r.brush }, groupId };
+        obj.userData = { ...obj.userData, strokeId: rec.id };
+        creados.push(rec);
+      }
+    }
+    for (const rec of creados) this.addStrokeRecord(rec);
+    this.setSelection(elegidos.filter((r) => this.strokes.includes(r)));
+    this.pushCmd({
+      undo: () => creados.forEach((r) => this.removeStrokeRecord(r)),
+      redo: () => creados.forEach((r) => this.addStrokeRecord(r)),
+    });
+    return creados.length;
+  }
+
   // ---------------------------------------------------------------- vistas orto / persp
 
   /** Vista activa — la UI la consulta tras restaurar un proyecto para dejar

@@ -23,8 +23,11 @@ const pageUrl=process.argv[3]||'http://127.0.0.1:8791/ui/index.html?mock=1';
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await new Promise(r=>setTimeout(r,200));
  await ev(`(()=>{const e=document.querySelectorAll('.rhythm-pose input')[3];e.value=8;e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
  check(await ev(`[...document.querySelectorAll('.rhythm-pose input')].reduce((n,e)=>n+Number(e.value),0)===28`),'fixed duration');
- await click('[data-action="play"]');await new Promise(r=>setTimeout(r,200));
- check(await ev(`document.querySelector('[data-counter="a"]').textContent!=='1 / 28 F'`),'play moves');
+ await click('[data-action="play"]');
+ // se espera a que AVANCE (hasta 2 s), no un tiempo fijo: con la máquina cargada
+ // (la prueba 3D anterior dibuja por software) el primer cuadro tardaba más de 200 ms
+ let movio=false;for(let i=0;i<20&&!movio;i++){await new Promise(r=>setTimeout(r,100));movio=await ev(`document.querySelector('[data-counter="a"]').textContent!=='1 / 28 F'`);}
+ check(movio,'play moves');
  await click('[data-action="play"]');
  await click('[data-action="tap"]');
  for(let i=0;i<8;i++){await send('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32});await send('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space',windowsVirtualKeyCode:32});await new Promise(r=>setTimeout(r,i===3?220:70));}

@@ -199,9 +199,11 @@ jobs:
           node tools/check_perspectiva_ui.js
           node tools/check_perspectiva_3d_ui.js
           node tools/check_perspectiva_3d_dibujo_ui.js
+          node tools/check_repetir_fuga_3d_ui.js
           node tools/check_limpieza_ui.js
           node tools/check_mover_en_linea_ui.js
           node tools/check_seleccion_alcance_ui.js
+          node tools/check_seleccion_grupo_ui.js
           node tools/check_capa_menu_ui.js
           node tools/check_cortar_pegar_ui.js
           node tools/check_acompanar_ui.js

@@ -28,12 +28,19 @@
   const D = () => (typeof DZ !== "undefined" ? DZ : null);
   const SVGNS = "http://www.w3.org/2000/svg";
   const CLAVE = "low.seleccion.v1";
+  // El ALCANCE no se guarda entre sesiones (sólo el tipo): abrir LOW con «toda
+  // la capa» puesto y mover algo «de este cuadro» movería todos sin avisar.
   const prefs = (() => {
     const base = { tipo: "rect", alcance: "dibujo" };
-    try { return { ...base, ...JSON.parse(global.localStorage.getItem(CLAVE) || "{}") }; } catch (_) { return base; }
+    try { const g = JSON.parse(global.localStorage.getItem(CLAVE) || "{}"); return { ...base, tipo: g.tipo || base.tipo }; } catch (_) { return base; }
   })();
-  const guardarPrefs = () => { try { global.localStorage.setItem(CLAVE, JSON.stringify(prefs)); } catch (_) { /* */ } };
+  const guardarPrefs = () => { try { global.localStorage.setItem(CLAVE, JSON.stringify({ tipo: prefs.tipo })); } catch (_) { /* */ } };
+  /** «Elegir toda la capa» prende el alcance SÓLO mientras dura esa selección:
+   *  al soltarla vuelve a «Este dibujo». Elegido a mano en la barra, queda. */
+  let alcanceTemporal = false;
   const aviso = (t) => global.dzSetStatus?.(t);
+  /** El desplegable de la barra lateral (seleccion-grupo.js) se entera así. */
+  const cambio = () => { try { doc.dispatchEvent(new CustomEvent("low:seleccion-cambio", { detail: { tipo: prefs.tipo, alcance: prefs.alcance } })); } catch (_) { /* */ } };
   const hoja = () => doc.querySelector("#dzCanvas > svg");
   const esFlecha = () => ["select", "direct"].includes(D()?.tool || "select");
 
@@ -90,11 +97,21 @@
     }
     return c;
   }
+  const pintado = (v) => { v = String(v || "").trim().toLowerCase(); return v && v !== "none" && v !== "transparent" && !v.startsWith("url(") ? v : ""; };
+  /** Los colores de un elemento: los de la paleta (data-stk/data-fil) y, si no
+   *  tiene, el color pintado (un trazo de pincel suelto también tiene «mismo color»). */
   const estilos = (n) => {
     const s = new Set();
     for (const x of [n, ...n.querySelectorAll("[data-stk],[data-fil]")]) {
       if (x.getAttribute("data-stk")) s.add("s" + x.getAttribute("data-stk"));
       if (x.getAttribute("data-fil")) s.add("f" + x.getAttribute("data-fil"));
+    }
+    if (!s.size) {
+      for (const x of [n, ...n.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse,text")]) {
+        const f = pintado(x.getAttribute("fill")), k = pintado(x.getAttribute("stroke"));
+        if (f) s.add("F" + f);
+        if (k) s.add("S" + k);
+      }
     }
     return s;
   };
@@ -252,7 +269,7 @@
     const cv = doc.querySelector("#dzCanvas");
     if (!cv || !cv.contains(e.target) || e.button !== 0 || !hoja()) return;
     const svg = hoja(), k = Math.hypot(svg.getScreenCTM().a, svg.getScreenCTM().b) || 1;
-    clic = { p: aLaHoja(e.clientX, e.clientY), tol: 6 / k, shift: !!e.shiftKey, t: performance.now() };
+    clic = { p: aLaHoja(e.clientX, e.clientY), tol: 6 / k, shift: !!e.shiftKey, t: performance.now(), x: e.clientX, y: e.clientY };
     punteroAbajo = true;
   }
   function envolverEleccion() {
@@ -268,6 +285,7 @@
           if (clic && performance.now() - clic.t < 1500 && punteroAbajo) {
             const c = { tipo: "punto", p: clic.p, tol: clic.tol };
             criterios = clic.shift && criterios ? criterios.concat([c]) : [c];
+            if (prefs.tipo === "color") porColor = clic;
           } else if (!marcando) criterios = null;          // una selección hecha por código: no se sabe repetirla
         }
         return r;
@@ -276,11 +294,29 @@
     }
     const des = global.dzDeselect;
     if (typeof des === "function" && !des.__alcance) {
-      global.dzDeselect = function () { const r = des.apply(this, arguments); if (!eligiendo && !restaurando) criterios = null; return r; };
+      global.dzDeselect = function () {
+        const r = des.apply(this, arguments);
+        if (!eligiendo && !restaurando) criterios = null;
+        if (!eligiendo && !restaurando && !aplicando && alcanceTemporal) {
+          alcanceTemporal = false; prefs.alcance = "dibujo";
+          try { global.dzToolOptsRender?.(); } catch (_) { /* */ }
+          cambio();
+        }
+        return r;
+      };
       global.dzDeselect.__alcance = true;
     }
   }
   let marcando = false;
+  /** MISMO COLOR como herramienta: el clic elige un elemento y, al soltar sin
+   *  arrastrar, se eligen todos los que tienen su color. */
+  let porColor = null;
+  function alSoltarColor(e) {
+    const c = porColor; porColor = null;
+    if (!c || prefs.tipo !== "color" || !esFlecha()) return;
+    if (Math.hypot(e.clientX - c.x, e.clientY - c.y) > 4) return;          // fue un arrastre: se movió eso
+    setTimeout(() => { try { mismoColor(); } catch (err) { console.warn("[selección]", err); } }, 0);
+  }
 
   /* ── repetir la transformación en los otros dibujos ── */
   let punteroAbajo = false, armado = null, aplicando = false, restaurando = false;
@@ -371,6 +407,7 @@
       .filter((t) => !(actual && t.levelId === capa.levelId && t.number === actual.number));
     if (!destinos.length) {
       if (prefs.alcance === "cuadros") aviso("Cuadros elegidos: marcá en la línea de tiempo los cuadros de esta capa");
+      else if (prefs.alcance === "capa") aviso("Esta capa tiene un solo dibujo: el cambio quedó sólo en él");
       return;
     }
     const svg = hoja(), vb = svg.getAttribute("viewBox"), tmp = hojaOculta(vb), cambios = [];
@@ -453,12 +490,58 @@
     if (!esFlecha()) global.dzSetTool?.("select");
     informar(elegirEn(svg, [{ tipo: "todo" }], false));
   }
+  /** ELEGIR TODA LA CAPA (todos sus cuadros) para moverla, escalarla o girarla
+   *  junta: pasa a la Flecha, pone el alcance «Toda la capa» mientras dure la
+   *  selección y elige todo el dibujo. Lo que se le haga se repite en todos
+   *  los dibujos de la capa, en un paso de Ctrl+Z. */
+  function elegirCapaEntera(layerId) {
+    const dz = D();
+    if (!dz || !dz.doc) return aviso("Abrí un documento de animación para elegir una capa entera");
+    const seguir = () => {
+      if (!esFlecha()) global.dzSetTool?.("select");
+      prefs.alcance = "capa"; alcanceTemporal = true;
+      try { global.dzToolOptsRender?.(); } catch (_) { /* */ }
+      const svg = hoja();
+      if (!svg || !candidatos(svg).length) {
+        return aviso("En este cuadro la capa está vacía: andá a un cuadro con dibujo y volvé a elegirla entera");
+      }
+      elegirTodo();
+      alcanceTemporal = true; prefs.alcance = "capa"; cambio();
+      const capa = dz.doc.layer, dibujos = new Set((capa.cells || []).filter((c) => c != null)).size;
+      aviso("Toda la capa «" + capa.name + "» elegida (" + dibujos + (dibujos === 1 ? " dibujo" : " dibujos") +
+        "): arrastrá para mover, usá los tiradores para escalar o girar · Ctrl+Z lo deshace en todos");
+    };
+    if (layerId && dz.doc.layerId !== layerId && typeof dz.doc.selectLayer === "function") {
+      dz.doc.selectLayer(layerId);
+      setTimeout(seguir, 120);                            // que el lienzo muestre esa capa
+    } else seguir();
+  }
+  const TIPOS = ["rect", "lazo", "poligono", "color"], ALCANCES = ["dibujo", "cuadros", "capa"];
+  /** Elegir la herramienta de selección (el desplegable de la barra lateral). */
+  function ponerTipo(t) {
+    if (!TIPOS.includes(t)) return;
+    prefs.tipo = t; guardarPrefs();
+    if (D()?.tool !== "select") global.dzSetTool?.("select");
+    else { try { global.dzToolOptsRender?.(); } catch (_) { /* */ } }
+    cambio();
+    aviso({ rect: "Selección con rectángulo: arrastrá en un lugar vacío", lazo: "Selección con lazo: dibujá a mano alzada alrededor",
+      poligono: "Selección con polígono: clic por punto · clic en el primero, doble clic o Enter lo cierra",
+      color: "Selección por color: clic en un trazo elige todos los de su mismo color" }[t]);
+  }
+  function ponerAlcance(a) {
+    if (!ALCANCES.includes(a)) return;
+    prefs.alcance = a; alcanceTemporal = false;
+    if (!esFlecha()) global.dzSetTool?.("select");
+    else { try { global.dzToolOptsRender?.(); } catch (_) { /* */ } }
+    cambio();
+    aviso(a === "dibujo" ? "Alcance: este dibujo" : a === "capa" ? "Alcance: toda la capa · lo que muevas se mueve igual en todos sus dibujos" : "Alcance: los cuadros elegidos en la línea de tiempo");
+  }
   function mismoColor() {
     const dz = D(), svg = hoja();
     const base = paquete().filter((n) => n && n.isConnected);
     if (!svg || !base.length) return aviso("Elegí algo primero: se eligen todos los que usan su mismo color de la paleta");
     const est = [...new Set(base.flatMap((n) => [...estilos(n)]))];
-    if (!est.length) return aviso("Eso no usa un color de la paleta: no hay «mismo color» para buscar");
+    if (!est.length) return aviso("Eso no tiene color de relleno ni de trazo: no hay «mismo color» para buscar");
     informar(elegirEn(svg, [{ tipo: "estilo", estilos: est }], false));
   }
 
@@ -477,8 +560,9 @@
     s.innerHTML = `<label title="Cómo se arma la selección al arrastrar en un lugar vacío">Tipo <select data-s="tipo">
         <option value="rect"${prefs.tipo === "rect" ? " selected" : ""}>Rectángulo</option>
         <option value="lazo"${prefs.tipo === "lazo" ? " selected" : ""}>Lazo</option>
-        <option value="poligono"${prefs.tipo === "poligono" ? " selected" : ""}>Polígono</option></select></label>
-      <label title="A qué dibujos se aplica mover, escalar o rotar: lo elegido se busca igual en cada uno">Alcance <select data-s="alcance">
+        <option value="poligono"${prefs.tipo === "poligono" ? " selected" : ""}>Polígono</option>
+        <option value="color"${prefs.tipo === "color" ? " selected" : ""}>Mismo color</option></select></label>
+      <label title="A qué dibujos se aplica mover, escalar o rotar: lo elegido se busca igual en cada uno">Alcance <select data-s="alcance"${prefs.alcance !== "dibujo" ? ' class="sel-alcance-activo"' : ""}>
         <option value="dibujo"${prefs.alcance === "dibujo" ? " selected" : ""}>Este dibujo</option>
         <option value="cuadros"${prefs.alcance === "cuadros" ? " selected" : ""}>Cuadros elegidos</option>
         <option value="capa"${prefs.alcance === "capa" ? " selected" : ""}>Toda la capa</option></select></label>
@@ -487,6 +571,8 @@
     s.addEventListener("change", (e) => {
       const k = e.target.dataset.s; if (!k) return;
       prefs[k] = e.target.value; guardarPrefs();
+      if (k === "alcance") { alcanceTemporal = false; e.target.classList.toggle("sel-alcance-activo", prefs.alcance !== "dibujo"); }
+      cambio();
       if (k === "alcance") aviso(prefs.alcance === "dibujo" ? "Alcance: este dibujo" : prefs.alcance === "capa" ? "Alcance: toda la capa · lo que muevas se mueve igual en todos sus dibujos" : "Alcance: los cuadros elegidos en la línea de tiempo");
     });
     s.addEventListener("click", (e) => {
@@ -496,12 +582,35 @@
     box.appendChild(s);
   }
 
+  /** Ctrl+A elige todo el cuadro; Ctrl+Shift+A, toda la capa. No con el foco
+   *  en un campo, en el editor de código ni en la línea de tiempo (son suyos). */
+  function alTeclado(e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || (e.key || "").toLowerCase() !== "a" || e.defaultPrevented) return;
+    const vista = doc.getElementById("designView");
+    if (!vista || vista.hidden || tipeando()) return;
+    if (e.target && e.target.closest && e.target.closest(".cm-editor, .CodeMirror, .dz-timeline, #dzTlGrid, #dzXsheet, .tl2, .xs2, #overlay, [role=menu]")) return;
+    e.preventDefault();
+    if (e.shiftKey) elegirCapaEntera();
+    else { if (!esFlecha()) global.dzSetTool?.("select"); elegirTodo(); }
+  }
+  function envolverMenu() {
+    const orig = global.dzMenuAction;
+    if (typeof orig !== "function" || orig.__seleccion) return;
+    global.dzMenuAction = function (act) {
+      if (act === "elegir-todo") { if (!esFlecha()) global.dzSetTool?.("select"); return elegirTodo(); }
+      if (act === "elegir-capa") return elegirCapaEntera();
+      return orig.apply(this, arguments);
+    };
+    Object.assign(global.dzMenuAction, orig); global.dzMenuAction.__seleccion = true;
+  }
+
   function enganchar() {
-    envolverMarco(); envolverEleccion(); envolverHistoria();
+    envolverMarco(); envolverEleccion(); envolverHistoria(); envolverMenu();
+    doc.addEventListener("keydown", alTeclado);
     doc.addEventListener("pointerdown", anotarClic, true);
     doc.addEventListener("pointerdown", poliDown, true);
     doc.addEventListener("pointermove", poliMove, true);
-    doc.addEventListener("pointerup", () => { punteroAbajo = false; desarmarLuego(); }, true);
+    doc.addEventListener("pointerup", (e) => { punteroAbajo = false; desarmarLuego(); alSoltarColor(e); }, true);
     doc.addEventListener("keydown", poliTecla, true);
     doc.addEventListener("keydown", alApretar, true);
     const orig = global.dzToolOptsRender;
@@ -514,7 +623,7 @@
 
   global.LOW = global.LOW || {};
   global.LOW.drawing = global.LOW.drawing || {};
-  global.LOW.drawing.seleccionOpciones = { prefs, elegirTodo, mismoColor, criterios: () => criterios, ajustar, cumple, candidatos };
+  global.LOW.drawing.seleccionOpciones = { prefs, elegirTodo, elegirCapaEntera, mismoColor, ponerTipo, ponerAlcance, criterios: () => criterios, ajustar, cumple, candidatos };
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", enganchar, { once: true });
   else enganchar();
 })(typeof window !== "undefined" ? window : globalThis);
