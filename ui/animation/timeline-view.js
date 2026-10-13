@@ -150,8 +150,13 @@
     }
     _updateCursor() {
       if (!this.host || !this.doc) return;
-      this.host.querySelectorAll(".actual").forEach((n) => n.classList.remove("actual"));
-      this.host.querySelectorAll(`[data-frame="${this.doc.frame}"]`).forEach((n) => n.classList.add("actual"));
+      // se acuerda de lo que marcó: barrer TODO el árbol buscando «.actual» en
+      // cada cuadro era lo más caro del play (≈7 ms con una escena real)
+      const tl = this.host.querySelector(".tl2");
+      if (this._cursorEn !== tl) { this._cursorEn = tl; this._marcados = Array.from(this.host.querySelectorAll(".actual")); }
+      (this._marcados || []).forEach((n) => n.classList.remove("actual"));
+      this._marcados = Array.from(this.host.querySelectorAll(`[data-frame="${this.doc.frame}"]`));
+      this._marcados.forEach((n) => n.classList.add("actual"));
       // sólo el CONTADOR: la celda también lleva «+ Capa», y reescribir su
       // textContent entero se lo llevaba puesto en cada cuadro
       const label = this.host.querySelector(".tl2-rulername .tl2-framepos") || this.host.querySelector(".tl2-rulername");

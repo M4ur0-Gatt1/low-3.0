@@ -87,7 +87,17 @@
         // cuando la ventana no está visible: con la timeline en el otro
         // monitor, la reproducción se congelaba. El frame se sigue calculando
         // por reloj real, así que el timing no deriva.
-        const espera = Math.max(4, 1000 / Math.max(1, this.doc.scene.fps || 24));
+        //
+        // Y se despierta en el BORDE del cuadro siguiente, no «un cuadro
+        // después de terminar»: esperar 1000/fps DESPUÉS del trabajo hacía
+        // que cada vuelta durara trabajo + 41,7 ms (≈60 ms con una escena real)
+        // y a 24 fps sólo se mostraban ~16 cuadros por segundo: el reloj
+        // mandaba saltear los demás y la reproducción se veía cortada.
+        // MEDIDO en la escena de Mauro: 33 de 48 cuadros en 2 s aun con los
+        // cuadros ya renderizados.
+        const fpsAhora = Math.max(1, this.doc.scene.fps || 24);
+        const siguiente = this.t0 + ((Math.floor(((ahora - this.t0) / 1000) * fpsAhora) + 1) * 1000) / fpsAhora;
+        const espera = Math.max(1, siguiente - (global.performance || Date).now());
         this.raf = global.setTimeout(paso, espera);
       };
       this.raf = global.setTimeout(paso, 0);

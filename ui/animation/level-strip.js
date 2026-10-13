@@ -28,15 +28,34 @@
       this.anchor = null;
       this._desuscribir = doc ? doc.subscribe((d, m) => {
         // se redibuja con lo que la afecta, no con cada movimiento del frame
-        if (m === "level" || m === "cells" || m === "content" || m === "frame" || m === "palette")
+        if (m === "frame") this._soloActual();
+        else if (m === "level" || m === "cells" || m === "content" || m === "palette")
           this.render();
       }) : null;
     }
     setDoc(doc) {
       if (this._desuscribir) this._desuscribir();
       this.doc = doc;
-      this._desuscribir = doc ? doc.subscribe(() => this.render()) : null;
+      this._desuscribir = doc ? doc.subscribe((d, m) => (m === "frame" ? this._soloActual() : this.render())) : null;
       this.render();
+    }
+    /** Cambio de cuadro: lo único que cambia en la tira es cuál dibujo está
+     *  «actual». Rearmarla entera (miniaturas incluidas) costaba ~4 ms POR
+     *  CUADRO y en reproducción eso se come el tiempo del cuadro. Si cambió el
+     *  nivel, ahí sí se rearma. */
+    _soloActual() {
+      const doc = this.doc, lv = doc && doc.level;
+      if (!this.host || !doc || (lv ? lv.id : null) !== this._nivelPintado) return this.render();
+      const actual = doc.cell;
+      let nuevo = null;
+      this.host.querySelectorAll(".ls2-item").forEach((el) => {
+        const es = +el.dataset.num === actual;
+        el.classList.toggle("actual", es);
+        if (es) nuevo = el;
+      });
+      if (nuevo && nuevo !== this._actualPintado && global.LOW && global.LOW.core && global.LOW.core.scrollDentro)
+        global.LOW.core.scrollDentro(nuevo, { limite: this.host });
+      this._actualPintado = nuevo;
     }
     dispose() { if (this._desuscribir) this._desuscribir(); if (this.host) this.host.innerHTML = ""; }
 
@@ -89,6 +108,7 @@
           + (d.number === actual ? " actual" : "")
           + (this.selected.has(d.number) ? " selected" : "")
           + (expuestos.has(d.number) ? "" : " suelto");
+        cel.dataset.num = d.number;
         cel.title = expuestos.has(d.number)
           ? `Dibujo ${d.number} · clic: ir a donde está expuesto`
           : `Dibujo ${d.number} · NO está expuesto en ninguna celda`;
@@ -157,6 +177,8 @@
       this.host.innerHTML = "";
       this.host.appendChild(box);
       const act = tira.querySelector(".ls2-item.actual");
+      this._nivelPintado = lv ? lv.id : null;
+      this._actualPintado = act;
       // sólo dentro de la tira: scrollIntoView arrastraba el panel lateral entero
       if (act && (global.LOW && global.LOW.core && global.LOW.core.scrollDentro)) global.LOW.core.scrollDentro(act, { limite: this.host });
     }
