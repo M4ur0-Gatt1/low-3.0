@@ -1,6 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 # LOW_fast.spec — build RAPIDO (--onedir, sin UPX, ~30-60s)
 # Uso: python build_exe.py fast
+# El ffmpeg de imageio-ffmpeg viaja DENTRO del ejecutable (MP4 sin instalar nada).
+from PyInstaller.utils.hooks import collect_data_files
+_FFMPEG = collect_data_files("imageio_ffmpeg")
 
 a = Analysis(
     ['main.py'],
@@ -9,8 +12,8 @@ a = Analysis(
     datas=[('providers', 'providers'), ('code_runner', 'code_runner'), ('config.py', '.'),
            ('low.ico', '.'), ('ui', 'ui'), ('tools', 'tools'), ('low_anim.py', '.'),
            ('self_improvement.py', '.'), ('animation_engine', 'animation_engine'),
-           ('social', 'social')],
-    hiddenimports=['providers', 'providers.transport', 'providers.nvidia_provider',
+           ('social', 'social')] + _FFMPEG,
+    hiddenimports=['imageio_ffmpeg', 'providers', 'providers.transport', 'providers.nvidia_provider',
                    'code_runner', 'webview.platforms.winforms',
                    'webview.platforms.edgechromium', 'webview.platforms.cocoa',
                    'webview.platforms.qt',

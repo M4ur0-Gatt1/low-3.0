@@ -6197,6 +6197,20 @@ def smoke(base):
             ok = False; det = repr(e)
         revisar("importa %s" % mod, ok, det)
 
+    # MP4 SIN INSTALAR NADA: el ejecutable trae su ffmpeg (imageio-ffmpeg). Se
+    # mira el EMPAQUETADO, no el del PATH: el runner de CI puede tener ffmpeg
+    # instalado y esconder que no entró en el bundle.
+    try:
+        import imageio_ffmpeg
+        propio = imageio_ffmpeg.get_ffmpeg_exe()
+        ok_ff = bool(propio) and Path(propio).is_file()
+        if ok_ff and getattr(sys, "frozen", False):
+            ok_ff = str(Path(propio).resolve()).startswith(str(Path(base).resolve()))
+        det_ff = propio
+    except Exception as e:
+        ok_ff, det_ff = False, repr(e)
+    revisar("trae su propio ffmpeg para exportar MP4", ok_ff, det_ff)
+
     escribible = None
     try:
         import tempfile

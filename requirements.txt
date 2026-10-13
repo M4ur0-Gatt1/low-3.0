@@ -1,6 +1,7 @@
 requests>=2.31
 pywebview>=5.0
 pillow>=10.0
+imageio-ffmpeg>=0.5   # trae su propio ffmpeg: MP4/WebM sin instalar nada (PATH primero, después este)
 vtracer>=0.6         # raster → SVG editable (vectorizar / "calcar"); offline
 numpy>=1.26          # motor de animación (tools/animation, low_anim)
 jsonschema>=4.21     # módulo social: valida la salida JSON del agente

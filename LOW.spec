@@ -1,4 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
+# El ffmpeg de imageio-ffmpeg viaja DENTRO del ejecutable: exportar MP4 no puede
+# depender de que la máquina tenga ffmpeg instalado (en la de un chico no lo hay).
+from PyInstaller.utils.hooks import collect_data_files
+_FFMPEG = collect_data_files("imageio_ffmpeg")
 
 
 a = Analysis(
@@ -8,8 +12,8 @@ a = Analysis(
 datas=[('providers', 'providers'), ('code_runner', 'code_runner'), ('config.py', '.'),
        ('low.ico', '.'), ('ui', 'ui'), ('tools', 'tools'), ('low_anim.py', '.'),
        ('self_improvement.py', '.'), ('animation_engine', 'animation_engine'),
-       ('social', 'social'), ('pinceles', 'pinceles')],
-    hiddenimports=['brush_import', 'providers', 'providers.transport', 'providers.nvidia_provider',
+       ('social', 'social'), ('pinceles', 'pinceles')] + _FFMPEG,
+    hiddenimports=['imageio_ffmpeg', 'brush_import', 'providers', 'providers.transport', 'providers.nvidia_provider',
                    'code_runner', 'webview.platforms.winforms',
                    'webview.platforms.edgechromium', 'webview.platforms.cocoa',
                    'webview.platforms.qt',
