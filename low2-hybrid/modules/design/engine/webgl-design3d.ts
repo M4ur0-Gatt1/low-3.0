@@ -844,7 +844,21 @@ export class WebGLDesign3D {
    *  cuadro del 2D con fondo transparente, y los puntos de fuga en esos mismos
    *  píxeles. La cuadrícula, los ejes, el control de transformar y las
    *  superficies-guía son ayudas del 3D: no van al layout. */
-  mandarAl2D(W: number, H: number): { png: string; width: number; height: number; vps: PuntoDeFuga[];
+  /** Las cajas en gris liso y opaco mientras dura `fn` (para mandarlas al 2D
+   *  como volúmenes de referencia); después vuelven a ser andamio translúcido. */
+  private conCajasLisas<T>(fn: () => T): T {
+    const antes: [THREE.Mesh | THREE.LineSegments, THREE.Material][] = [];
+    this.boxesGroup.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.userData.caraDeCaja) { antes.push([m, m.material as THREE.Material]); m.material = new THREE.MeshBasicMaterial({ color: 0xd8d8d8 }); }
+      else if ((o as THREE.LineSegments).isLineSegments) { const l = o as THREE.LineSegments; antes.push([l, l.material as THREE.Material]); l.material = new THREE.LineBasicMaterial({ color: 0x555555 }); }
+    });
+    try { return fn(); } finally {
+      for (const [o, mat] of antes) { (o.material as THREE.Material).dispose(); o.material = mat; }
+    }
+  }
+
+  mandarAl2D(W: number, H: number, op: { cajas?: boolean } = {}): { png: string; width: number; height: number; vps: PuntoDeFuga[];
     paralelas: { ux: number; uy: number; eje: Eje }[]; ajustes: Perspectiva3DAjustes } | null {
     // sin pedir que el marco esté prendido: lo que se ve en Perspectiva, con su lente
     if (!(W > 0) || !(H > 0) || this.view !== 'persp') return null;
@@ -858,7 +872,8 @@ export class WebGLDesign3D {
     const antes = new Map<THREE.Object3D, boolean>();
     for (const o of this.scene.children) {
       antes.set(o, o.visible);
-      o.visible = o === this.persp3d.group || o === this.strokesGroup || (o as THREE.Light).isLight === true;
+      o.visible = o === this.persp3d.group || o === this.strokesGroup || (o as THREE.Light).isLight === true
+        || (!!op.cajas && o === this.boxesGroup);
     }
     const fondo = this.scene.background, niebla = this.scene.fog;
     this.scene.background = null;
@@ -872,7 +887,7 @@ export class WebGLDesign3D {
       r.toneMapping = this.renderer.toneMapping;
       r.toneMappingExposure = this.renderer.toneMappingExposure;
       r.setClearColor(0x000000, 0);
-      r.render(this.scene, cam);
+      if (op.cajas) this.conCajasLisas(() => r.render(this.scene, cam)); else r.render(this.scene, cam);
       png = r.domElement.toDataURL('image/png');
     } finally {
       r.dispose();
@@ -928,8 +943,12 @@ export class WebGLDesign3D {
     this.controls.target.fromArray(c.mira);
     this.perspCamera.lookAt(this.controls.target);
     this.controls.update();
-    if (this.perspAjustes.activa && Math.abs(this.perspAjustes.lente - c.lente) > 0.01)
+    if (this.perspAjustes.activa && Math.abs(this.perspAjustes.lente - c.lente) > 0.01) {
       this.perspAjustes = { ...this.perspAjustes, lente: c.lente };
+      this.perspFirma = '';
+      this.scheduleAutosave();
+      window.dispatchEvent(new Event('low3d:persp'));   // el panel Cámara muestra el lente de la clave
+    }
     return true;
   }
   /** Los fondos de la toma: cada cuadro pedido renderizado del tamaño del
@@ -938,7 +957,7 @@ export class WebGLDesign3D {
    *  control de transformar no. Las líneas del esquema de perspectiva, sólo si
    *  se piden. Un solo renderizador para todos los cuadros. */
   async tomaRender(cuadros: number[], W: number, H: number,
-    op: { formato: 'jpg' | 'png'; calidad?: number; lineas?: boolean },
+    op: { formato: 'jpg' | 'png'; calidad?: number; lineas?: boolean; cajas?: boolean },
     progreso?: (hechos: number, total: number) => void): Promise<{ cuadro: number; data: string }[]> {
     if (!this.toma.claves.length || !(W > 0) || !(H > 0) || !cuadros.length) return [];
     this.detachRig();
@@ -949,7 +968,8 @@ export class WebGLDesign3D {
     const antes = new Map<THREE.Object3D, boolean>();
     for (const o of this.scene.children) {
       antes.set(o, o.visible);
-      o.visible = o === this.strokesGroup || (o as THREE.Light).isLight === true || (!!op.lineas && o === this.persp3d.group);
+      o.visible = o === this.strokesGroup || (o as THREE.Light).isLight === true || (!!op.lineas && o === this.persp3d.group)
+        || (!!op.cajas && o === this.boxesGroup);
     }
     const fondo = this.scene.background, niebla = this.scene.fog;
     this.scene.background = null;
@@ -970,7 +990,7 @@ export class WebGLDesign3D {
         cam.lookAt(new THREE.Vector3().fromArray(c.mira));
         cam.updateProjectionMatrix();
         cam.updateMatrixWorld(true);
-        r.render(this.scene, cam);
+        if (op.cajas) this.conCajasLisas(() => r.render(this.scene, cam)); else r.render(this.scene, cam);
         out.push({ cuadro: cuadros[i], data: r.domElement.toDataURL(tipo, calidad) });
         progreso?.(i + 1, cuadros.length);
         // que la interfaz respire entre cuadro y cuadro (y se vea el progreso)
@@ -1584,7 +1604,20 @@ export class WebGLDesign3D {
     return this.activeSurfaceId ? this.surfaces.find((x) => x.id === this.activeSurfaceId) : undefined;
   }
 
+  /** Los planos de las guías, al día con su transformación. */
+  private refrescarGuias(): void {
+    const al = (m: THREE.Object3D): THREE.Plane | undefined => {
+      const local = m.userData.guidePlaneLocal as THREE.Plane | undefined;
+      if (!local) return undefined;
+      m.updateMatrixWorld(true);
+      return local.clone().applyMatrix4(m.matrixWorld);
+    };
+    for (const g of this.guides) { const pl = al(g.mesh); if (pl) (g as { plane?: THREE.Plane }).plane = pl; }
+    if (this.activeGuide) { const pl = al(this.activeGuide.mesh); if (pl) (this.activeGuide as { plane?: THREE.Plane }).plane = pl; }
+  }
+
   private resolveHit(): HitInfo | null {
+    this.refrescarGuias();
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
     // PRIORIDAD: la guía ACTIVA gana sobre cualquier otra superficie. Con varias
     // guías, el rayo agarraba la que quedaba más cerca en profundidad (aunque no
@@ -1788,12 +1821,22 @@ export class WebGLDesign3D {
 
   /** El piso (y = 0) bajo el cursor, o null si el rayo no baja hacia él o lo
    *  toca casi de canto (más allá de 300 m). */
+  /** El último intento de apoyo cayó en el piso demasiado lejos o de canto. */
+  private pisoLejos = false;
   private pisoBajoElCursor(): { point: THREE.Vector3; normal: THREE.Vector3; plane: THREE.Plane; kind: 'surface' } | null {
     const ray = this.raycaster.ray;
+    this.pisoLejos = false;
     if (ray.direction.y > -1e-4 || ray.origin.y <= 1e-4) return null;
     const plano = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const p = new THREE.Vector3();
-    if (!ray.intersectPlane(plano, p) || p.distanceTo(ray.origin) > 300) return null;
+    if (!ray.intersectPlane(plano, p)) return null;
+    // Cerca del horizonte el piso se ve de CANTO: un píxel del cursor son metros
+    // y el trazo se cortaba sin aviso (las muestras que saltan más de
+    // MAX_DRAW_JUMP se descartan). Se mide cuánto piso cubre un píxel ahí.
+    const cam = this.camera as THREE.PerspectiveCamera;
+    const alto = this.canvas.clientHeight || 1;
+    const porPixel = p.distanceTo(ray.origin) * (THREE.MathUtils.degToRad(cam.fov || 45) / alto) / Math.max(1e-6, -ray.direction.y);
+    if (porPixel > 0.5) { this.pisoLejos = true; return null; }
     return { point: p, normal: new THREE.Vector3(0, 1, 0), plane: plano, kind: 'surface' };
   }
   /** Un aviso que SE VE (lo muestra el estudio arriba de la vista). Antes los
@@ -2688,7 +2731,9 @@ export class WebGLDesign3D {
         // canto y el rayo del lápiz corre paralelo a ella. Decirlo, en vez del
         // mensaje genérico de "no hay guía" — que confunde, porque sí hay.
         ? 'La guía está de canto desde esta vista: orbitá (arrastrá) para verla de frente y dibujar sobre ella'
-        : 'Acá no hay dónde apoyar el trazo: dibujá sobre el piso, una guía o una caja (o pasá a una vista de frente o de costado)';
+        : this.pisoLejos
+          ? 'El piso está demasiado lejos o de canto acá: acercate u orbitá para verlo más de arriba'
+          : 'Acá no hay dónde apoyar el trazo: dibujá sobre el piso, una guía o una caja (o pasá a una vista de frente o de costado)';
       this.avisar(this.canvas.title);
       this.cursorEl.style.borderColor = '#ff4d4d';
       setTimeout(() => { this.canvas.title = ''; this.cursorEl.style.borderColor = '#333'; }, 1400);
@@ -2925,6 +2970,7 @@ export class WebGLDesign3D {
     // afectar el cuerpo del trazo. También para guías ("imán de guía"): si
     // trazás una guía nueva cerca de un trazo ya hecho, se engancha a él
     // igual que un trazo normal — antes solo aplicaba a kind==='stroke'.
+    let ejeUsado: { a: THREE.Vector3; eje: THREE.Vector3 } | null = null;
     if (this.current && this.current.points.length >= 2) {
       const pts = this.current.points;
       // El ESTABILIZADOR (pulso) deja el último punto ATRÁS del cursor: con
@@ -2950,6 +2996,7 @@ export class WebGLDesign3D {
       if (this.imanFuga && this.current.kind === 'stroke' && this.tool === 'pencil' && !e.shiftKey && !e.altKey
           && pts.length >= 3 && this.isStrokeStraight(pts)) {
         const a = pts[0], eje = this.ejeDeLaRecta(a, pts[pts.length - 1]);
+        ejeUsado = eje ? { a: a.clone(), eje } : null;
         if (eje) {
           const fin = a.clone().addScaledVector(eje, pts[pts.length - 1].clone().sub(a).dot(eje));
           const pr = this.current.pressures;
@@ -2958,9 +3005,15 @@ export class WebGLDesign3D {
         }
       }
       const last = pts[pts.length - 1];
-      // el enganche tiene la última palabra: tocar la línea gana a alinearse
+      // el enganche tiene la última palabra: tocar la línea gana a alinearse.
+      // Con una recta ya llevada a su eje, una esquina FUERA de la recta no la
+      // tuerce: la punta va a la proyección de la esquina sobre el eje (sigue
+      // fugando y queda a ras); si la esquina está sobre el eje (±1 cm), manda.
       const v = this.findSnapVertex(e, last, 0.6);
-      if (v) pts[pts.length - 1] = v.clone();
+      if (v && ejeUsado) {
+        const enEje = ejeUsado.a.clone().addScaledVector(ejeUsado.eje, v.clone().sub(ejeUsado.a).dot(ejeUsado.eje));
+        pts[pts.length - 1] = enEje.distanceTo(v) <= 0.01 ? v.clone() : enEje;
+      } else if (v) pts[pts.length - 1] = v.clone();
     }
     this.hideSnapMark();
     this.hideAlignLines();
@@ -3900,6 +3953,10 @@ export class WebGLDesign3D {
     mesh.userData.surfaceId = id;
     mesh.userData.guideId = id;
     const plane = mesh.userData.guidePlane as THREE.Plane | undefined;
+    // el plano en coordenadas PROPIAS de la guía: así, si se la mueve con el
+    // gizmo, su respaldo infinito se mueve con ella (antes quedaba en el lugar
+    // viejo y los trazos caían donde la guía ya no estaba)
+    if (plane) { mesh.updateMatrixWorld(true); mesh.userData.guidePlaneLocal = plane.clone().applyMatrix4(mesh.matrixWorld.clone().invert()); }
     const g = { id, mesh, plane };
     const attach = () => {
       this.guidesGroup.add(mesh);
@@ -5680,9 +5737,18 @@ export class WebGLDesign3D {
       const normal = new THREE.Vector3().fromArray(g.normal || [0, 0, 1]);
       const mesh = this.buildGuideSurface(pts, normal);
       if (!mesh) continue;
+      // el plano de la guía se arma en el MUNDO con la guía recién construida
+      // (centrada en su trazo): pasarlo a coordenadas de la guía ANTES de ponerle
+      // la transformación guardada, y recién ahí al mundo. Antes quedaba en el
+      // lugar de origen: una guía movida y guardada volvía a apoyar donde no estaba.
+      mesh.updateMatrix();
+      const planoGuia = mesh.userData.guidePlane as THREE.Plane | undefined;
+      const planoPropio = planoGuia?.clone().applyMatrix4(mesh.matrix.clone().invert());
       mesh.position.fromArray(g.position || [0, 0, 0]);
       mesh.quaternion.fromArray(g.quaternion || [0, 0, 0, 1]);
       mesh.scale.fromArray(g.scale || [1, 1, 1]);
+      mesh.updateMatrix();
+      if (planoPropio) mesh.userData.guidePlane = planoPropio.applyMatrix4(mesh.matrix);
       this.setGuide(mesh);
     }
     const cam = doc.camera;
