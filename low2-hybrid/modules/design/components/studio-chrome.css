@@ -113,4 +113,16 @@
 .persp3d-repetir label { display:flex;flex-direction:column;gap:3px; }
 .persp3d-repetir select,.persp3d-repetir input { background:var(--studio-input);border:1px solid var(--studio-line);border-radius:8px;padding:5px;color:var(--studio-fg);width:100%; }
 .persp3d-boton { border:1px solid var(--studio-line);border-radius:8px;padding:6px 8px;cursor:pointer;background:var(--studio-input);color:var(--studio-fg); }
+.toma3d-fila { display:flex;align-items:center;gap:8px;font-size:12px; }
+.toma3d-fila input { flex:1;min-width:0;background:var(--studio-input);border:1px solid var(--studio-line);border-radius:8px;padding:5px;color:var(--studio-fg); }
+.toma3d-linea { display:grid;grid-template-columns:1fr 64px;gap:8px;align-items:center; }
+.toma3d-linea input[type=number] { background:var(--studio-input);border:1px solid var(--studio-line);border-radius:8px;padding:5px;color:var(--studio-fg);width:100%; }
+.toma3d-claves { display:flex;flex-wrap:wrap;gap:4px;min-height:24px; }
+.toma3d-claves button { border:1px solid var(--studio-line);border-radius:6px;padding:2px 6px;background:var(--studio-input);color:var(--studio-fg);font-size:11.5px;cursor:pointer; }
+.toma3d-claves button.on { border-color:var(--studio-accent);color:var(--studio-accent); }
+.toma3d-botones { display:grid;grid-template-columns:1fr 1fr;gap:6px; }
+.toma3d-botones .toma3d-jugar { grid-column:1 / -1; }
+.toma3d-check { flex-direction:row!important;align-items:center;grid-column:1 / -1; }
+.toma3d-mandar { width:100%;padding:8px; }
+.toma3d-mandar:disabled { opacity:.6;cursor:progress; }
 .persp3d-repetir-ya { background:var(--studio-accent)!important;color:#fff!important;border:0;font-weight:700; }

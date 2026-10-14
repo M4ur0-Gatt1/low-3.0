@@ -29,6 +29,7 @@ import webview
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import Config, data_dir
+import fondos_archivo
 from providers import get_provider, PROVIDERS, is_custom_provider
 from providers.media_gateway import generate as generate_media
 from code_runner.agent_plan import TOOL as PLAN_TOOL, validate as validate_plan
@@ -2781,8 +2782,15 @@ class Api:
             content = p.read_text(encoding="utf-8", errors="replace")
         except OSError as e:
             return {"error": f"No pude abrir {p.name}: {e}"}
-        return {"path": str(p), "name": p.name, "content": content,
-                "lang": LANG_BY_EXT.get(p.suffix.lower(), "python")}
+        faltan = 0
+        if p.suffix.lower() in EXT_LOW:
+            # los fondos de las tomas del 3D viven al lado, en <nombre>.fondos/
+            content, faltan = fondos_archivo.adentro(content, p)
+        r = {"path": str(p), "name": p.name, "content": content,
+             "lang": LANG_BY_EXT.get(p.suffix.lower(), "python")}
+        if faltan:
+            r["fondos_faltan"] = faltan
+        return r
 
     def open_file(s, path):
         return s._file_payload(path)
@@ -2890,13 +2898,22 @@ class Api:
                 return None
             path = s._con_extension(r[0] if isinstance(r, (list, tuple)) else str(r), filename)
         p = Path(path)
+        fondos = 0
+        if p.suffix.lower() in EXT_LOW:
+            # los fondos de las tomas del 3D van como JPG/PNG al lado, no adentro
+            content, fondos = fondos_archivo.afuera(content, p)
         try:
             atomic_write_text(p, content, encoding="utf-8")
         except OSError as e:
             log(f"save_file: escritura atómica falló para {p}: {e}")
             return {"error": str(e), "path": str(p), "recoverable": True}
-        return {"path": str(p), "name": p.name, "bytes": len(content.encode("utf-8")),
-                "atomic": True}
+        if p.suffix.lower() in EXT_LOW:
+            fondos_archivo.podar(p, content)
+        r = {"path": str(p), "name": p.name, "bytes": len(content.encode("utf-8")),
+             "atomic": True}
+        if fondos:
+            r["fondos"] = fondos
+        return r
 
     # ── ejecutar código ───────────────────────────────────
     GUI_LIBS = re.compile(r"\b(pygame|tkinter|turtle|PyQt5|PyQt6|PySide6|kivy|arcade)\b")

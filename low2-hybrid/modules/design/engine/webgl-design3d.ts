@@ -26,6 +26,7 @@ import { frameGeometry } from './frame-content';
 import { Perspectiva3D, AJUSTES_INICIALES, ajustesValidos, posicionCamara, leerCamara, marcoEnVista,
   fovVista, fovRender, puntosDeFuga, pintarSuperposicion, direccion, soporte as soporteEsquema, type Perspectiva3DAjustes,
   type PuntoDeFuga, type Eje } from './perspectiva3d';
+import { TOMA_INICIAL, tomaValida, ponerClave, quitarClave, camaraEn, type Toma3D, type V3 } from './toma3d';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
@@ -108,7 +109,9 @@ export interface Low3DProject {
   settings: { brush: BrushSettings; mirror: { x: boolean; y: boolean; z: boolean }; theme: Theme;
     activeSurface: ReturnType<typeof lowStore.getState>['activeSurface'];
     /** la perspectiva para layouts (esquema, puntos, horizonte, lente…) */
-    perspectiva?: Partial<Perspectiva3DAjustes> };
+    perspectiva?: Partial<Perspectiva3DAjustes>;
+    /** la toma: claves de cámara por cuadro para sacar los fondos del 2D */
+    toma?: Toma3D };
   layers: ReturnType<typeof lowStore.getState>['layers'];
   activeLayerId: string | null;
   strokes: Array<{
@@ -250,6 +253,7 @@ export class WebGLDesign3D {
   // perspectiva para layouts de fondo (engine/perspectiva3d.ts)
   private persp3d = new Perspectiva3D();
   private perspAjustes: Perspectiva3DAjustes = { ...AJUSTES_INICIALES };
+  private toma: Toma3D = tomaValida(TOMA_INICIAL);
   private aspecto2D = 16 / 9;
   private perspFirma = '';
 
@@ -840,6 +844,107 @@ export class WebGLDesign3D {
     }
     const { vps, paralelas } = puntosDeFuga(cam, W, H);
     return { png, width: W, height: H, vps, paralelas, ajustes: { ...this.perspAjustes } };
+  }
+
+  // ---------------------------------------------------------------- tomas (cámara animada)
+  getToma(): Toma3D { return tomaValida(this.toma); }
+  setToma(c: Partial<Pick<Toma3D, 'nombre' | 'cuadros'>>): Toma3D {
+    this.toma = tomaValida({ ...this.toma, ...c });
+    return this.getToma();
+  }
+  /** El lente de la cámara de perspectiva (el del layout si está prendido). */
+  private lenteActual(): number {
+    if (this.perspAjustes.activa) return this.perspAjustes.lente;
+    const fovV = THREE.MathUtils.degToRad(this.perspCamera.fov);
+    const fovH = 2 * Math.atan(Math.tan(fovV / 2) * (this.perspCamera.aspect || 16 / 9));
+    return Math.round(36 / (2 * Math.tan(fovH / 2)));
+  }
+  /** Clave en ese cuadro con la cámara como se ve ahora. Sólo en perspectiva. */
+  tomaPonerClave(cuadro: number): Toma3D | null {
+    if (this.view !== 'persp') return null;
+    const pos = this.perspCamera.position.toArray() as V3, mira = this.controls.target.toArray() as V3;
+    const antes = this.toma;
+    this.toma = ponerClave(this.toma, { cuadro, pos, mira, lente: this.lenteActual() });
+    const despues = this.toma;
+    this.pushCmd({ undo: () => { this.toma = antes; this.avisarToma(); }, redo: () => { this.toma = despues; this.avisarToma(); } });
+    this.avisarToma();
+    return this.getToma();
+  }
+  tomaQuitarClave(cuadro: number): Toma3D {
+    const antes = this.toma;
+    this.toma = quitarClave(this.toma, cuadro);
+    const despues = this.toma;
+    if (antes.claves.length !== despues.claves.length)
+      this.pushCmd({ undo: () => { this.toma = antes; this.avisarToma(); }, redo: () => { this.toma = despues; this.avisarToma(); } });
+    this.avisarToma();
+    return this.getToma();
+  }
+  private avisarToma(): void { window.dispatchEvent(new Event('low3d:toma')); }
+  /** Lleva la cámara de perspectiva a ese cuadro de la toma. false si no hay claves. */
+  tomaIr(cuadro: number): boolean {
+    const c = camaraEn(this.toma, cuadro);
+    if (!c) return false;
+    if (this.view !== 'persp') this.setView('persp');
+    this.perspCamera.position.fromArray(c.pos);
+    this.controls.target.fromArray(c.mira);
+    this.perspCamera.lookAt(this.controls.target);
+    this.controls.update();
+    if (this.perspAjustes.activa && Math.abs(this.perspAjustes.lente - c.lente) > 0.01)
+      this.perspAjustes = { ...this.perspAjustes, lente: c.lente };
+    return true;
+  }
+  /** Los fondos de la toma: cada cuadro pedido renderizado del tamaño del
+   *  cuadro del 2D. JPG con papel blanco (lo más liviano) o PNG transparente.
+   *  Van lo dibujado y lo modelado; la cuadrícula, los ejes, las guías y el
+   *  control de transformar no. Las líneas del esquema de perspectiva, sólo si
+   *  se piden. Un solo renderizador para todos los cuadros. */
+  async tomaRender(cuadros: number[], W: number, H: number,
+    op: { formato: 'jpg' | 'png'; calidad?: number; lineas?: boolean },
+    progreso?: (hechos: number, total: number) => void): Promise<{ cuadro: number; data: string }[]> {
+    if (!this.toma.claves.length || !(W > 0) || !(H > 0) || !cuadros.length) return [];
+    this.detachRig();
+    const tipo = op.formato === 'png' ? 'image/png' : 'image/jpeg';
+    const calidad = Math.max(0.5, Math.min(1, op.calidad ?? 0.9));
+    const cam = new THREE.PerspectiveCamera(45, W / H, this.perspCamera.near, this.perspCamera.far);
+    const r = new THREE.WebGLRenderer({ antialias: true, alpha: op.formato === 'png', preserveDrawingBuffer: true });
+    const antes = new Map<THREE.Object3D, boolean>();
+    for (const o of this.scene.children) {
+      antes.set(o, o.visible);
+      o.visible = o === this.strokesGroup || (o as THREE.Light).isLight === true || (!!op.lineas && o === this.persp3d.group);
+    }
+    const fondo = this.scene.background, niebla = this.scene.fog;
+    this.scene.background = null;
+    this.scene.fog = null;
+    const out: { cuadro: number; data: string }[] = [];
+    try {
+      r.setPixelRatio(1);
+      r.setSize(W, H, false);
+      r.outputColorSpace = this.renderer.outputColorSpace;
+      r.toneMapping = this.renderer.toneMapping;
+      r.toneMappingExposure = this.renderer.toneMappingExposure;
+      if (op.formato === 'png') r.setClearColor(0x000000, 0); else r.setClearColor(0xffffff, 1);
+      for (let i = 0; i < cuadros.length; i++) {
+        const c = camaraEn(this.toma, cuadros[i])!;
+        cam.fov = fovRender(c.lente, W / H);
+        cam.position.fromArray(c.pos);
+        cam.up.set(0, 1, 0);
+        cam.lookAt(new THREE.Vector3().fromArray(c.mira));
+        cam.updateProjectionMatrix();
+        cam.updateMatrixWorld(true);
+        r.render(this.scene, cam);
+        out.push({ cuadro: cuadros[i], data: r.domElement.toDataURL(tipo, calidad) });
+        progreso?.(i + 1, cuadros.length);
+        // que la interfaz respire entre cuadro y cuadro (y se vea el progreso)
+        if (i % 2 === 1) await new Promise((ok) => setTimeout(ok, 0));
+      }
+    } finally {
+      r.dispose();
+      r.forceContextLoss();
+      for (const [o, v] of antes) o.visible = v;
+      this.scene.background = fondo;
+      this.scene.fog = niebla;
+    }
+    return out;
   }
 
   /** El eje horizontal que más va «hacia atrás» desde la cámara (hacia su
@@ -4995,6 +5100,7 @@ export class WebGLDesign3D {
     this.lastSurfaceKey = '';
     lowStore.setActiveSurface(null);
     this.setPerspectiva({ ...AJUSTES_INICIALES }, { mover: false });   // un proyecto nuevo arranca con la perspectiva de fábrica
+    this.toma = tomaValida(TOMA_INICIAL); this.avisarToma();
     this.setView('persp');
   }
 
@@ -5151,6 +5257,7 @@ export class WebGLDesign3D {
         target: this.controls.target.toArray(), orthoSize: this.orthoSize },
       settings: { brush: { ...this.brush }, mirror: { ...this.mirror }, theme: this.theme,
         perspectiva: { ...this.perspAjustes },
+        toma: this.getToma(),
         activeSurface: state.activeSurface ? { type: state.activeSurface.type, params: { ...state.activeSurface.params } } : null },
       layers: state.layers.map((l) => ({ ...l })), activeLayerId: state.activeLayerId,
       strokes: this.strokes.map((rec) => ({
@@ -5256,6 +5363,7 @@ export class WebGLDesign3D {
     }
     // la perspectiva vuelve como estaba, SIN mover la cámara que se acaba de restaurar
     this.setPerspectiva(ajustesValidos(doc.settings?.perspectiva), { mover: false });
+    this.toma = tomaValida(doc.settings?.toma); this.avisarToma();
     this.applyLayerStyles();
     this.undoStack = [];
     this.redoStack = [];
