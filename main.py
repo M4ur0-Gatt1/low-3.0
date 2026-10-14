@@ -1461,6 +1461,7 @@ class Api:
     # de siempre: `export/` al lado del documento.
     _EXPORT_ARCHIVO = {"mp4": ("Video MP4 (*.mp4)", ".mp4"),
                        "webm": ("Video WebM (*.webm)", ".webm"),
+                       "whatsapp": ("Video MP4 para WhatsApp (*.mp4)", ".mp4"),
                        "gif": ("GIF animado (*.gif)", ".gif"),
                        "sheet": ("Imagen PNG (*.png)", ".png")}
 
@@ -1487,7 +1488,7 @@ class Api:
                 r = s._window.create_file_dialog(webview.FOLDER_DIALOG, directory=inicio)
             else:
                 tipo, ext = s._EXPORT_ARCHIVO[kind]
-                sugerido = stem + ("_sheet" if kind == "sheet" else "") + ext
+                sugerido = stem + {"sheet": "_sheet", "whatsapp": "_whatsapp"}.get(kind, "") + ext
                 r = s._window.create_file_dialog(webview.SAVE_DIALOG, directory=inicio,
                                                  save_filename=sugerido, file_types=(tipo,))
         except Exception as e:  # noqa: BLE001 — el frontend cae al camino de siempre
@@ -1593,7 +1594,7 @@ class Api:
                 out.write_bytes(imgs[0])
                 s._push("ws", {"ws": s.ws, "tree": s._tree(), "branch": s._git_branch()})
                 return {"path": str(out), "n": 1}
-            if kind in ("mp4", "webm"):
+            if kind in ("mp4", "webm", "whatsapp"):
                 # Video real con ffmpeg (no necesita Pillow). Los cuadros ya vienen
                 # rasterizados como PNG del frontend  los escribo a temp y encodeo.
                 import shutil
@@ -1606,23 +1607,39 @@ class Api:
                     return {"error": "no llegó ningún cuadro"}
                 tdir = Path(tempfile.mkdtemp())
                 try:
-                    for i, raw in enumerate(imgs):
-                        (tdir / f"f_{i + 1:04d}.png").write_bytes(raw)
-                    out = salida(f"{stem}.{kind}")
                     fps_v = max(1, int(fps or 12))
-                    vcodec = "libx264" if kind == "mp4" else "libvpx-vp9"
+                    # PARA WHATSAPP: un video de un segundo pasa en un parpadeo y
+                    # no se repite; el GIF, WhatsApp lo convierte por su cuenta o
+                    # lo manda como foto fija. Se repite la animación hasta ~6 s
+                    # (lo que WhatsApp deja mandar «como GIF», en bucle) sin pasar
+                    # de 15 s, en 720 px, H.264 main y con el índice al principio
+                    # (faststart) para que se reproduzca mientras se descarga.
+                    vueltas = 1
+                    if kind == "whatsapp":
+                        vueltas = max(1, min(-(-6 * fps_v // len(imgs)), (15 * fps_v) // len(imgs) or 1))
+                    for i, raw in enumerate(imgs * vueltas):
+                        (tdir / f"f_{i + 1:05d}.png").write_bytes(raw)
+                    out = salida(f"{stem}_whatsapp.mp4" if kind == "whatsapp" else f"{stem}.{kind}")
+                    vcodec = "libvpx-vp9" if kind == "webm" else "libx264"
                     # yuv420p + escala a dimensiones pares = compatible con todos los players
+                    escala = ("scale='min(720,iw)':'min(720,ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+                              if kind == "whatsapp" else "scale=trunc(iw/2)*2:trunc(ih/2)*2")
+                    extra = (["-profile:v", "main", "-level", "3.1", "-crf", "23", "-an"]
+                             if kind == "whatsapp" else [])
+                    if vcodec == "libx264":
+                        extra += ["-movflags", "+faststart"]
                     cmd = [ff, "-y", "-framerate", str(fps_v),
-                           "-i", str(tdir / "f_%04d.png"),
-                           "-c:v", vcodec, "-pix_fmt", "yuv420p",
-                           "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", str(out)]
+                           "-i", str(tdir / "f_%05d.png"),
+                           "-c:v", vcodec, "-pix_fmt", "yuv420p", *extra,
+                           "-vf", escala, str(out)]
                     r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
                 finally:
                     shutil.rmtree(tdir, ignore_errors=True)
                 if r.returncode != 0 or not out.exists():
                     return {"error": "ffmpeg falló: " + ((r.stderr or r.stdout or "")[-200:])}
                 s._push("ws", {"ws": s.ws, "tree": s._tree(), "branch": s._git_branch()})
-                return {"path": str(out), "n": len(imgs)}
+                return {"path": str(out), "n": len(imgs), "vueltas": vueltas,
+                        "segundos": round(len(imgs) * vueltas / fps_v, 2)}
             # GIF (y spritesheet los arma el frontend en canvas)
             try:
                 from PIL import Image

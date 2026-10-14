@@ -95,7 +95,7 @@ async function main() {
     window.__anim = [];
     api.export_anim = (ruta, pngs, fps, kind) => {
       window.__anim.push({ ruta:String(ruta||""), cuantos:pngs.length, fps, kind, pngs:pngs.slice() });
-      return { path:"export/prueba", n:pngs.length };
+      return { path:"export/prueba", n:pngs.length, segundos: kind === "whatsapp" ? 6 : undefined };
     };
     if (typeof api.refresh_tree !== "function") api.refresh_tree = () => ({tree:{}});
     return { rango: dzExportCuadros(), vacio: !dzCuadroSvgTexto(3), conContenido: !!dzCuadroSvgTexto(1),
@@ -117,7 +117,7 @@ async function main() {
     await w(300);
   }
   if (!modal) mal("el botón de exportar de la timeline no abre el modal", { montaje });
-  for (const salida of ["mp4", "gif", "png", "sheet", "premiere"])
+  for (const salida of ["mp4", "whatsapp", "gif", "png", "sheet", "premiere"])
     if (!modal.salidas.includes(salida))
       mal("el modal de exportar perdió una salida: " + salida, modal);
   if (modal.texto.indexOf("5 cuadros") < 0)
@@ -173,6 +173,31 @@ async function main() {
       estado: (document.querySelector("#dzStatus")||{}).textContent?.trim() || "" };
   })()`);
 
+  // ── 5. «Para WhatsApp» (v3.29.2): un GIF mandado por WhatsApp llegaba
+  //       quieto. El botón va al lado de MP4 y le pide al puente un video
+  //       "whatsapp" con los cinco cuadros, rasterizados a 720 de lado mayor.
+  await ev(`(()=>{window.__anim=[];return 1;})()`);
+  await clickEn("#tlExport");
+  for (let i = 0; i < 25; i++) { if (await ev(`!!document.querySelector('#modal [data-x="whatsapp"]')`)) break; await w(300); }
+  const orden = await ev(`[...document.querySelectorAll("#modal [data-x]")].map(b=>b.dataset.x).slice(0,2).join(",")`);
+  if (orden !== "mp4,whatsapp") mal("«Para WhatsApp» no está al lado de «Video MP4»", { orden });
+  await clickEn('#modal [data-x="whatsapp"]');
+  let wa = null;
+  for (let i = 0; i < 90; i++) {
+    wa = await ev(`(async()=>{ if(!window.__anim.length) return null; const a = window.__anim[0];
+      const im = new Image(); im.src = a.pngs[0]; await im.decode();
+      return { llamadas: window.__anim.length, kind: a.kind, cuantos: a.cuantos, lado: Math.max(im.naturalWidth, im.naturalHeight),
+        estado: (document.querySelector("#dzStatus")||{}).textContent?.trim().slice(0,170) || "" };})()`);
+    if (wa) break;
+    await w(400);
+  }
+  if (!wa) mal("«Para WhatsApp» no llamó al puente", {});
+  if (wa.kind !== "whatsapp" || wa.llamadas !== 1 || wa.cuantos !== 5)
+    mal("«Para WhatsApp» no pidió el video de WhatsApp con los cinco cuadros", wa);
+  if (wa.lado > 720) mal("para WhatsApp se rasterizó a " + wa.lado + " px: es trabajo de más para un video de 720", wa);
+  if (!/WhatsApp/.test(wa.estado) || !/6 s en bucle/.test(wa.estado))
+    mal("el aviso no dice que salió el video para WhatsApp y cuánto dura", wa);
+
   ws.close();
   try { await fetch(endpoint + "/json/close/" + target.id); } catch (_) { }
 
@@ -190,6 +215,7 @@ async function main() {
     png: { pedidos: 5, salieron: salida.cuantos, fps: salida.fps },
     hueco: { conPapel: papel.tienePapel },
     perdida: { avisa: true },
+    whatsapp: { cuadros: wa.cuantos, lado: wa.lado },
   }));
 }
 

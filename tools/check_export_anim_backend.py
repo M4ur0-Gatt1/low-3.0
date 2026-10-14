@@ -159,6 +159,39 @@ def main():
                 ("el error de MP4 no dice que hacer en su lugar: al final de una "
                  "exportacion larga eso es perder el trabajo :: %s" % r["error"])
 
+        # -- 5b. PARA WHATSAPP (v3.29.2). Un GIF mandado por WhatsApp llegaba
+        #       quieto. Este MP4 tiene que: repetir una animacion corta hasta
+        #       ~6 s, no pasar de 720 px, ser H.264 Main en yuv420p, sin audio, y
+        #       tener el indice (moov) ANTES de los datos (faststart).
+        if tiene_ffmpeg:
+            import subprocess
+            r = puente.export_anim(str(doc), cuadros, 12, "whatsapp")
+            assert not r.get("error"), r
+            wa = Path(r["path"])
+            assert wa.name == "escena_whatsapp.mp4", r
+            assert r.get("vueltas") == 24 and r.get("segundos") == 6.0,                 "3 cuadros a 12 fps tienen que repetirse hasta 6 s :: %s" % r
+            datos = wa.read_bytes()
+            assert datos.find(b"moov") < datos.find(b"mdat"),                 "sin faststart: WhatsApp no lo reproduce hasta bajarlo entero"
+            info = subprocess.run([_m._ffmpeg_exe(), "-hide_banner", "-i", str(wa)],
+                                  capture_output=True, text=True).stderr
+            assert "Duration: 00:00:06.00" in info, info
+            assert "h264 (Main)" in info and "yuv420p" in info, info
+            assert "Audio" not in info, info
+            assert " 8x8" in info, "agrando un cuadro chico: " + info
+            # un cuadro de documento grande baja a 720 de lado mayor, par
+            grande = data_url(png_de_un_color(200, 30, 30, 1920, 1080))
+            r = puente.export_anim(str(doc), [grande] * 30, 24, "whatsapp")
+            assert not r.get("error"), r
+            info = subprocess.run([_m._ffmpeg_exe(), "-hide_banner", "-i", r["path"]],
+                                  capture_output=True, text=True).stderr
+            assert " 720x404" in info or " 720x406" in info, "no quedo en 720 px: " + info
+            # una animacion larga no se repite: 20 s a 1 fps quedan en 20 s
+            r = puente.export_anim(str(doc), cuadros * 7, 1, "whatsapp")
+            assert r.get("vueltas") == 1, r
+        else:
+            r = puente.export_anim(str(doc), cuadros, 12, "whatsapp")
+            assert r.get("error") and "ffmpeg" in r["error"], r
+
         # -- 6. GIF. Igual: o sale el GIF con sus tres cuadros, o el mensaje
         #       explica que instalar y que alternativa no necesita nada.
         r = puente.export_anim(str(doc), cuadros, 10, "gif")
@@ -193,7 +226,7 @@ def main():
     if not tiene_pillow:
         faltantes.append("sin Pillow: se comprobo el mensaje, no el GIF")
     print("EXPORT ANIM OK: secuencia PNG intacta y ordenable, cuadro roto sin "
-          "secuencia a medias, MP4, GIF y spritesheet"
+          "secuencia a medias, MP4, MP4 para WhatsApp, GIF y spritesheet"
           + (" (" + "; ".join(faltantes) + ")" if faltantes else ""))
 
 

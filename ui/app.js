@@ -7401,7 +7401,7 @@ async function dzDoExport(kind) {
     if (!txt) continue;
     txt = dzRigView(txt, dzFrameNum(frames[i]));
     if (throughCam) txt = dzCamView(txt, dzCamAt(dzFrameNum(frames[i])));
-    const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : kind === "gif" ? 1080 : Math.max(DZ.doc?.scene?.width || 1080, DZ.doc?.scene?.height || 1080));   // MP4/PNG/Premiere a la resolución del DOCUMENTO (salía 1080×608 de un 1920×1080); el GIF, topeado para compartir
+    const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : kind === "gif" ? 1080 : kind === "whatsapp" ? 720 : Math.max(DZ.doc?.scene?.width || 1080, DZ.doc?.scene?.height || 1080));   // MP4/PNG/Premiere a la resolución del DOCUMENTO (salía 1080×608 de un 1920×1080); el GIF, topeado para compartir
     if (du) pngs.push(du);
     dzSetStatus(` Rasterizando${throughCam ? " por cámara 🎬" : ""}… ${i + 1}/${frames.length}`);
   }
@@ -7423,11 +7423,11 @@ async function dzDoExport(kind) {
     dzSetStatus(r && r.error ? " " + r.error : " Spritesheet exportado (" + cols + "×" + rows + ")  " + ((r && r.path) || "export/"));
   } else {
     const fps = Math.max(1, Math.min(60, +$("#tlFps").value || 12));
-    const label = { mp4: " Codificando MP4 con ffmpeg…", webm: " Codificando WebM…",
+    const label = { mp4: " Codificando MP4 con ffmpeg…", webm: " Codificando WebM…", whatsapp: " Armando el video para WhatsApp…",
                     gif: " Armando el GIF…" }[kind] || " Guardando la secuencia…";
     dzSetStatus(label);
     const r = await api.export_anim(dzRutaDeSalida(DZ), pngs, fps, kind, destino.path, destino.nombre);
-    const done = { mp4: " (MP4 a " + fps + " fps)", webm: " (WebM a " + fps + " fps)",
+    const done = { mp4: " (MP4 a " + fps + " fps)", webm: " (WebM a " + fps + " fps)", whatsapp: " (para WhatsApp: " + ((r && r.segundos) || "?") + " s en bucle)",
                    gif: " (GIF a " + fps + " fps)" }[kind] || " (" + pngs.length + " PNGs)";
     dzSetStatus(r && r.error ? " " + r.error : " Exportado  " + ((r && r.path) || "export/") + done + dzExportAvisoFaltantes(pngs.length, frames.length));
   }
@@ -10041,7 +10041,7 @@ async function dzDoExportDoc(kind, destino) {
   for (let i = 0; i < cuadros.length; i++) {
     const f = cuadros[i];
     const txt = dzExportCuadroSvg(f, throughCam);   // export-cuadros.js: el MISMO cuadro que muestra la vista previa
-    const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : kind === "gif" ? 1080 : Math.max(DZ.doc?.scene?.width || 1080, DZ.doc?.scene?.height || 1080));   // MP4/PNG/Premiere a la resolución del DOCUMENTO (salía 1080×608 de un 1920×1080); el GIF, topeado para compartir
+    const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : kind === "gif" ? 1080 : kind === "whatsapp" ? 720 : Math.max(DZ.doc?.scene?.width || 1080, DZ.doc?.scene?.height || 1080));   // MP4/PNG/Premiere a la resolución del DOCUMENTO (salía 1080×608 de un 1920×1080); el GIF, topeado para compartir
     if (du) pngs.push(du);
     dzSetStatus("Rasterizando" + (throughCam ? " por c\u00e1mara" : "") +
       "\u2026 " + (i + 1) + "/" + cuadros.length);
@@ -10050,10 +10050,10 @@ async function dzDoExportDoc(kind, destino) {
   const fps = Math.max(1, Math.min(60, +$("#tlFps").value || DZ.doc.scene.fps || 12));
   if (kind === "sheet") return dzExportSpritesheet(pngs, fps, destino);
   if (kind === "premiere") return dzExportPremiere(pngs, fps, cuadros, destino);
-  dzSetStatus({ mp4: "Codificando MP4 con ffmpeg\u2026", webm: "Codificando WebM\u2026",
+  dzSetStatus({ mp4: "Codificando MP4 con ffmpeg\u2026", webm: "Codificando WebM\u2026", whatsapp: "Armando el video para WhatsApp\u2026",
                 gif: "Armando el GIF\u2026" }[kind] || "Guardando la secuencia\u2026");
   const r = await api.export_anim(dzRutaDeSalida(DZ), pngs, fps, kind, destino?.path, destino?.nombre);   // la del .low, no la del .svg suelto
-  const detalle = { mp4: " (MP4 a " + fps + " fps)", webm: " (WebM a " + fps + " fps)",
+  const detalle = { mp4: " (MP4 a " + fps + " fps)", webm: " (WebM a " + fps + " fps)", whatsapp: " (para WhatsApp: " + ((r && r.segundos) || "?") + " s en bucle)",
                     gif: " (GIF a " + fps + " fps)" }[kind] || " (" + pngs.length + " PNGs)";
   dzSetStatus(r && r.error ? r.error
     : "Exportado " + ((r && r.path) || "export/") + detalle + " \u00b7 " +
