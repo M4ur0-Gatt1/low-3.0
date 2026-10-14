@@ -9,6 +9,9 @@
    - En la mesa se ven el horizonte y un abanico de rectas por punto. Con la
      barra abierta se ARRASTRAN los puntos y el horizonte (los dos primeros
      comparten la altura de los ojos: mover uno de arriba abajo mueve el otro).
+   - v3.29.2: la Línea y las figuras también (las figuras, sobre un plano de la
+     perspectiva); flecha en el borde para los puntos fuera de la vista; imán
+     por punto; Tab cambia de fuga en medio del trazo; «Fuga con 2 líneas».
    - IMÁN: el lápiz y el pincel siguen la recta hacia el punto de fuga que mejor
      coincide con hacia dónde arrancó el trazo; con 1 o 2 puntos también las
      verticales, y con 1 punto las horizontales. Si el trazo arranca lejos de
@@ -73,6 +76,7 @@
     if (!svg) return;
     let g = svg.querySelector(":scope > g[data-low='perspectiva']");
     const p = datos();
+    pintarFlechas(p);
     if (!p || !(p.visible || editando)) { if (g) g.remove(); return; }
     if (!g) {
       g = el("g", { "data-low": "perspectiva", class: "dz-penui dz-perspectiva", "pointer-events": "none" });
@@ -126,6 +130,60 @@
       });
     }
     if (g.parentNode !== svg || svg.lastElementChild !== g) svg.appendChild(g);
+  }
+
+  /* ── flechas en el borde: los puntos que quedan fuera de la vista ──
+     MEDIDO en v3.29.1: con el zoom de siempre, los dos puntos del preset de 2
+     quedaban fuera de la pantalla —no se veían ni se podían agarrar—. Ahora
+     cada punto afuera tiene una flecha en el borde de la mesa, en la dirección
+     en que está, y arrastrarla mueve el punto (con su Ctrl+Z). */
+  function pintarFlechas(p) {
+    const mesa = document.getElementById("dzCanvas"), svg = svgDibujo();
+    const todas = Array.from(document.querySelectorAll(".lowpersp-fuera"));
+    const ver = p && (p.visible || editando) && mesa && svg && !mesa.closest("[hidden]");
+    if (!ver) { todas.forEach((f) => { f.hidden = true; }); return; }
+    const r = mesa.getBoundingClientRect();
+    if (!r.width || !r.height) { todas.forEach((f) => { f.hidden = true; }); return; }
+    const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2, M = 18;
+    // la hoja RECORTA (overflow hidden): un punto fuera de la hoja no se dibuja
+    // aunque caiga dentro de la mesa. MEDIDO a 1000×560: los dos puntos del
+    // preset de 2 caían ahí, invisibles.
+    const h = svg.getBoundingClientRect(), recorta = getComputedStyle(svg).overflow !== "visible";
+    const seVe = (s) => s.x >= r.left && s.x <= r.right && s.y >= r.top && s.y <= r.bottom &&
+      (!recorta || (s.x >= h.left && s.x <= h.right && s.y >= h.top && s.y <= h.bottom));
+    todas.forEach((f) => { if (+f.dataset.vp >= p.vps.length) f.hidden = true; });
+    p.vps.forEach((v, i) => {
+      let f = document.querySelector(`.lowpersp-fuera[data-vp="${i}"]`);
+      const s = aPantalla(svg, v);
+      if (seVe(s)) { if (f) f.hidden = true; return; }
+      const enMesa = s.x >= r.left + M && s.x <= r.right - M && s.y >= r.top + M && s.y <= r.bottom - M;
+      if (!f) {
+        f = document.createElement("button");
+        f.type = "button"; f.className = "lowpersp-fuera"; f.dataset.vp = String(i);
+        f.innerHTML = '<span class="lowpersp-flecha" aria-hidden="true"></span><b></b>';
+        f.addEventListener("pointerdown", (e) => { if (e.button === 0) empezarArrastre(e, +f.dataset.vp); });
+        document.body.appendChild(f);
+      }
+      // dentro de la mesa (pero fuera de la hoja): la agarradera va EN el punto;
+      // fuera de la mesa: flecha en el borde, en la dirección del punto
+      const dx = s.x - cx, dy = s.y - cy;
+      let x = s.x, y = s.y;
+      if (!enMesa) {
+        const tx = dx ? ((dx > 0 ? r.right - M : r.left + M) - cx) / dx : Infinity;
+        const ty = dy ? ((dy > 0 ? r.bottom - M : r.top + M) - cy) / dy : Infinity;
+        const t = Math.min(tx, ty);
+        x = cx + dx * t; y = cy + dy * t;
+      }
+      f.classList.toggle("en-sitio", enMesa);
+      f.style.left = x + "px"; f.style.top = y + "px";
+      f.style.setProperty("--ang", Math.atan2(dy, dx) + "rad");
+      f.style.setProperty("--fuga", colorDe(v, i));
+      const nombre = v.eje ? v.eje.toUpperCase() : String(i + 1);
+      f.querySelector("b").textContent = nombre;
+      f.title = "Punto de fuga " + nombre + (enMesa ? ", fuera de la hoja" : ", fuera de la vista") + " · arrastrá para moverlo";
+      f.setAttribute("aria-label", f.title);
+      f.hidden = false;
+    });
   }
 
   /** Se repinta cuando el lienzo cambia (otro cuadro, otro documento): la capa
@@ -185,49 +243,77 @@
   }
   function dzAviso(t) { if (typeof global.dzSetStatus === "function") global.dzSetStatus(t); }
 
-  /* ── el imán del lápiz ── */
-  function direcciones(p, sx, sy) {
+  /* ── el imán: lápiz, pincel, Línea y figuras ──
+     Una FAMILIA es un juego de rectas de la perspectiva: las que van a un punto
+     de fuga, o las paralelas (verticales, horizontales, las del 3D). Cada una
+     tiene una clave estable, para poder decir «la misma» o «la siguiente». */
+  function familias(p) {
     const out = [];
-    p.vps.forEach((v, i) => {
-      const dx = v.x - sx, dy = v.y - sy, n = Math.hypot(dx, dy);
-      if (n > 1e-6) out.push({ ux: dx / n, uy: dy / n, color: colorDe(v, i) });
-    });
+    p.vps.forEach((v, i) => { if (v.iman !== false) out.push({ clave: "vp" + i, vp: v, color: colorDe(v, i) }); });
     if (Array.isArray(p.paralelas)) {                                           // del estudio 3D
-      for (const u of p.paralelas) out.push({ ux: u.ux, uy: u.uy, color: Math.abs(u.ux) < Math.abs(u.uy) ? "#9aa0a6" : HORIZONTE });
+      p.paralelas.forEach((u, k) => out.push({ clave: "par" + k, ux: u.ux, uy: u.uy, color: Math.abs(u.ux) < Math.abs(u.uy) ? "#9aa0a6" : HORIZONTE }));
     } else {
-      if (p.vps.length < 3) out.push({ ux: 0, uy: 1, color: "#9aa0a6" });     // verticales
-      if (p.vps.length === 1) out.push({ ux: 1, uy: 0, color: HORIZONTE });    // horizontales
+      if (p.vps.length < 3) out.push({ clave: "vert", ux: 0, uy: 1, color: "#9aa0a6" });     // verticales
+      if (p.vps.length === 1) out.push({ clave: "hor", ux: 1, uy: 0, color: HORIZONTE });    // horizontales
     }
     return out;
   }
+  /** La dirección de una familia en el punto (sx, sy). null si el punto ES el de fuga. */
+  function enPunto(f, sx, sy) {
+    if (!f.vp) return { clave: f.clave, ux: f.ux, uy: f.uy, color: f.color };
+    const dx = f.vp.x - sx, dy = f.vp.y - sy, n = Math.hypot(dx, dy);
+    return n > 1e-6 ? { clave: f.clave, ux: dx / n, uy: dy / n, color: f.color } : null;
+  }
+  function direcciones(p, sx, sy) { return familias(p).map((f) => enPunto(f, sx, sy)).filter(Boolean); }
   const colorDe = (v, i) => v.color || COLORES[i] || COLORES[0];
-  /** Decide hacia dónde va el trazo y proyecta el punto ahí. La dirección es
-   *  PROVISORIA hasta FIJAR_PX: se mide del arranque al punto actual (no del
-   *  primer tramito, que con el pulso temblando apunta a cualquier lado) y, si
-   *  cambia, lo ya dibujado se vuelve a proyectar. Después queda fija. */
-  function imantar(track, x, y) {
+  /** Las direcciones en (sx, sy) ordenadas por cuánto se parecen a (dx, dy). */
+  function ordenadas(p, sx, sy, dx, dy) {
+    const d = Math.hypot(dx, dy) || 1;
+    return direcciones(p, sx, sy)
+      .map((u) => ({ u, ang: Math.acos(Math.min(1, Math.abs(dx * u.ux + dy * u.uy) / d)) }))
+      .sort((a, b) => a.ang - b.ang);
+  }
+  /** Decide hacia dónde va un gesto que arrancó en (sx, sy) y está en (x, y).
+   *  La dirección es PROVISORIA hasta FIJAR_PX: se mide del arranque al punto
+   *  actual (no del primer tramito, que con el pulso temblando apunta a
+   *  cualquier lado). Después queda fija; Tab la cambia (`cambiarFuga`).
+   *  Devuelve { dir, cambio } o null si no hay perspectiva con imán. */
+  function elegir(st, sx, sy, x, y) {
     const p = datos();
     if (!p || !p.iman) return null;
-    const sx = track.startX, sy = track.startY;
+    st.sx = sx; st.sy = sy; st.x = x; st.y = y;
+    if (st.fijo) return { dir: st.dir, cambio: false };
+    const dx = x - sx, dy = y - sy, px = Math.hypot(dx, dy) * escala(svgDibujo());
+    if (px < ARRANQUE_PX && st.dir === undefined) return { dir: undefined, cambio: false };   // todavía no se sabe
+    const o = px > 0 ? ordenadas(p, sx, sy, dx, dy) : [];
+    const dir = o.length && o[0].ang <= ANG_LIBRE ? o[0].u : null;
+    const cambio = (dir && dir.clave) !== (st.dir && st.dir.clave);
+    st.dir = dir;
+    if (px >= FIJAR_PX) st.fijo = true;
+    if (dir) mostrarGuia(sx, sy, dir); else ocultarGuia();
+    return { dir, cambio };
+  }
+  const proyectar = (sx, sy, u, x, y) => { const k = (x - sx) * u.ux + (y - sy) * u.uy; return { x: sx + k * u.ux, y: sy + k * u.uy }; };
+  /** Tab en medio del gesto: la fuga siguiente, por parecido a lo dibujado.
+   *  Cerca del horizonte las rectas de dos puntos casi coinciden y el imán no
+   *  tiene cómo adivinar cuál se quería: esto le deja la decisión a quien dibuja. */
+  function siguienteDireccion(st) {
+    const p = datos(); if (!p || st.sx == null) return null;
+    const o = ordenadas(p, st.sx, st.sy, st.x - st.sx, st.y - st.sy);
+    if (!o.length) return null;
+    const i = st.dir ? o.findIndex((c) => c.u.clave === st.dir.clave) : -1;
+    st.dir = o[(i + 1) % o.length].u; st.fijo = true;
+    mostrarGuia(st.sx, st.sy, st.dir);
+    return st.dir;
+  }
+  /** Lápiz y pincel: proyecta el punto y, si la dirección cambió, también lo ya dibujado. */
+  function imantar(track, x, y) {
     const st = track._pp || (track._pp = { dir: undefined, fijo: false });
-    if (!st.fijo) {
-      const dx = x - sx, dy = y - sy, d = Math.hypot(dx, dy), px = d * escala(svgDibujo());
-      if (px < ARRANQUE_PX && st.dir === undefined) return { x: sx, y: sy };   // todavía no se sabe: nada torcido
-      let mejor = null, ang = Infinity;
-      if (d > 1e-9) for (const u of direcciones(p, sx, sy)) {
-        const a = Math.acos(Math.min(1, Math.abs(dx * u.ux + dy * u.uy) / d));
-        if (a < ang) { ang = a; mejor = u; }
-      }
-      const dir = mejor && ang <= ANG_LIBRE ? mejor : null;
-      if (dir && dir !== st.dir) reproyectar(track, dir);
-      st.dir = dir;
-      if (px >= FIJAR_PX) st.fijo = true;
-      if (dir) mostrarGuia(sx, sy, dir); else ocultarGuia();
-    }
-    const u = st.dir;
-    if (!u) return null;
-    const k = (x - sx) * u.ux + (y - sy) * u.uy;
-    return { x: sx + k * u.ux, y: sy + k * u.uy };
+    const r = elegir(st, track.startX, track.startY, x, y);
+    if (!r) return null;
+    if (r.dir === undefined) return { x: track.startX, y: track.startY };   // nada torcido mientras se decide
+    if (r.dir && r.cambio) reproyectar(track, r.dir);
+    return r.dir ? proyectar(track.startX, track.startY, r.dir, x, y) : null;
   }
   function reproyectar(track, u) {
     for (const pt of track.pts) {
@@ -271,11 +357,218 @@
     if (typeof cancelar === "function") global._drawCancel = function () { ocultarGuia(); return cancelar.apply(this, arguments); };
   }
 
+  /* ── la Línea y las figuras ──
+     MEDIDO en v3.29.1: con 2 puntos de fuga la Línea y el Rectángulo salían con
+     los mismos 8° con que se los tiraba; sólo el lápiz y el pincel fugaban. Como
+     en Clip Studio, ahora:
+     - la Línea elige su fuga igual que el lápiz (y Tab la cambia);
+     - el Rectángulo, la Elipse, el Círculo, el Polígono y la Estrella se dibujan
+       SOBRE UN PLANO de la perspectiva: el gesto va de una esquina a la opuesta
+       y los otros dos vértices salen de cruzar las rectas de las dos fugas del
+       plano. La Elipse queda inscripta en ese cuadrilátero (homografía del
+       cuadrado al cuadrilátero), que es como se ve un círculo en el piso.
+     Shift sigue siendo lo de siempre (proporcionado, 45°): una salida sin
+     perspectiva, igual que en el lápiz. */
+  function cruce(p, u, q, w) {
+    const den = u.ux * w.uy - u.uy * w.ux;
+    if (Math.abs(den) < 1e-9) return null;
+    const t = ((q.x - p.x) * w.uy - (q.y - p.y) * w.ux) / den;
+    return { x: p.x + t * u.ux, y: p.y + t * u.uy };
+  }
+  function convexo(q) {
+    let signo = 0;
+    for (let i = 0; i < 4; i++) {
+      const a = q[i], b = q[(i + 1) % 4], c = q[(i + 2) % 4];
+      const z = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      if (Math.abs(z) < 1e-6) return false;
+      if (!signo) signo = Math.sign(z); else if (Math.sign(z) !== signo) return false;
+    }
+    return true;
+  }
+  /** El cuadrilátero con A y C opuestos y los lados en las familias fi y fj. */
+  function cuadrilatero(fi, fj, A, C) {
+    const ai = enPunto(fi, A.x, A.y), aj = enPunto(fj, A.x, A.y), ci = enPunto(fi, C.x, C.y), cj = enPunto(fj, C.x, C.y);
+    if (!ai || !aj || !ci || !cj) return null;
+    const B = cruce(A, ai, C, cj), D = cruce(A, aj, C, ci);
+    if (!B || !D) return null;
+    const q = [A, B, C, D], diag = Math.hypot(C.x - A.x, C.y - A.y) || 1;
+    // casi paralelas: el cruce se va al infinito y la figura no se puede leer
+    if (q.some((v) => Math.hypot(v.x - A.x, v.y - A.y) > diag * 12)) return null;
+    return convexo(q) ? q : null;
+  }
+  /** Los planos posibles para un gesto de A a C, el más probable primero.
+   *  Un gesto TENDIDO (diagonal a menos de 45° de la horizontal) va al piso o
+   *  al techo: las dos familias que no son verticales. Uno PARADO va a una
+   *  pared: la vertical con la fuga que más se parece a la diagonal. */
+  function planos(p, A, C) {
+    const fs = familias(p);
+    const vertical = (f) => { const u = enPunto(f, A.x, A.y); return u && Math.abs(u.uy) > Math.cos(30 * Math.PI / 180); };
+    const dx = C.x - A.x, dy = C.y - A.y, d = Math.hypot(dx, dy) || 1, tendido = Math.abs(dy) < Math.abs(dx);
+    const pares = [];
+    for (let i = 0; i < fs.length; i++) for (let j = i + 1; j < fs.length; j++) {
+      const q = cuadrilatero(fs[i], fs[j], A, C);
+      if (!q) continue;
+      const nVert = (vertical(fs[i]) ? 1 : 0) + (vertical(fs[j]) ? 1 : 0);
+      // qué tanto se parece cada lado a la diagonal: lo más parecido, mejor
+      const parecido = Math.max(...[fs[i], fs[j]].map((f) => { const u = enPunto(f, A.x, A.y); return Math.abs(dx * u.ux + dy * u.uy) / d; }));
+      const nota = (tendido ? (nVert === 0 ? 2 : 0) : (nVert === 1 ? 2 : 0)) + parecido;
+      pares.push({ q, nota, clave: fs[i].clave + "+" + fs[j].clave });
+    }
+    return pares.sort((a, b) => b.nota - a.nota);
+  }
+  /** Homografía del cuadrado unidad al cuadrilátero q (A=(0,0), B=(1,0), C=(1,1), D=(0,1)). */
+  function homografia(q) {
+    const [p0, p1, p2, p3] = q;
+    const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+    const dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+    const den = dx1 * dy2 - dx2 * dy1;
+    const g = den ? (dx3 * dy2 - dx2 * dy3) / den : 0, h = den ? (dx1 * dy3 - dx3 * dy1) / den : 0;
+    const a = p1.x - p0.x + g * p1.x, b = p3.x - p0.x + h * p3.x, c = p0.x;
+    const d = p1.y - p0.y + g * p1.y, e = p3.y - p0.y + h * p3.y, f = p0.y;
+    return (u, v) => { const w = g * u + h * v + 1; return { x: (a * u + b * v + c) / w, y: (d * u + e * v + f) / w }; };
+  }
+  /** La figura en el cuadrado unidad, como lista de [u, v]. */
+  function figuraUnidad(kind) {
+    if (kind === "rect") return [[0, 0], [1, 0], [1, 1], [0, 1]];
+    if (kind === "ellipse" || kind === "circle") {
+      const out = [];
+      for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; out.push([0.5 + 0.5 * Math.cos(a), 0.5 + 0.5 * Math.sin(a)]); }
+      return out;
+    }
+    const lados = kind === "star" ? 10 : 6, out = [];
+    for (let i = 0; i < lados; i++) {
+      const r = kind === "star" && i % 2 ? 0.5 * 0.45 : 0.5, a = -Math.PI / 2 + i * Math.PI * 2 / lados;
+      out.push([0.5 + r * Math.cos(a), 0.5 + r * Math.sin(a)]);
+    }
+    return out;
+  }
+  /** Pasa la forma del gesto a un <polygon> (una vez) y le pone los puntos. */
+  function formaEnPlano(g, q) {
+    if (!g.persp) {
+      const pol = document.createElementNS(SVGNS, "polygon");
+      for (const k of ["fill", "stroke", "stroke-width", "stroke-linejoin", "stroke-linecap", "style", "class"])
+        if (g.el.hasAttribute(k)) pol.setAttribute(k, g.el.getAttribute(k));
+      g.el.replaceWith(pol); g.el = pol; g.persp = true;
+    }
+    const H = homografia(q);
+    g.el.setAttribute("points", figuraUnidad(g.kind).map(([u, v]) => { const p = H(u, v); return p.x.toFixed(2) + "," + p.y.toFixed(2); }).join(" "));
+  }
+  function envolverFormas() {
+    const geo = global.dzFormaGeometria, vacia = global.dzFormaVacia, medida = global.dzFormaMedida;
+    if (typeof geo !== "function" || geo._perspectiva) return;
+    global.dzFormaGeometria = function (g, p, shift, alt) {
+      // sólo el gesto de la herramienta (dzFormaDown le pone desdePantalla), con imán y sin Shift
+      const persp = datos();
+      if (!g || !g.desdePantalla || shift || !persp || !persp.iman) return geo.apply(this, arguments);
+      g._ultimo = { p, alt };
+      if (g.kind === "line") {
+        const st = g._pp || (g._pp = { dir: undefined, fijo: false });
+        const r = elegir(st, g.ancla.x, g.ancla.y, p.x, p.y);
+        if (r && r.dir === undefined) p = { x: g.ancla.x, y: g.ancla.y };
+        else if (r && r.dir) p = proyectar(g.ancla.x, g.ancla.y, r.dir, p.x, p.y);
+        return geo.call(this, g, p, false, alt);
+      }
+      const lista = planos(persp, g.ancla, p);
+      // el plano se elige una vez que el gesto tiene tamaño, y después queda (Tab lo cambia)
+      if (g._plano == null && Math.hypot(p.x - g.ancla.x, p.y - g.ancla.y) * escala(svgDibujo()) >= FIJAR_PX && lista.length) g._plano = lista[0].clave;
+      const elegido = lista.find((x) => x.clave === g._plano) || lista[0];
+      if (!elegido) return geo.apply(this, arguments);
+      formaEnPlano(g, elegido.q);
+      g._planos = lista.map((x) => x.clave);
+    };
+    global.dzFormaGeometria._perspectiva = true;
+    if (typeof vacia === "function") global.dzFormaVacia = function (g) {
+      if (!g || !g.persp) return vacia.apply(this, arguments);
+      const v = (g.el.getAttribute("points") || "").trim().split(/[\s,]+/).map(Number), n = Math.floor(v.length / 2);
+      let area = 0;
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n; area += v[2 * i] * v[2 * j + 1] - v[2 * j] * v[2 * i + 1]; }
+      return Math.abs(area) / 2 < 0.5;
+    };
+    if (typeof medida === "function") global.dzFormaMedida = function (g) {
+      if (!g || !g.persp) return medida.apply(this, arguments);
+      return ({ rect: "Rectángulo", ellipse: "Elipse", circle: "Círculo", poly: "Polígono", star: "Estrella" }[g.kind] || "Forma") + " en perspectiva";
+    };
+  }
+  /** Tab en medio de un gesto con perspectiva: la otra fuga (o el otro plano).
+   *  Fuera de un gesto, Tab sigue siendo el modo dibujo. */
+  function alTeclear(e) {
+    if (e.key !== "Tab" || e.ctrlKey || e.altKey || e.metaKey || !datos()) return;
+    const t = typeof DRAW_TRACK !== "undefined" ? DRAW_TRACK : null;
+    const f = typeof DZ_FORMA !== "undefined" ? DZ_FORMA : null;
+    if (!t && !f) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (t && (t.mode === "pencil" || t.mode === "brush")) {
+      const st = t._pp || (t._pp = { dir: undefined, fijo: false });
+      if (st.sx == null) return;
+      const u = siguienteDireccion(st);
+      if (u) { reproyectar(t, u); dzAviso("Fuga cambiada (Tab)"); }
+    } else if (f && f._ultimo) {
+      if (f.kind === "line") { if (f._pp && f._pp.sx != null) siguienteDireccion(f._pp); }
+      else if (f._planos && f._planos.length > 1) f._plano = f._planos[(f._planos.indexOf(f._plano) + 1) % f._planos.length];
+      global.dzFormaGeometria(f, f._ultimo.p, false, f._ultimo.alt);
+      dzAviso(f.kind === "line" ? "Fuga cambiada (Tab)" : "Plano cambiado (Tab)");
+    }
+  }
+
   /* ── arrastrar puntos y horizonte (con la barra abierta) ── */
+  const aLienzoDe = (svg) => { const inv = svg.getScreenCTM().inverse(); return (x, y) => ({ x: inv.a * x + inv.c * y + inv.e, y: inv.b * x + inv.d * y + inv.f }); };
+  function empezarArrastre(e, cual) {
+    const p = datos(), svg = svgDibujo();
+    if (!p || !svg) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    const aLienzo = aLienzoDe(svg);
+    const juntos = p.vps.length >= 2 && Math.abs(p.vps[0].y - p.vps[1].y) < 0.5;
+    arrastre = { cual, antes: copia(p), desde: aLienzo(e.clientX, e.clientY), aLienzo, juntos, pid: e.pointerId };
+    ocultarGuia();
+  }
+  /* «Fuga con 2 líneas», como en Clip Studio: se dibujan dos rectas sobre los
+     bordes de algo que ya está (una foto, un fondo del 3D) y donde se cruzan
+     nace el punto de fuga. Las rectas son de construcción: no quedan en la hoja. */
+  let construyendo = null;          // { segs: [{a, b}], actual, capa }
+  function capaConstruccion() {
+    const svg = svgDibujo(); if (!svg) return null;
+    let g = svg.querySelector(":scope > g[data-low='perspectiva-construccion']");
+    if (!g) g = el("g", { "data-low": "perspectiva-construccion", class: "dz-penui", "pointer-events": "none" }, svg);
+    return g;
+  }
+  function pintarConstruccion() {
+    const g = capaConstruccion(); if (!g) return;
+    while (g.firstChild) g.firstChild.remove();
+    const L = ((escena() && escena().width) || 1920) * 8;
+    for (const s of construyendo ? construyendo.segs.concat(construyendo.actual ? [construyendo.actual] : []) : []) {
+      const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, n = Math.hypot(dx, dy) || 1;
+      el("line", { x1: s.a.x - dx / n * L, y1: s.a.y - dy / n * L, x2: s.a.x + dx / n * L, y2: s.a.y + dy / n * L, stroke: HORIZONTE,
+        "stroke-width": "1", "stroke-dasharray": "5 4", opacity: "0.7", "vector-effect": "non-scaling-stroke" }, g);
+      el("line", { x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke: HORIZONTE, "stroke-width": "2.5", "vector-effect": "non-scaling-stroke" }, g);
+    }
+    if (!construyendo) g.remove();
+  }
+  function terminarConstruccion() { construyendo = null; pintarConstruccion(); sincronizarBarra(); }
+  function construccionLista() {
+    const [s1, s2] = construyendo.segs;
+    const u = (s) => { const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, n = Math.hypot(dx, dy); return { ux: dx / n, uy: dy / n }; };
+    const q = cruce(s1.a, u(s1), s2.a, u(s2));
+    terminarConstruccion();
+    if (!q) return dzAviso("Las dos rectas son paralelas: no se cruzan, no hay punto de fuga");
+    const sc = escena(); if (!sc) return;
+    const p = copia(sc.perspective);
+    if ((p.vps || []).length >= 3) return dzAviso("Ya hay 3 puntos de fuga: sacá uno antes de agregar otro");
+    p.vps = (p.vps || []).concat([{ x: q.x, y: q.y }]);
+    guardar({ ...p, visible: true, iman: p.iman !== false, origen: "manual" }, "Punto de fuga con 2 líneas");
+    dzAviso("Punto de fuga " + p.vps.length + " donde se cruzan las dos rectas");
+  }
   function agarrar(e) {
     if (!editando || e.button !== 0) return;
     const p = datos(), svg = svgDibujo();
-    if (!p || !svg) return;
+    if (!svg) return;
+    if (construyendo) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const a = aLienzoDe(svg)(e.clientX, e.clientY);
+      construyendo.actual = { a, b: a, pid: e.pointerId, aLienzo: aLienzoDe(svg) };
+      pintarConstruccion();
+      return;
+    }
+    if (!p) return;
     const cx = e.clientX, cy = e.clientY;
     let cual = null, mejor = AGARRE_PX;
     p.vps.forEach((v, i) => { const s = aPantalla(svg, v), d = Math.hypot(s.x - cx, s.y - cy); if (d < mejor) { mejor = d; cual = i; } });
@@ -297,14 +590,15 @@
       return;
     }
     if (cual === null) return;
-    e.preventDefault(); e.stopImmediatePropagation();
-    const inv = svg.getScreenCTM().inverse();
-    const aLienzo = (x, y) => ({ x: inv.a * x + inv.c * y + inv.e, y: inv.b * x + inv.d * y + inv.f });
-    const juntos = p.vps.length >= 2 && Math.abs(p.vps[0].y - p.vps[1].y) < 0.5;
-    arrastre = { cual, antes: copia(p), desde: aLienzo(cx, cy), aLienzo, juntos, pid: e.pointerId };
-    ocultarGuia();
+    empezarArrastre(e, cual);
   }
   function mover(e) {
+    if (construyendo && construyendo.actual) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      construyendo.actual.b = construyendo.actual.aLienzo(e.clientX, e.clientY);
+      pintarConstruccion();
+      return;
+    }
     if (!arrastre) return;
     e.preventDefault(); e.stopImmediatePropagation();
     const sc = escena(); if (!sc) return;
@@ -321,6 +615,18 @@
     pintar();
   }
   function soltar(e) {
+    if (construyendo && construyendo.actual) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const s = construyendo.actual; construyendo.actual = null;
+      const svg = svgDibujo();
+      // una recta muy corta no dice hacia dónde va: se ignora
+      if (Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y) * escala(svg) < 12) { pintarConstruccion(); return dzAviso("Esa recta es muy corta: arrastrá un poco más"); }
+      construyendo.segs.push({ a: s.a, b: s.b });
+      pintarConstruccion();
+      if (construyendo.segs.length >= 2) construccionLista();
+      else dzAviso("Ahora la segunda recta, sobre otro borde que vaya al mismo punto");
+      return;
+    }
     if (!arrastre) return;
     e.preventDefault(); e.stopImmediatePropagation();
     const a = arrastre; arrastre = null;
@@ -341,7 +647,10 @@
         <button type="button" data-p="2" title="Esquinas de casas y edificios">2 puntos</button>
         <button type="button" data-p="3" title="Edificios vistos desde arriba o desde abajo">3 puntos</button>
         <span class="lowpersp-sep"></span>
-        <label title="El lápiz sigue al punto de fuga hacia donde arranca el trazo"><input type="checkbox" id="lowPerspIman"> Imán</label>
+        <button type="button" data-p="dos-lineas" title="Dibujá dos rectas sobre bordes que van al mismo punto (de una foto o un fondo): donde se cruzan nace el punto de fuga">Fuga con 2 líneas</button>
+        <span class="lowpersp-sep"></span>
+        <label title="Las herramientas siguen al punto de fuga hacia donde arranca el trazo. Tab, en medio del trazo, cambia de fuga"><input type="checkbox" id="lowPerspIman"> Imán</label>
+        <span class="lowpersp-fugas" id="lowPerspFugas" title="Prendé o apagá el imán de cada punto de fuga"></span>
         <label><input type="checkbox" id="lowPerspVer"> Ver guías</label>
         <button type="button" data-p="marcar" title="Clic en la mesa: salen las rectas de cada punto de fuga pasando por ahí">Líneas desde un punto</button>
         <button type="button" data-p="borrar-lineas" title="Borrar las líneas de construcción">Borrar líneas</button>
@@ -356,6 +665,11 @@
         if (q === "marcar") {
           marcando = !marcando; sincronizarBarra();
           return dzAviso(marcando ? "Clic en la mesa: salen las rectas de cada punto de fuga pasando por ahí" : "");
+        }
+        if (q === "dos-lineas") {
+          if (construyendo) { terminarConstruccion(); return dzAviso(""); }
+          marcando = false; construyendo = { segs: [], actual: null }; sincronizarBarra();
+          return dzAviso("Dibujá una recta sobre un borde que vaya al punto de fuga (Esc cancela)");
         }
         if (q === "borrar-lineas") {
           const sc = escena(); if (!sc) return;
@@ -384,6 +698,7 @@
   }
   function cerrar() {
     editando = false; marcando = false;
+    if (construyendo) terminarConstruccion();
     if (barra) barra.hidden = true;
     pintar();
   }
@@ -391,7 +706,25 @@
     const mesa = document.getElementById("dzCanvas");
     if (!barra || !mesa) return;
     const r = mesa.getBoundingClientRect();
-    barra.style.top = Math.max(4, r.top + 8) + "px";
+    // al PIE de la mesa: arriba tapaba la altura de los ojos, que es justo donde
+    // están los puntos de fuga (medido a 1000×560: la barra cubría y 108–221 y
+    // el horizonte estaba en 200)
+    // con la mesa baja (espacio Animación en una ventana chica) la ayuda pasa a la
+    // barra de estado: si no, la barra tapa la hoja entera
+    const compacta = r.height < 420;
+    if (barra.classList.contains("compacta") !== compacta) barra.classList.toggle("compacta", compacta);
+    // Arriba de la mesa, como siempre, SALVO que ahí tape la altura de los ojos,
+    // que es donde están los puntos de fuga (medido a 1000×560: la barra cubría
+    // y 108–221 y el horizonte estaba en 200). Entonces va al pie. Siempre
+    // abajo tampoco: tapaba el piso, donde se dibuja (lo encontró la prueba).
+    const arriba = Math.max(4, r.top + 8), abajo = Math.max(r.top + 8, r.bottom - barra.offsetHeight - 8);
+    const p = datos(), svg = svgDibujo();
+    let top = arriba;
+    if (p && p.vps.length && svg && svg.getScreenCTM()) {
+      const ys = p.vps.filter((v) => v.eje !== "y").map((v) => aPantalla(svg, v).y);
+      if (ys.some((y) => y >= arriba - 12 && y <= arriba + barra.offsetHeight + 12)) top = abajo;
+    }
+    barra.style.top = top + "px";
     barra.style.left = (r.left + r.width / 2) + "px";
   }
   function sincronizarBarra() {
@@ -407,9 +740,34 @@
     barra.querySelector('[data-p="borrar-lineas"]').disabled = !hay || !((p.lineas || []).length);
     barra.querySelectorAll("[data-p='1'],[data-p='2'],[data-p='3']").forEach((b) =>
       b.classList.toggle("activo", hay && p.vps.length === +b.dataset.p));
+    barra.querySelector('[data-p="dos-lineas"]').classList.toggle("activo", !!construyendo);
+    // un interruptor por punto: apagar uno resuelve «se va a la fuga que no es»
+    const fugas = barra.querySelector("#lowPerspFugas");
+    fugas.textContent = "";
+    if (hay) p.vps.forEach((v, i) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.vpIman = String(i);
+      const prendido = v.iman !== false;
+      b.className = "lowpersp-fuga" + (prendido ? " activo" : "");
+      b.style.setProperty("--fuga", colorDe(v, i));
+      b.setAttribute("aria-pressed", String(prendido));
+      b.textContent = v.eje ? v.eje.toUpperCase() : String(i + 1);
+      b.title = (prendido ? "Apagar" : "Prender") + " el imán del punto de fuga " + b.textContent;
+      b.onclick = () => {
+        const sc = escena(); if (!sc) return;
+        const q = copia(sc.perspective);
+        if (q.vps[i].iman === false) delete q.vps[i].iman; else q.vps[i].iman = false;
+        guardar(q, (prendido ? "Apagar" : "Prender") + " el imán de un punto de fuga");
+      };
+      fugas.appendChild(b);
+    });
     barra.querySelector("#lowPerspAyuda").textContent = hay
-      ? (p.origen === "3d" ? "Puntos de la cámara del estudio 3D · " : "") + "Arrastrá los puntos y el horizonte · el lápiz sigue al punto de fuga hacia donde arranques (Shift: recta libre)"
+      ? (p.origen === "3d" ? "Puntos de la cámara del estudio 3D · " : "") + (construyendo ? "Dibujá dos rectas sobre bordes que vayan al mismo punto · Esc cancela"
+        : "Arrastrá los puntos (o su flecha, si están fuera de la vista) y el horizonte · lápiz, Línea y figuras siguen la fuga · Tab, en medio del trazo, cambia de fuga · Shift: libre")
       : "Elegí cuántos puntos de fuga";
+    barra.title = barra.querySelector("#lowPerspAyuda").textContent;
+    ubicar();   // el alto de la barra depende de lo que dice: se reubica después
+    if (barra.classList.contains("compacta") && hay && editando) dzAviso(barra.title);
   }
 
   /* ── lo que usan la Regla y el estudio 3D ── */
@@ -444,16 +802,29 @@
 
   function iniciar() {
     envolverTrazo();
+    envolverFormas();
     const mesa = document.getElementById("dzCanvas");
     if (mesa) {
       mesa.addEventListener("pointerdown", agarrar, true);
       global.addEventListener("pointermove", mover, true);
       global.addEventListener("pointerup", soltar, true);
       global.addEventListener("pointercancel", soltar, true);
+      // panear o hacer zoom cambia el estilo del svg: las flechas del borde se reubican
+      let flechasPend = false;
+      new MutationObserver(() => {
+        if (flechasPend || !datos()) return;
+        flechasPend = true;
+        requestAnimationFrame(() => { flechasPend = false; pintarFlechas(datos()); });
+      }).observe(mesa, { attributes: true, subtree: true, attributeFilter: ["style", "viewBox"] });
     }
+    global.addEventListener("keydown", alTeclear, true);
+    global.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && construyendo) { e.preventDefault(); e.stopImmediatePropagation(); terminarConstruccion(); dzAviso("Fuga con 2 líneas cancelada"); }
+    }, true);
+    global.addEventListener("resize", () => pintarFlechas(datos()));
     const zoom = global.dzApplyZoom;
     if (typeof zoom === "function" && !zoom._perspectiva) {
-      global.dzApplyZoom = function () { const r = zoom.apply(this, arguments); if (editando) pintar(); return r; };
+      global.dzApplyZoom = function () { const r = zoom.apply(this, arguments); if (editando) pintar(); else pintarFlechas(datos()); return r; };
       global.dzApplyZoom._perspectiva = true;
     }
     vigilar(); pintar();

@@ -198,6 +198,7 @@ jobs:
           node tools/check_mesa_sola_ui.js
           node tools/check_hilo_tensado_ui.js
           node tools/check_perspectiva_ui.js
+          node tools/check_perspectiva_herramientas_ui.js
           node tools/check_perspectiva_3d_ui.js
           node tools/check_perspectiva_3d_dibujo_ui.js
           node tools/check_repetir_fuga_3d_ui.js

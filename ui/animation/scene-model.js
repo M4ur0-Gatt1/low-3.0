@@ -1264,6 +1264,7 @@
         const out = { x: num(v.x), y: num(v.y) };
         if (v.eje === "x" || v.eje === "y" || v.eje === "z") out.eje = v.eje;   // del estudio 3D: qué eje fuga ahí
         if (color(v.color)) out.color = color(v.color);
+        if (v.iman === false) out.iman = false;   // este punto no imanta (se apaga desde la barra)
         return out;
       });
     const out = { vps, visible: d.visible !== false, iman: d.iman !== false,

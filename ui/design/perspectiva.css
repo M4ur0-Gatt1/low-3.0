@@ -22,3 +22,41 @@
 .lowpersp label:has(input:disabled) { opacity: .45; cursor: default; }
 .lowpersp-sep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
 .lowpersp-ayuda { flex-basis: 100%; text-align: center; color: var(--faint); font-size: 11px; }
+
+/* un interruptor por punto de fuga: prendido = su imán actúa */
+.lowpersp-fugas { display: inline-flex; gap: 4px; }
+.lowpersp .lowpersp-fuga {
+  min-width: 26px; padding: 3px 7px; font-weight: 700;
+  color: var(--faint); border-color: var(--line); text-decoration: line-through;
+}
+.lowpersp .lowpersp-fuga.activo {
+  color: var(--fuga); border-color: var(--fuga); text-decoration: none;
+  box-shadow: inset 0 0 0 1px var(--fuga);
+}
+
+/* flecha en el borde de la mesa para un punto de fuga fuera de la vista */
+.lowpersp-fuera {
+  position: fixed; z-index: 64; transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 6px 3px 4px; border-radius: 999px;
+  background: var(--panel); border: 1.5px solid var(--fuga, #F0450E);
+  color: var(--fuga, #F0450E); font: 700 11px Figtree, sans-serif;
+  box-shadow: 0 6px 16px -8px rgba(0,0,0,.6); cursor: grab; touch-action: none;
+}
+.lowpersp-fuera[hidden] { display: none; }
+.lowpersp-fuera:active { cursor: grabbing; }
+.lowpersp-flecha {
+  width: 0; height: 0; transform: rotate(var(--ang, 0rad));
+  border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  border-left: 8px solid currentColor;
+}
+/* dentro de la mesa pero fuera de la hoja: una agarradera redonda EN el punto */
+.lowpersp-fuera.en-sitio { padding: 2px 6px; }
+.lowpersp-fuera.en-sitio .lowpersp-flecha {
+  width: 8px; height: 8px; border: 2px solid currentColor; border-radius: 50%; background: #fff; transform: none;
+}
+/* mesa baja: sin la línea de ayuda (va a la barra de estado y al título) y más apretada */
+.lowpersp.compacta { padding: 4px 8px; gap: 4px; }
+.lowpersp.compacta .lowpersp-ayuda { display: none; }
+.lowpersp.compacta .lowpersp-titulo { display: none; }
+.lowpersp.compacta button { padding: 3px 7px; }
