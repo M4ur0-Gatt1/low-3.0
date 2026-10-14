@@ -1515,5 +1515,12 @@ LOW_I18N.registrar("en", "English", {
  "Abrí un documento de animación para elegir una capa entera": "Open an animation document to select a whole layer",
  "En este cuadro la capa está vacía: andá a un cuadro con dibujo y volvé a elegirla entera": "The layer is empty in this frame: go to a frame with a drawing and select it whole again",
  "Toda la capa «{}» elegida ({} dibujos): arrastrá para mover, usá los tiradores para escalar o girar · Ctrl+Z lo deshace en todos": "Whole layer «{}» selected ({} drawings): drag to move, use the handles to scale or rotate · Ctrl+Z undoes it in all",
- "Toda la capa «{}» elegida ({} dibujo): arrastrá para mover, usá los tiradores para escalar o girar · Ctrl+Z lo deshace en todos": "Whole layer «{}» selected ({} drawing): drag to move, use the handles to scale or rotate · Ctrl+Z undoes it in all"
+ "Toda la capa «{}» elegida ({} dibujo): arrastrá para mover, usá los tiradores para escalar o girar · Ctrl+Z lo deshace en todos": "Whole layer «{}» selected ({} drawing): drag to move, use the handles to scale or rotate · Ctrl+Z undoes it in all",
+ "Abrí o creá un documento de animación en LOW para recibir la toma": "Open or create an animation document in LOW to receive the shot",
+ "Toma 3D · {}": "3D shot · {}",
+ "{} fondos de la toma «{}» en la capa «{}» (al fondo), uno cada {} cuadros · Ctrl+Z los saca": "{} backgrounds from shot «{}» in layer «{}» (at the bottom), one every {} frames · Ctrl+Z removes them",
+ "{} fondos de la toma «{}» en la capa «{}» (al fondo) · Ctrl+Z los saca": "{} backgrounds from shot «{}» in layer «{}» (at the bottom) · Ctrl+Z removes them",
+ "{} fondo de la toma «{}» en la capa «{}» (al fondo) · Ctrl+Z los saca": "{} background from shot «{}» in layer «{}» (at the bottom) · Ctrl+Z removes it",
+ "Faltan {} fondos de una toma del 3D: la carpeta «.fondos» tiene que estar al lado del .low. Se pueden volver a mandar desde el estudio 3D.": "{} backgrounds from a 3D shot are missing: the «.fondos» folder must be next to the .low. You can send them again from the 3D studio.",
+ "Faltan {} fondo de una toma del 3D: la carpeta «.fondos» tiene que estar al lado del .low. Se pueden volver a mandar desde el estudio 3D.": "{} background from a 3D shot is missing: the «.fondos» folder must be next to the .low. You can send it again from the 3D studio."
 });

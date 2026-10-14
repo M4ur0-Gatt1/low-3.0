@@ -73,6 +73,7 @@ jobs:
           python tools/check_export_anim_backend.py
           python tools/check_export_destino_backend.py
           python tools/check_guardar_extension_backend.py
+          python tools/check_fondos_archivo_backend.py
           python tools/check_sin_modo_menu.py
           python tools/check_escena_nueva_backend.py
           python tools/check_export_premiere_backend.py
@@ -200,6 +201,7 @@ jobs:
           node tools/check_perspectiva_3d_ui.js
           node tools/check_perspectiva_3d_dibujo_ui.js
           node tools/check_repetir_fuga_3d_ui.js
+          node tools/check_toma_3d_ui.js
           node tools/check_limpieza_ui.js
           node tools/check_mover_en_linea_ui.js
           node tools/check_seleccion_alcance_ui.js

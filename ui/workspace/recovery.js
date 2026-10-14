@@ -24,6 +24,14 @@
     clear(path) { clearTimeout(this.timers.get(path)); this.timers.delete(path); try { this.storage?.removeItem(this.key(path)); } catch (_) {} }
   }
   const canonicalPath = value => String(value || "").trim().replace(/\\+/g, "/").replace(/\/{2,}/g, "/").toLowerCase();
+  /* LOS FONDOS DE UNA TOMA DEL 3D NO ENTRAN EN EL RESCATE: son varios MB de
+     JPG y el almacén del navegador da ~5 MB por origen. Con ellos adentro,
+     `setItem` tira y LOW deja de guardar el rescate de esa escena. Si el rescate
+     no entra, se guarda sin esas imágenes (todo el dibujo queda): la capa de la
+     toma sigue y sus fondos se vuelven a mandar desde el estudio 3D. */
+  const TOMA_DATA = /(<image\b[^>]*data-low=\\?"toma-3d\\?"[^>]*href=\\?")data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/=]+/g;
+  const sinFondosDeToma = (texto) => texto.replace(TOMA_DATA, "$1");
+
   class SceneRecoveryStore {
     constructor(storage = global.localStorage) {
       this.storage = storage;
@@ -60,8 +68,11 @@
         path: metadata.path || null, sceneId: content.scene?.id || metadata.sceneId || null,
         name: metadata.name || content.scene?.name || "Escena", savedAt: Date.now(), metadata,
         content };
+      let aliviado = false;
       const escribir = () => {
-        this.storage?.setItem(this.key(identity), JSON.stringify(record));
+        let texto = JSON.stringify(record);
+        if (aliviado) texto = sinFondosDeToma(texto);
+        this.storage?.setItem(this.key(identity), texto);
         const verified = this.get(identity);
         if (!verified || verified.identity !== identity) return false;
         this._writeIndex([...this._index(), identity]);
@@ -72,7 +83,8 @@
       catch (_) {
         // sin espacio: se hace lugar con lo mas viejo y se reintenta UNA vez.
         // Perder un rescate viejo es barato; perder el de ahora, no.
-        try { this._podar(identity); guardado = escribir(); } catch (__) { return false; }
+        try { this._podar(identity); guardado = escribir(); }
+        catch (__) { try { aliviado = true; guardado = escribir(); } catch (___) { return false; } }
       }
       if (guardado) { try { this._podar(identity); } catch (_) { /* podar es higiene, no la promesa */ } }
       return guardado;

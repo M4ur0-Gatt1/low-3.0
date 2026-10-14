@@ -10,7 +10,7 @@ a = Analysis(
            ('low.ico', '.'), ('ui', 'ui'), ('tools', 'tools'), ('low_anim.py', '.'),
            ('self_improvement.py', '.'), ('animation_engine', 'animation_engine'),
            ('social', 'social')],
-    hiddenimports=['providers', 'providers.transport', 'providers.nvidia_provider',
+    hiddenimports=['fondos_archivo', 'providers', 'providers.transport', 'providers.nvidia_provider',
                    'code_runner', 'webview.platforms.winforms',
                    'webview.platforms.edgechromium', 'webview.platforms.cocoa',
                    'webview.platforms.qt',

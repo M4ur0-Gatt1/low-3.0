@@ -70,6 +70,9 @@
 
   async function conRescate(leido) {
     if (!leido || leido.error || !leido.path || !leido.content) return leido;
+    // los fondos de las tomas del 3D viven en <nombre>.fondos/ al lado del .low
+    if (leido.fondos_faltan > 0) setTimeout(() => global.dzNotice?.("Faltan " + leido.fondos_faltan +
+      (leido.fondos_faltan === 1 ? " fondo" : " fondos") + " de una toma del 3D: la carpeta «.fondos» tiene que estar al lado del .low. Se pueden volver a mandar desde el estudio 3D."), 600);
     const st = almacen();
     if (!st || typeof st.get !== "function") return leido;
     let registro = null;

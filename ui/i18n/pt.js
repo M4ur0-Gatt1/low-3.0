@@ -1489,5 +1489,12 @@ LOW_I18N.registrar("pt", "Português", {
  "Abrí un documento de animación para elegir una capa entera": "Abra um documento de animação para selecionar uma camada inteira",
  "En este cuadro la capa está vacía: andá a un cuadro con dibujo y volvé a elegirla entera": "A camada está vazia neste quadro: vá a um quadro com desenho e selecione-a inteira de novo",
  "Toda la capa «{}» elegida ({} dibujos): arrastrá para mover, usá los tiradores para escalar o girar · Ctrl+Z lo deshace en todos": "Camada inteira «{}» selecionada ({} desenhos): arraste para mover, use as alças para escalar ou girar · Ctrl+Z desfaz em todos",
- "Toda la capa «{}» elegida ({} dibujo): arrastrá para mover, usá los tiradores para escalar o girar · Ctrl+Z lo deshace en todos": "Camada inteira «{}» selecionada ({} desenho): arraste para mover, use as alças para escalar ou girar · Ctrl+Z desfaz em todos"
+ "Toda la capa «{}» elegida ({} dibujo): arrastrá para mover, usá los tiradores para escalar o girar · Ctrl+Z lo deshace en todos": "Camada inteira «{}» selecionada ({} desenho): arraste para mover, use as alças para escalar ou girar · Ctrl+Z desfaz em todos",
+ "Abrí o creá un documento de animación en LOW para recibir la toma": "Abra ou crie um documento de animação no LOW para receber a tomada",
+ "Toma 3D · {}": "Tomada 3D · {}",
+ "{} fondos de la toma «{}» en la capa «{}» (al fondo), uno cada {} cuadros · Ctrl+Z los saca": "{} fundos da tomada «{}» na camada «{}» (no fundo), um a cada {} quadros · Ctrl+Z os remove",
+ "{} fondos de la toma «{}» en la capa «{}» (al fondo) · Ctrl+Z los saca": "{} fundos da tomada «{}» na camada «{}» (no fundo) · Ctrl+Z os remove",
+ "{} fondo de la toma «{}» en la capa «{}» (al fondo) · Ctrl+Z los saca": "{} fundo da tomada «{}» na camada «{}» (no fundo) · Ctrl+Z o remove",
+ "Faltan {} fondos de una toma del 3D: la carpeta «.fondos» tiene que estar al lado del .low. Se pueden volver a mandar desde el estudio 3D.": "Faltam {} fundos de uma tomada 3D: a pasta «.fondos» tem que estar ao lado do .low. Dá para enviá-los de novo do estúdio 3D.",
+ "Faltan {} fondo de una toma del 3D: la carpeta «.fondos» tiene que estar al lado del .low. Se pueden volver a mandar desde el estudio 3D.": "Falta {} fundo de uma tomada 3D: a pasta «.fondos» tem que estar ao lado do .low. Dá para enviá-lo de novo do estúdio 3D."
 });

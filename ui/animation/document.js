@@ -1243,6 +1243,60 @@
       return ly;
     }
 
+    /** Los FONDOS DE UNA TOMA del estudio 3D: una capa de fondo (al fondo de
+     *  todo) con un dibujo por fondo, cada uno expuesto desde su cuadro hasta
+     *  el siguiente. Se reconoce por data-toma="<nombre>": volver a mandar la
+     *  misma toma REEMPLAZA sus fondos (no apila capas). Un paso de Ctrl+Z.
+     *  items: [{ cuadro, content }] ordenados; hasta: último cuadro de la toma. */
+    setToma3D(nombre, items, { hasta = 0 } = {}) {
+      const sc = this.scene, clave = encodeURIComponent(String(nombre || "Toma"));
+      const marca = 'data-toma="' + clave + '"';
+      const validos = (items || []).filter((x) => x && Number(x.cuadro) > 0 && x.content != null)
+        .sort((a, b) => a.cuadro - b.cuadro);
+      if (!validos.length) return null;
+      const foto = () => {
+        const lv = sc.levels.find((l) => l.type === "reference" && l.drawings.some((d) => String(d.content || "").includes(marca)));
+        const ly = lv ? sc.layers.find((l) => l.levelId === lv.id) : null;
+        return { level: lv ? lv.toJSON() : null, levelIndex: lv ? sc.levels.indexOf(lv) : -1,
+                 layer: ly ? ly.toJSON() : null, layerIndex: ly ? sc.layers.indexOf(ly) : -1 };
+      };
+      const before = foto();
+      let lv = before.level ? sc.level(before.level.id) : null;
+      const titulo = "Toma 3D · " + String(nombre || "Toma");
+      if (!lv) lv = sc.addLevel(titulo, "reference");
+      lv.drawings = [];
+      validos.forEach((it, i) => lv.addDrawing(i + 1, String(it.content).replace("<image ", "<image " + marca + " ")));
+      let ly = sc.layers.find((l) => l.levelId === lv.id);
+      if (!ly) {
+        ly = sc.addLayer(lv.id, titulo);
+        sc.layers.splice(sc.layers.indexOf(ly), 1); sc.layers.unshift(ly);   // al fondo: es el fondo
+      }
+      ly.cells = [];
+      const fin = Math.max(Number(hasta) || 0, validos[validos.length - 1].cuadro);
+      validos.forEach((it, i) => {
+        const hastaAca = i + 1 < validos.length ? validos[i + 1].cuadro - 1 : fin;
+        for (let f = Math.round(it.cuadro); f <= hastaAca; f++) ly.setCell(f, i + 1);
+      });
+      const after = foto();
+      this.touch(); this.emit("layers"); this.emit("level"); this.emit("cells"); this.emit("frame");
+      if (this.history) {
+        const doc = this;
+        const ids = [before.level && before.level.id, after.level && after.level.id].filter(Boolean);
+        const lyIds = [before.layer && before.layer.id, after.layer && after.layer.id].filter(Boolean);
+        this.history.push({ label: "Fondos de la toma «" + (nombre || "Toma") + "»", domain: "layout3d", before, after,
+          apply: (_dir, v) => {
+            const s = doc.scene;
+            s.levels = s.levels.filter((l) => !ids.includes(l.id));
+            s.layers = s.layers.filter((l) => !lyIds.includes(l.id));
+            if (v.level) s.levels.splice(Math.max(0, Math.min(s.levels.length, v.levelIndex)), 0, new animation.Level(v.level));
+            if (v.layer) s.layers.splice(Math.max(0, Math.min(s.layers.length, v.layerIndex)), 0, new animation.Layer(v.layer));
+            if (doc.layerId && !s.layer(doc.layerId)) doc.layerId = s.layers.length ? s.layers[s.layers.length - 1].id : null;
+            doc.touch(); doc.emit("layers"); doc.emit("level"); doc.emit("cells"); doc.emit("frame");
+          } });
+      }
+      return ly;
+    }
+
     addReferenceSequence(items, nombre) {
       const valid=(items||[]).filter(x=>x&&Number(x.frame)>0&&x.content!=null);
       if(!valid.length)return null;
