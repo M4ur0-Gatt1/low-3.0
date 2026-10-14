@@ -1,8 +1,14 @@
-/* ══ PERSPECTIVA PARA LAYOUTS DE FONDO ══════════════════════════════════════
-   Pedido de Mauro: «quiero que tire muchas líneas de punto de fuga ya
-   predefinidos, con 1, 2 o 3; que se pueda cambiar el horizonte, girar la
-   vista; que tenga esquemas para exteriores e interiores», para dibujar
-   fondos en el módulo 2D.
+/* ══ LA CÁMARA DEL LAYOUT ═══════════════════════════════════════════════════
+   v3.29.3 — Mauro: «esa vista de calle es de lo más inútil y tiene mucho
+   ruido». Se fueron los ESQUEMAS (Calle, Manzana, Habitación, Sólo líneas):
+   eran enrejados de líneas de colores que tapaban la vista y no servían para
+   apoyar nada. El estudio vuelve a la forma de Feather: el espacio se arma con
+   superficies (el piso, guías, cajas) y la cámara en perspectiva hace fugar
+   todo sola. De acá queda lo que sí sirve: la cámara (altura de los ojos,
+   giro, inclinación, lente), el marco del cuadro del 2D, el horizonte, los
+   puntos de fuga marcados y «Mandar al 2D».
+   Los tipos `Esquema3D`, `esquema` y `densidad` se conservan sólo para leer
+   archivos .low3d viejos sin error.
 
    La idea que hace que todo sea exacto: las líneas NO se dibujan hacia un
    punto en la pantalla. Son rectas PARALELAS en el espacio (a lo largo de X,
@@ -14,14 +20,7 @@
      horizonte; las verticales siguen verticales.
    - 3 puntos = además se inclina: fuga también la vertical.
 
-   Esquemas (en metros, el piso es y=0):
-   - Calle: calzada, veredas y fachadas a los dos lados, con pisos y columnas.
-   - Manzana: cuadras con edificios de distintas alturas y la cuadrícula del
-     piso, vista desde una esquina.
-   - Habitación: piso, paredes y techo cuadriculados, vista desde adentro.
-   - Sólo líneas: un enrejado de rectas en los tres ejes, sin «cosas».
-
-   «Mandar al 2D» renderiza las líneas (y lo modelado) del tamaño del cuadro
+   «Mandar al 2D» renderiza lo dibujado y modelado del tamaño del cuadro
    del 2D, con fondo transparente, y calcula los puntos de fuga en esos mismos
    píxeles: el 2D los recibe como su perspectiva y el lápiz se imanta exacto. */
 import * as THREE from 'three';
@@ -51,12 +50,6 @@ export const AJUSTES_INICIALES: Perspectiva3DAjustes = {
 
 export const COLOR_EJE: Record<Eje, string> = { x: '#F0450E', z: '#33B5E8', y: '#2ecc71' };
 export const COLOR_HORIZONTE = '#FFB000';
-const LARGO = 480;                     // las rectas llegan casi al plano lejano (500)
-
-/** Dónde está parado el que mira, por esquema. */
-const ESTACION: Record<Esquema3D, [number, number]> = {
-  calle: [0, 10], manzana: [-20, 20], habitacion: [0, 0.6], fuga: [0, 6],
-};
 
 export function ajustesValidos(a: Partial<Perspectiva3DAjustes> | null | undefined): Perspectiva3DAjustes {
   const d = { ...AJUSTES_INICIALES, ...(a || {}) };
@@ -75,146 +68,16 @@ export function ajustesValidos(a: Partial<Perspectiva3DAjustes> | null | undefin
   };
 }
 
-/** Los encuadres listos de 1, 2 y 3 puntos para cada esquema. */
-export function preset(esquema: Esquema3D, puntos: 1 | 2 | 3): Partial<Perspectiva3DAjustes> {
-  const interior = esquema === 'habitacion';
-  if (puntos === 1) return { puntos, giro: 0, inclinacion: 0, altura: interior ? 1.5 : 1.6 };
-  if (puntos === 2) return { puntos, giro: interior ? -30 : esquema === 'manzana' ? 45 : 35, inclinacion: 0, altura: interior ? 1.5 : 1.6 };
-  // 3 puntos: afuera, desde arriba (vista de pájaro); adentro, desde abajo
-  return interior
-    ? { puntos, giro: -30, inclinacion: 22, altura: 1.0 }
-    : { puntos, giro: 35, inclinacion: -38, altura: esquema === 'fuga' ? 14 : 34 };
-}
-
-/* ── la geometría de los esquemas: segmentos agrupados por eje ── */
-type Familias = Record<Eje, number[]>;
-function nuevas(): Familias { return { x: [], y: [], z: [] }; }
-function seg(f: Familias, eje: Eje, a: number[], b: number[]) { f[eje].push(a[0], a[1], a[2], b[0], b[1], b[2]); }
-function rango(a: number, b: number, paso: number): number[] {
-  const out: number[] = [];
-  const n = Math.floor((b - a) / paso + 1e-6);
-  for (let i = 0; i <= n; i++) out.push(a + i * paso);
-  return out;
-}
-/** Cuadrícula en un piso (y fijo): rectas en X y en Z. */
-function piso(f: Familias, x0: number, x1: number, z0: number, z1: number, y: number, px: number, pz = px) {
-  for (const z of rango(z0, z1, pz)) seg(f, 'x', [x0, y, z], [x1, y, z]);
-  for (const x of rango(x0, x1, px)) seg(f, 'z', [x, y, z0], [x, y, z1]);
-}
-/** Pared a lo largo de Z (x fijo): rectas en Z (pisos) y verticales. */
-function paredZ(f: Familias, x: number, z0: number, z1: number, y0: number, y1: number, py: number, pz: number) {
-  for (const y of rango(y0, y1, py)) seg(f, 'z', [x, y, z0], [x, y, z1]);
-  for (const z of rango(z0, z1, pz)) seg(f, 'y', [x, y0, z], [x, y1, z]);
-}
-/** Pared a lo largo de X (z fijo): rectas en X y verticales. */
-function paredX(f: Familias, z: number, x0: number, x1: number, y0: number, y1: number, py: number, px: number) {
-  for (const y of rango(y0, y1, py)) seg(f, 'x', [x0, y, z], [x1, y, z]);
-  for (const x of rango(x0, x1, px)) seg(f, 'y', [x, y0, z], [x, y1, z]);
-}
-
-/** Las cuadras de la manzana: alrededor de una PLAZA (las cuatro del medio no
- *  están). Las usan las líneas y los soportes: tienen que coincidir. */
-export function cuadras(): { x0: number; x1: number; z0: number; z1: number; h: number }[] {
-  const alturas = [15, 27, 12, 33, 21, 9, 24, 18, 30, 12, 21, 15, 36, 18, 24, 12];
-  const out: { x0: number; x1: number; z0: number; z1: number; h: number }[] = [];
-  let n = 0;
-  for (const i of [-2, -1, 0, 1]) for (const j of [-2, -1, 0, 1]) {
-    if ((i === -1 || i === 0) && (j === -1 || j === 0)) continue;
-    const x0 = i * 36 + 6, z0 = j * 36 + 6;
-    out.push({ x0, x1: x0 + 24, z0, z1: z0 + 24, h: alturas[n++ % alturas.length] });
-  }
-  return out;
-}
-
-export function construirEsquema(esquema: Esquema3D, densidad: 'pocas' | 'muchas'): Familias {
-  const f = nuevas();
-  const k = densidad === 'muchas' ? 1 : 2;
-  if (esquema === 'calle') {
-    // calzada de 10 m, veredas de 3 m, fachadas a x=±8 de 18 m de alto
-    piso(f, -8, 8, -LARGO, 14, 0, 2 * k, 4 * k);
-    for (const x of [-5, 5]) seg(f, 'z', [x, 0.15, -LARGO], [x, 0.15, 14]);   // cordones
-    for (const s of [-1, 1]) {
-      paredZ(f, 8 * s, -LARGO, 14, 0, 18, 3 * k, 4 * k);
-      seg(f, 'y', [8 * s, 0, 14], [8 * s, 60, 14]);
-    }
-  } else if (esquema === 'manzana') {
-    // cuadras de 24 m con calles de 12 m alrededor de una PLAZA (las cuatro del
-    // medio no están): la cámara, en la plaza, ve en diagonal la esquina de una cuadra
-    for (const { x0, x1, z0, z1, h } of cuadras()) {
-      paredX(f, z0, x0, x1, 0, h, 3 * k, 6 * k); paredX(f, z1, x0, x1, 0, h, 3 * k, 6 * k);
-      paredZ(f, x0, z0, z1, 0, h, 3 * k, 6 * k); paredZ(f, x1, z0, z1, 0, h, 3 * k, 6 * k);
-      piso(f, x0, x1, z0, z1, h, 24, 24);   // el borde del techo
-    }
-    piso(f, -LARGO / 2, LARGO / 2, -LARGO / 2, LARGO / 2, 0, 6 * k);
-  } else if (esquema === 'habitacion') {
-    // 6 m de ancho, 8 de fondo, 2,8 de alto; la cámara junto a la pared de adelante
-    const x0 = -3, x1 = 3, z0 = -8, z1 = 1, h = 2.8, p = 0.5 * k;
-    piso(f, x0, x1, z0, z1, 0, p);
-    piso(f, x0, x1, z0, z1, h, 2 * p);
-    paredX(f, z0, x0, x1, 0, h, p, p);
-    paredZ(f, x0, z0, z1, 0, h, p, p);
-    paredZ(f, x1, z0, z1, 0, h, p, p);
-    // una puerta y una ventana, para tener escala
-    paredX(f, z0 + 0.01, -2.4, -1.5, 0, 2.05, 2.05, 0.9);
-    paredZ(f, x1 - 0.01, -5.5, -3.5, 0.9, 2.1, 1.2, 2);
-  } else {
-    // sólo líneas: un enrejado en los tres ejes
-    const p = 4 * k;
-    for (const y of rango(0, 24, 3 * k)) for (const z of rango(-60, 0, p)) seg(f, 'x', [-LARGO, y, z], [LARGO, y, z]);
-    for (const y of rango(0, 24, 3 * k)) for (const x of rango(-24, 24, p)) seg(f, 'z', [x, y, -LARGO], [x, y, 20]);
-    for (const x of rango(-24, 24, p)) for (const z of rango(-60, 0, p)) seg(f, 'y', [x, -LARGO / 4, z], [x, LARGO / 2, z]);
-  }
-  return f;
-}
-
-/* ── DÓNDE APOYAR EL TRAZO: el piso, las paredes y el techo del esquema ──
-   En perspectiva el estudio sólo dibuja sobre una superficie (guía, plano o
-   trazo): las líneas del esquema son dibujo, no superficie, y sobre la calle
-   «no se podía dibujar». Cada esquema da sus caras como rectángulos alineados
-   a los ejes; el trazo se apoya en la que está bajo el cursor. */
-type Cara = { eje: Eje; c: number; u: [number, number]; v: [number, number] };   // u,v: los otros dos ejes, en orden x,y,z
-const OTROS: Record<Eje, [Eje, Eje]> = { x: ['y', 'z'], y: ['x', 'z'], z: ['x', 'y'] };
-export function carasDe(esquema: Esquema3D): Cara[] {
-  if (esquema === 'calle') return [
-    { eje: 'y', c: 0, u: [-8, 8], v: [-LARGO, 14] },
-    { eje: 'x', c: -8, u: [0, 60], v: [-LARGO, 14] },
-    { eje: 'x', c: 8, u: [0, 60], v: [-LARGO, 14] },
-  ];
-  if (esquema === 'habitacion') return [
-    { eje: 'y', c: 0, u: [-3, 3], v: [-8, 1] }, { eje: 'y', c: 2.8, u: [-3, 3], v: [-8, 1] },
-    { eje: 'x', c: -3, u: [0, 2.8], v: [-8, 1] }, { eje: 'x', c: 3, u: [0, 2.8], v: [-8, 1] },
-    { eje: 'z', c: -8, u: [-3, 3], v: [0, 2.8] }, { eje: 'z', c: 1, u: [-3, 3], v: [0, 2.8] },
-  ];
-  if (esquema === 'manzana') {
-    const out: Cara[] = [{ eje: 'y', c: 0, u: [-LARGO / 2, LARGO / 2], v: [-LARGO / 2, LARGO / 2] }];
-    for (const b of cuadras()) out.push(
-      { eje: 'x', c: b.x0, u: [0, b.h], v: [b.z0, b.z1] }, { eje: 'x', c: b.x1, u: [0, b.h], v: [b.z0, b.z1] },
-      { eje: 'z', c: b.z0, u: [b.x0, b.x1], v: [0, b.h] }, { eje: 'z', c: b.z1, u: [b.x0, b.x1], v: [0, b.h] },
-      { eje: 'y', c: b.h, u: [b.x0, b.x1], v: [b.z0, b.z1] });
-    return out;
-  }
-  return [{ eje: 'y', c: 0, u: [-LARGO, LARGO], v: [-LARGO, LARGO] }];
-}
-/** La cara del esquema que el rayo toca primero: punto, normal (de cara a la
- *  cámara) y su plano. Null si no toca ninguna. */
-export function soporte(esquema: Esquema3D, ray: THREE.Ray): { point: THREE.Vector3; normal: THREE.Vector3; plane: THREE.Plane } | null {
-  const k = (e: Eje) => (e === 'x' ? 0 : e === 'y' ? 1 : 2);
-  const o = ray.origin.toArray(), d = ray.direction.toArray();
-  let mejor: { t: number; cara: Cara } | null = null;
-  for (const cara of carasDe(esquema)) {
-    const i = k(cara.eje);
-    if (Math.abs(d[i]) < 1e-9) continue;
-    const t = (cara.c - o[i]) / d[i];
-    if (t <= 1e-4 || (mejor && t >= mejor.t)) continue;
-    const [ea, eb] = OTROS[cara.eje], pa = o[k(ea)] + d[k(ea)] * t, pb = o[k(eb)] + d[k(eb)] * t;
-    if (pa < cara.u[0] || pa > cara.u[1] || pb < cara.v[0] || pb > cara.v[1]) continue;
-    mejor = { t, cara };
-  }
-  if (!mejor) return null;
-  const n = new THREE.Vector3(mejor.cara.eje === 'x' ? 1 : 0, mejor.cara.eje === 'y' ? 1 : 0, mejor.cara.eje === 'z' ? 1 : 0);
-  if (n.dot(ray.direction) > 0) n.negate();               // de cara a la cámara
-  const point = ray.at(mejor.t, new THREE.Vector3());
-  return { point, normal: n, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(n, point) };
+/** Los encuadres de la cámara, por cantidad de puntos de fuga que se ven:
+ *  de frente fuga una sola dirección; en esquina, las dos horizontales;
+ *  desde arriba o desde abajo, también la vertical. La altura sólo se toca
+ *  para mirar desde arriba (hace falta subir para ver los techos). */
+export type Encuadre = 'frente' | 'esquina' | 'arriba' | 'abajo';
+export function encuadre(e: Encuadre, altura: number): Partial<Perspectiva3DAjustes> {
+  if (e === 'frente') return { puntos: 1, giro: 0, inclinacion: 0 };
+  if (e === 'esquina') return { puntos: 2, giro: 35, inclinacion: 0 };
+  if (e === 'arriba') return { puntos: 3, giro: 35, inclinacion: -35, altura: Math.max(altura, 12) };
+  return { puntos: 3, giro: 35, inclinacion: 25 };
 }
 
 /* ── la cámara: dónde mira según altura, giro e inclinación ── */
@@ -222,9 +85,10 @@ export function direccion(giroGrados: number, inclinacionGrados: number): THREE.
   const g = THREE.MathUtils.degToRad(giroGrados), i = THREE.MathUtils.degToRad(inclinacionGrados);
   return new THREE.Vector3(Math.sin(g) * Math.cos(i), Math.sin(i), -Math.cos(g) * Math.cos(i));
 }
-export function posicionCamara(a: Perspectiva3DAjustes): { pos: THREE.Vector3; target: THREE.Vector3 } {
-  const [sx, sz] = ESTACION[a.esquema];
-  const pos = new THREE.Vector3(sx, a.altura, sz);
+/** La cámara parada en (x, z) —donde ya está: ya no hay «estación» por
+ *  esquema— a la altura de los ojos, mirando según giro e inclinación. */
+export function posicionCamara(a: Perspectiva3DAjustes, x = 0, z = 6): { pos: THREE.Vector3; target: THREE.Vector3 } {
+  const pos = new THREE.Vector3(x, a.altura, z);
   return { pos, target: pos.clone().add(direccion(a.giro, a.inclinacion).multiplyScalar(10)) };
 }
 /** Lo inverso: altura, giro e inclinación de una cámara (tras orbitar con el mouse). */
@@ -311,28 +175,11 @@ export class Perspectiva3D {
     this.group.userData.noPick = true;
   }
 
-  /** Reconstruye las líneas sólo si cambió el esquema o la densidad. */
-  actualizar(a: Perspectiva3DAjustes, oscuro: boolean): void {
-    this.group.visible = a.activa;
-    const firma = `${a.esquema}|${a.densidad}|${oscuro}`;
-    if (!a.activa || firma === this.ultima) return;
-    this.ultima = firma;
-    this.liberar();
-    const familias = construirEsquema(a.esquema, a.densidad);
-    for (const eje of ['x', 'z', 'y'] as Eje[]) {
-      if (!familias[eje].length) continue;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(familias[eje], 3));
-      const mat = new THREE.LineBasicMaterial({
-        color: COLOR_EJE[eje], transparent: true, opacity: oscuro ? 0.62 : 0.55,
-        depthWrite: false, fog: false,
-      });
-      const lineas = new THREE.LineSegments(geo, mat);
-      lineas.name = 'perspectiva-' + eje;
-      lineas.userData.eje = eje;
-      lineas.frustumCulled = false;
-      this.group.add(lineas);
-    }
+  /** Ya no hay enrejado de líneas (v3.29.3): el grupo queda vacío y oculto.
+   *  Se conserva la clase para no tocar a quien la usa. */
+  actualizar(_a: Perspectiva3DAjustes, _oscuro: boolean): void {
+    this.group.visible = false;
+    if (this.group.children.length) this.liberar();
   }
 
   cantidadDeLineas(): number {
@@ -379,12 +226,8 @@ export function pintarSuperposicion(svg: SVGSVGElement, cam: THREE.PerspectiveCa
   const { vps } = puntosDeFuga(cam, w, h);
   for (const v of vps) {
     if (Math.abs(v.x) > w * 30 || Math.abs(v.y) > h * 30) continue;
+    // sólo el punto: el abanico de 36 rayos por punto era ruido (v3.29.3)
     const g = el('g', { stroke: v.color, 'data-p': 'vp-' + v.eje }, svg);
-    const span = (w + h) * 3;
-    for (let i = 0; i < 36; i++) {
-      const a = (i / 36) * Math.PI * 2;
-      el('line', { x1: v.x, y1: v.y, x2: v.x + Math.cos(a) * span, y2: v.y + Math.sin(a) * span, 'stroke-width': 1, 'stroke-opacity': 0.16 }, g);
-    }
     el('circle', { cx: v.x, cy: v.y, r: 6, fill: '#fff', 'stroke-width': 2.5 }, g);
     const t = el('text', { x: v.x + 10, y: v.y - 8, fill: v.color, stroke: 'none', 'font-size': 12, 'font-weight': 700, 'font-family': 'Figtree, sans-serif' }, g);
     t.textContent = v.eje.toUpperCase();

@@ -7,6 +7,7 @@ import { PropertiesPanel3D } from './PropertiesPanel3D';
 import { LayerManager3D } from './LayerManager3D';
 import { ObjectList3D } from './ObjectList3D';
 import { PerspectivaPanel3D } from './PerspectivaPanel3D';
+import { RepetirPanel3D } from './RepetirPanel3D';
 import { TomaPanel3D } from './TomaPanel3D';
 import './studio-chrome.css';
 
@@ -44,6 +45,10 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
  const [history,setHistory]=useState({undo:false,redo:false});
  const [joystick,setJoystick]=useState(false);
  const active=tools.find(t=>t.id===state.currentTool);
+ // los avisos del motor (p. ej. «acá no hay dónde apoyar») se VEN unos segundos en la barra de contexto
+ const [aviso,setAviso]=useState('');
+ useEffect(()=>{let t=0;const oir=(e:Event)=>{setAviso(String((e as CustomEvent).detail||''));clearTimeout(t);t=window.setTimeout(()=>setAviso(''),4500);};
+   window.addEventListener('low3d:aviso',oir);return()=>{clearTimeout(t);window.removeEventListener('low3d:aviso',oir);};},[]);
  const toggle=(p:Panel)=>{setPanel(old=>old===p?null:p);setMenu(false);setHelp(false);};
  useEffect(()=>{
    const sync=()=>{const e=engine.current;if(e){setView(e.currentView());setHistory(e.historyState());setJoystick(e.getJoystick());}};
@@ -74,7 +79,7 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
        <button className="studio-text-button" onClick={()=>toggle('brush')} aria-pressed={panel==='brush'}>Pincel</button>
        <button className="studio-text-button" onClick={()=>toggle('guides')} aria-pressed={panel==='guides'}>Guías</button>
        <button className="studio-text-button" onClick={()=>toggle('scene')} aria-pressed={panel==='scene'}><StudioIcon name="layers"/>Escena <span className="studio-count">{state.objects.length}</span></button>
-       <button className="studio-text-button" data-panel="persp" title="Esquemas de perspectiva para dibujar fondos en el 2D" onClick={()=>toggle('persp')} aria-pressed={panel==='persp'}>Perspectiva</button>
+       <button className="studio-text-button" data-panel="persp" title="La cámara del layout: altura de los ojos, encuadre, lente y el cuadro del 2D" onClick={()=>toggle('persp')} aria-pressed={panel==='persp'}>Cámara</button>
        <button className="studio-text-button" data-panel="toma" title="Toma: la cámara animada que saca los fondos para el 2D (en JPG o PNG)" onClick={()=>toggle('toma')} aria-pressed={panel==='toma'}>Toma</button>
        {iconButton('sun',dark?'Usar fondo claro':'Usar fondo oscuro',onTheme)}
        {iconButton('help','Ayuda y atajos (?)',()=>{setHelp(v=>!v);setMenu(false);},help)}
@@ -89,20 +94,20 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <span className="studio-rail-divider"/>
      <button title="Todas las herramientas" aria-label="Todas las herramientas" aria-pressed={panel==='tools'} onClick={()=>toggle('tools')}><StudioIcon name="more"/><span>Más</span></button>
    </nav>
-   <div className="studio-context" aria-live="polite"><strong>{active?.name||({'pencil-free':'Dibujo libre',select:'Editar puntos',scissors:'Tijera',fill:'Relleno',circle:'Círculo',poly:'Polígono'} as Record<string,string>)[state.currentTool]}</strong><span>{active?.hint||'Elegí las opciones de la herramienta en el inspector'}</span></div>
+   <div className={'studio-context'+(aviso?' is-aviso':'')} aria-live="polite"><strong>{active?.name||({'pencil-free':'Dibujo libre',select:'Editar puntos',scissors:'Tijera',fill:'Relleno',circle:'Círculo',poly:'Polígono'} as Record<string,string>)[state.currentTool]}</strong><span>{aviso||active?.hint||'Elegí las opciones de la herramienta en el inspector'}</span></div>
    {state.currentTool==='move'&&<div className="studio-transform-strip studio-surface" aria-label="Transformación de selección">
      {(['translate','rotate','scale'] as const).map((mode,i)=><button key={mode} aria-pressed={state.gizmoMode===mode&&!joystick} onClick={()=>{engine.current?.setJoystick(false);setJoystick(false);state.setGizmoMode(mode);}}>{['Mover','Rotar','Escalar'][i]}</button>)}
      <button aria-pressed={joystick} onClick={()=>{engine.current?.setJoystick(!joystick);setJoystick(!joystick);}}>Joystick</button>
    </div>}
    {panel&&<aside className="studio-inspector studio-surface" aria-label="Inspector 3D">
-     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Perspectiva para layouts',toma:'Toma: fondos para el 2D'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
+     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Cámara del layout',toma:'Toma: fondos para el 2D'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
      <div className="studio-inspector-content">
        {panel==='tools'&&<Toolbar3D engine={engine}/>}
        {panel==='persp'&&<PerspectivaPanel3D engine={engine}/>}
        {panel==='toma'&&<TomaPanel3D engine={engine}/>}
        {panel==='brush'&&<PropertiesPanel3D section="brush"/>}
        {panel==='guides'&&<><div className="studio-guide-tools"><p>Una superficie orienta los trazos en el espacio.</p><div className="studio-option-grid">{(['plane','cylinder','sphere','torus','loft'] as const).map((type,i)=><button key={type} aria-pressed={state.activeSurface?.type===type} onClick={()=>state.setActiveSurface(state.activeSurface?.type===type?null:{type,params:{}})}>{['Plano','Cilindro','Esfera','Toro','Loft'][i]}</button>)}</div><label>Visibilidad de guías <output>{guideOpacity}%</output><input aria-label="Visibilidad de guías" type="range" min="0" max="100" value={guideOpacity} onChange={e=>onGuideOpacity(Number(e.target.value))}/></label><button className="studio-text-button" onClick={()=>engine.current?.deleteGuide()}>Quitar última guía</button></div><PropertiesPanel3D section="surface"/></>}
-       {panel==='scene'&&<><div className="studio-scene-section"><h3>Objetos</h3><ObjectList3D engine={engine}/><div className="studio-selection-actions"><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.groupSelection()}>Agrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.ungroupSelection()}>Desagrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.solidifySelection()}>Crear volumen</button></div></div><div className="studio-scene-section"><h3>Capas</h3><LayerManager3D engine={engine}/></div></>}
+       {panel==='scene'&&<><div className="studio-scene-section"><h3>Objetos</h3><ObjectList3D engine={engine}/><div className="studio-selection-actions"><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.groupSelection()}>Agrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.ungroupSelection()}>Desagrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.solidifySelection()}>Crear volumen</button></div><RepetirPanel3D engine={engine}/></div><div className="studio-scene-section"><h3>Capas</h3><LayerManager3D engine={engine}/></div></>}
      </div>
    </aside>}
    <div className="studio-brush-strip studio-surface">

@@ -40,6 +40,30 @@ async function abrir(url) {
 const w = (ms) => new Promise((r) => setTimeout(r, ms));
 const mal = (m, d) => { throw Error("REGRESIÓN: " + m + " :: " + JSON.stringify(d)); };
 
+/* Un cuadriculado de 5 + 5 rectas sobre el piso, dibujado con el mouse en
+   Perspectiva: cada extremo del mundo se proyecta a la pantalla con la cámara
+   del estudio y se arrastra de uno a otro. */
+async function pisoDibujado(send, ev) {
+  await ev(`__low3d.setView("persp"); const e = __low3d; e.camera.position.set(0, 9, 16); e.controls.target.set(0, 0, 0);
+    e.camera.lookAt(e.controls.target); e.controls.update(); true`);
+  await w(200);
+  const segs = [];
+  for (const x of [-6, -3, 0, 3, 6]) segs.push([[x, 0, -6], [x, 0, 6]]);
+  for (const z of [-6, -3, 0, 3, 6]) segs.push([[-6, 0, z], [6, 0, z]]);
+  for (const [a, b] of segs) {
+    const [pa, pb] = await ev(`(()=>{ const e = __low3d, r = e.canvasElement().getBoundingClientRect(), c = e.camera;
+      return [${JSON.stringify(a)}, ${JSON.stringify(b)}].map(p => { const v = new c.position.constructor(...p).project(c);
+        return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; }); })()`);
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: pa.x, y: pa.y });
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: pa.x, y: pa.y, button: "left", buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 12; i++) await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: pa.x + (pb.x - pa.x) * i / 12, y: pa.y + (pb.y - pa.y) * i / 12, button: "left", buttons: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: pb.x, y: pb.y, button: "left", buttons: 0, clickCount: 1 });
+    await w(60);
+  }
+  const n = await ev(`__low3d.strokes.length`);
+  if (n < 10) mal("no se pudo dibujar el cuadriculado sobre el piso en Perspectiva", { trazos: n });
+}
+
 /* en el estudio: tocar el panel como lo toca una persona */
 const AYUDA = `
   window.__t = {
@@ -64,8 +88,9 @@ async function main() {
     if (r.exceptionDetails) throw Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result?.value; };
   for (let i = 0; i < 80; i++) { if (await ev("!!window.__low3d").catch(() => false)) break; await w(250); }
   await ev(`try{localStorage.clear()}catch(e){}; __low3d.newProject(); ${AYUDA}; true`);
-  // algo que fotografiar: la calle de la perspectiva, con sus fachadas
-  await ev(`__low3d.setPerspectiva({ activa: true, esquema: "manzana", puntos: 2 }); true`); await w(300);
+  // algo que fotografiar: un cuadriculado DIBUJADO sobre el piso, con el mouse
+  // (hasta v3.29.2 la escena se llenaba con el esquema «Manzana», que ya no existe)
+  await pisoDibujado(send, ev);
   await ev(`document.querySelector('[data-panel="toma"]').click(); true`); await w(300);
   if (!(await ev(`!!document.querySelector(".toma3d")`))) mal("no está el panel «Toma» en el estudio", {});
   await ev(`__t.poner("Cuadros de la toma", 24)`); await w(100);
@@ -92,13 +117,13 @@ async function main() {
   if (en6.pos[2] > K1.pos[2] + 1e-6 || en6.pos[2] < K12.pos[2] - 1e-6) mal("la curva se pasa de largo (va para atrás)", en6);
 
   // 3. render JPG
-  const fotos = await ev(`(async()=>{ const r = await __low3d.tomaRender([1, 12, 24], 640, 360, { formato: "jpg", calidad: 0.85, lineas: true });
+  const fotos = await ev(`(async()=>{ const r = await __low3d.tomaRender([1, 12, 24], 640, 360, { formato: "jpg", calidad: 0.85 });
     const medir = (d) => new Promise(ok => { const im = new Image(); im.onload = () => ok({ w: im.naturalWidth, h: im.naturalHeight }); im.src = d; });
     return { tipos: r.map(x => x.data.slice(0, 15)), tam: await Promise.all(r.map(x => medir(x.data))), distintos: new Set(r.map(x => x.data)).size, kb: r.map(x => Math.round(x.data.length * 3 / 4 / 1024)) }; })()`);
   if (fotos.tipos.some((x) => x !== "data:image/jpeg")) mal("los fondos no salen en JPG", fotos.tipos);
   if (fotos.tam.some((s) => s.w !== 640 || s.h !== 360)) mal("los fondos no tienen el tamaño del cuadro", fotos.tam);
   if (fotos.distintos !== 3) mal("los tres cuadros de la toma dan la misma imagen (la cámara no se movió en el render)", fotos);
-  const png = await ev(`(async()=>{ const r = await __low3d.tomaRender([1], 64, 36, { formato: "png", lineas: true }); return r[0].data.slice(0, 14); })()`);
+  const png = await ev(`(async()=>{ const r = await __low3d.tomaRender([1], 64, 36, { formato: "png" }); return r[0].data.slice(0, 14); })()`);
   if (png !== "data:image/png") mal("el formato PNG no sale en PNG", png);
 
   // 4. Ctrl+Z y el proyecto
@@ -132,7 +157,7 @@ async function main() {
     await w(400);
   };
   await mandar();
-  await evIframe(`try{localStorage.clear()}catch(e){}; __low3d.newProject(); __low3d.setPerspectiva({ activa: true, esquema: "manzana", puntos: 2 }); true`);
+  await evIframe(`try{localStorage.clear()}catch(e){}; __low3d.newProject(); true`);
   await w(300);
   let nota = "";
   for (let i = 0; i < 20; i++) { nota = await evIframe(`[...document.querySelectorAll(".toma3d .persp3d-nota")].map(n=>n.textContent).join(" | ")`); if (nota.includes(doc.w + "×" + doc.h)) break; await w(150); }
@@ -142,7 +167,6 @@ async function main() {
   await evIframe(`__t.poner("Cuadro", 1)`); await evIframe(`__t.camara(${JSON.stringify(K1.pos)}, ${JSON.stringify(K1.mira)})`); await evIframe(`__t.boton("Clave aquí")`);
   await evIframe(`__t.poner("Cuadro", 24)`); await evIframe(`__t.camara(${JSON.stringify(K24.pos)}, ${JSON.stringify(K24.mira)})`); await evIframe(`__t.boton("Clave aquí")`);
   await evIframe(`__t.poner("Cada cuántos cuadros", 4)`); await w(150);
-  await evIframe(`document.querySelector(".toma3d-check input").click(); true`); await w(100);   // con las líneas: que haya algo que fotografiar
   const rotulo = await evIframe(`document.querySelector(".toma3d-mandar").textContent`);
   if (!rotulo.includes("6 fondos")) mal("el botón no dice cuántos fondos va a mandar", rotulo);
   await evIframe(`__t.boton("Mandar la toma al 2D")`);

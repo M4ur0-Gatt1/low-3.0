@@ -1,12 +1,12 @@
 /* REPETIR HACIA LA FUGA EN EL ESTUDIO 3D. CDP :9223 + mock :8791.
-
    Pedido de Mauro (v3.29): «en la perspectiva estaría bueno tener una función
    de repetición en la fuga, que si yo la activo repita el mismo edificio hacia
-   atrás». Con el mouse de verdad, en la Calle de 1 punto:
-   1. Se dibuja un «edificio» (dos trazos agrupados) sobre la fachada.
-   2. Panel Perspectiva → Medir → Repetir (4 copias): aparecen 4 copias del
-      grupo, cada una corrida la misma distancia hacia el fondo (−Z), sobre la
-      misma fachada, y cada copia es su propio grupo.
+   atrás». Desde v3.29.3 vive en el panel Escena (era del panel de perspectiva,
+   que ya no tiene esquemas) y se dibuja sobre el PISO. Con el mouse de verdad:
+   1. Se dibuja la planta de un «edificio» (dos trazos agrupados) en el piso.
+   2. Escena → Medir → Repetir (4 copias): 4 copias del grupo, cada una corrida
+      la misma distancia hacia el fondo (−Z), en el piso, y cada copia es su
+      propio grupo.
    3. En pantalla se achican hacia el punto de fuga (es perspectiva de verdad).
    4. Un Ctrl+Z las saca todas. */
 const endpoint = process.argv[2] || "http://127.0.0.1:9223";
@@ -44,14 +44,27 @@ async function main() {
     await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: r.x, y: r.y, button: "left", buttons: 0, clickCount: 1 });
     await w(250);
   };
-  /** Cada trazo: su caja en el mundo, su grupo y su alto en pantalla. */
+  /** Del mundo a la pantalla, con la cámara del estudio. */
+  const aPantalla = (p) => ev(`(()=>{ const e = __low3d, r = e.canvasElement().getBoundingClientRect(), c = e.camera;
+    const v = new c.position.constructor(...${JSON.stringify(p)}).project(c); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; })()`);
+  const enPiso = async (a, b) => { const A = await aPantalla(a), B = await aPantalla(b); await trazo(A.x, A.y, B.x - A.x, B.y - A.y); };
+  const clicTexto = async (texto) => {
+    const r = await ev(`(()=>{ const b = [...document.querySelectorAll("button")].find(b => b.textContent.trim().startsWith(${JSON.stringify(texto)})); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+    if (!r) mal("falta el botón " + texto, {});
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: r.x, y: r.y, buttons: 0 });
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: r.x, y: r.y, button: "left", buttons: 1, clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: r.x, y: r.y, button: "left", buttons: 0, clickCount: 1 });
+    await w(250);
+  };
+  /** Cada trazo: su centro en el mundo, su grupo y su tamaño en pantalla (el lado más largo). */
   const trazos = () => ev(`(()=>{ const e = __low3d, cam = e.camera, V = cam.position.constructor, B = new (e.scene.position.constructor === V ? Object : Object)();
     const r2 = v => Math.round(v * 100) / 100;
     return e.strokes.filter(s => s.kind === "stroke").map(s => { s.object.updateMatrixWorld(true);
       const pts = s.points.map(p => s.object.localToWorld(p.clone()));
-      const ys = pts.map(p => p.clone().project(cam)).map(n => (1 - n.y) / 2 * e.canvas.clientHeight);
+      const ns = pts.map(p => p.clone().project(cam)), W = e.canvas.clientWidth, H = e.canvas.clientHeight;
+      const xs = ns.map(n => (n.x + 1) / 2 * W), ys = ns.map(n => (1 - n.y) / 2 * H);
       return { id: s.id, grupo: s.groupId || null, x: r2(pts.reduce((a, p) => a + p.x, 0) / pts.length), z: r2(pts.reduce((a, p) => a + p.z, 0) / pts.length),
-        alto: r2(Math.max(...ys) - Math.min(...ys)) }; }); })()`);
+        y: r2(Math.max(...pts.map(p => Math.abs(p.y)))), alto: r2(Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))) }; }); })()`);
 
   await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable");
   await send("Network.setCacheDisabled", { cacheDisabled: true });
@@ -59,22 +72,22 @@ async function main() {
   await send("Page.navigate", { url });
   for (let i = 0; i < 80; i++) { if (await ev("!!window.__low3d").catch(() => false)) break; await w(250); }
   await ev(`try{localStorage.clear()}catch(e){}; __low3d.newProject(); document.querySelector('[data-tool="pencil"]').click();
-    __low3d.setPerspectiva({ activa: true, esquema: "calle", puntos: 1, giro: 0, inclinacion: 0, altura: 1.6 }); true`);
+    __low3d.setView("persp"); const e = __low3d; e.camera.position.set(0, 3, 8); e.controls.target.set(0, 0, 0); e.camera.lookAt(e.controls.target); e.controls.update(); true`);
   await w(500);
 
-  // ── 1. un «edificio» de dos trazos sobre la fachada derecha, agrupado
-  await trazo(1150, 200, 0, 200);
-  await trazo(1175, 230, 50, 20);            // al lado: arrancar ENCIMA del primero lo usaría de apoyo
+  // ── 1. la planta de un «edificio»: dos trazos en el piso, a la derecha, agrupados
+  await enPiso([3, 0, 1], [6, 0, 1]);
+  await enPiso([3, 0, -1], [6, 0, -1]);
   let t = await trazos();
-  if (t.length !== 2 || t.some(s => Math.abs(s.x - 8) > 0.3)) mal("no quedó el edificio sobre la fachada", t);
+  if (t.length !== 2 || t.some(s => s.y > 0.05 || Math.abs(s.x - 4.5) > 0.4)) mal("no quedó la planta del edificio en el piso", t);
   // elegir los dos y agrupar
   await ev(`(()=>{ document.querySelector('[data-tool="move"]').click(); const e = __low3d; e.setSelection(e.strokes.filter(s => s.kind === "stroke")); e.groupSelection(); return e.selectedCount(); })()`);
   t = await trazos();
   if (!t[0].grupo || t[0].grupo !== t[1].grupo) mal("no se agrupó el edificio", t);
   const grupoOriginal = t[0].grupo;
 
-  // ── 2. panel → Medir → 4 copias → Repetir
-  await clicEn('[data-panel="persp"]');
+  // ── 2. Escena → Medir → 4 copias → Repetir
+  await clicTexto("Escena");
   await clicEn('.persp3d-repetir .persp3d-boton:not(.persp3d-repetir-ya)');   // Medir
   const medido = await ev(`({ eje: document.querySelector('[aria-label="Eje de la repetición"]').value, sep: +document.querySelector('[aria-label="Separación en metros"]').value })`);
   if (medido.eje !== "z" || !(medido.sep > 0)) mal("Medir no eligió el eje del fondo o no sugirió una separación", medido);
@@ -91,7 +104,7 @@ async function main() {
   for (let k = 1; k < zs.length; k++) {
     const paso = zs[k - 1].z - zs[k].z;
     if (Math.abs(paso - medido.sep) > 0.05) mal("las copias no van cada " + medido.sep + " m hacia el fondo", zs);
-    if (Math.abs(zs[k].x - 8) > 0.3) mal("una copia se salió de la fachada", zs[k]);
+    if (Math.abs(zs[k].x - zs[0].x) > 0.05 || porGrupo.get(zs[k].g).some(s => s.y > 0.05)) mal("una copia se corrió de costado o se despegó del piso", zs[k]);
     // ── 3. perspectiva de verdad: cada copia se ve más chica que la anterior
     if (!(zs[k].alto < zs[k - 1].alto)) mal("las copias no se achican hacia el punto de fuga", zs);
   }

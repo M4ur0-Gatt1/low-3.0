@@ -1,14 +1,15 @@
-/* DIBUJAR SOBRE LA PERSPECTIVA DEL ESTUDIO 3D. CDP :9223 + mock :8791.
-
-   Reportado por Mauro después de la v3.26: «el sistema 3D lo dejaste todo roto,
-   no se puede dibujar en las perspectivas». Dos causas, con el mouse de verdad:
-   1. En perspectiva el estudio sólo dibuja sobre una superficie, y las líneas
-      del esquema son dibujo: sobre la calle no pasaba nada. Ahora el piso, las
-      paredes y el techo del esquema son soporte: un trazo sobre el piso queda
-      en el piso (y = 0) y uno sobre la fachada, en la fachada (x = 8).
-   2. Con el panel Perspectiva abierto, al soltar cada trazo el panel releía la
-      cámara y te devolvía a la vista perspectiva: no se podía dibujar en Frente.
-   Y sin la perspectiva de layout, todo sigue como antes (se dibuja con un plano). */
+/* DIBUJAR EN PERSPECTIVA EN EL ESTUDIO 3D: EL PISO ES APOYO. CDP :9223 + mock :8791.
+   Historia: en v3.26 sólo se podía dibujar en perspectiva sobre las caras de un
+   «esquema» (Calle, Habitación). En v3.29.3 los esquemas se fueron (Mauro: «de lo
+   más inútil y tiene mucho ruido») y, como en Feather, el PISO es la primera
+   superficie. Medido antes: arrastrar sobre la cuadrícula no dibujaba NADA y el
+   aviso iba a un tooltip que no se veía. Con el mouse de verdad:
+   0. Sin guías, en perspectiva: un trazo sobre el piso queda en el piso (y = 0).
+   1. Mirando al cielo no hay dónde apoyar: no se dibuja y el aviso SE VE.
+   2. Un trazo que arranca en la PUNTA de otro sigue en el piso (no toma la
+      inclinación del tubo del trazo anterior).
+   3. En la vista Arriba, una planta se dibuja EN el piso (y = 0), no flotando.
+   4. Con el panel Cámara abierto, dibujar en Frente NO te devuelve a perspectiva. */
 const endpoint = process.argv[2] || "http://127.0.0.1:9223";
 const url = process.argv[3] || "http://127.0.0.1:8791/ui/estudio3d/index.html";
 
@@ -51,46 +52,61 @@ async function main() {
   await ev(`try{localStorage.clear()}catch(e){}; __low3d.newProject(); document.querySelector('[data-tool="pencil"]').click(); true`);
   await w(300);
 
-  // ── 0. sin perspectiva de layout: en perspectiva sin soporte no se dibuja (como siempre)
-  await trazo(600, 600, 160, 0);
-  if ((await ultimo()).n !== 0) mal("sin soporte, en perspectiva no debería dibujarse (regla del estudio)", await ultimo());
+  const vista = (v) => ev(`(()=>{ const s = document.querySelector('[aria-label="Vista de cámara"]'); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+  /** Del mundo a la pantalla, con la cámara del estudio. */
+  const aPantalla = (p) => ev(`(()=>{ const e = __low3d, r = e.canvasElement().getBoundingClientRect(), c = e.camera;
+    const v = new c.position.constructor(...${JSON.stringify(p)}).project(c); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; })()`);
+  /** El último trazo, punto por punto, en el mundo. */
+  const puntos = () => ev(`(()=>{ const p = __low3d.exportProject(), s = p.strokes.at(-1); if (!s) return [];
+    return s.points.map(q => [q[0] + s.position[0], q[1] + s.position[1], q[2] + s.position[2]]); })()`);
 
-  // ── 1. Calle, 1 punto, SIN plano ni guía: el piso y la fachada son soporte
-  await ev(`(()=>{ __low3d.setPerspectiva({ activa: true, esquema: "calle", puntos: 1, giro: 0, inclinacion: 0, altura: 1.6 }); return true; })()`);
-  await w(500);
-  await trazo(560, 600, 240, 0);                      // abajo del horizonte, en el medio: el piso
+  // ── 0. sin guías, en perspectiva: el piso es apoyo
+  await trazo(560, 600, 240, -20);
   let t = await ultimo();
-  if (t.n !== 1) mal("sobre el piso de la calle no se pudo dibujar", t);
-  if (Math.abs(t.y[0]) > 0.2 || Math.abs(t.y[1]) > 0.2) mal("el trazo sobre el piso no quedó en el piso (y = 0)", t);
-  await trazo(1150, 250, 0, 160);                     // a la derecha, arriba: la fachada (x = 8)
-  t = await ultimo();
-  if (t.n !== 2) mal("sobre la fachada no se pudo dibujar", t);
-  if (Math.abs(t.x[0] - 8) > 0.3 || Math.abs(t.x[1] - 8) > 0.3) mal("el trazo sobre la fachada no quedó en la fachada (x = 8)", t);
+  if (t.n !== 1) mal("en perspectiva, sobre el piso, no se pudo dibujar", t);
+  if (Math.abs(t.y[0]) > 0.05 || Math.abs(t.y[1]) > 0.05) mal("el trazo sobre el piso no quedó en el piso (y = 0)", t);
 
-  // ── 2. con el panel abierto, dibujar en Frente NO te devuelve a perspectiva
+  // ── 1. mirando al cielo: no se dibuja, y el aviso se ve
+  const horizonte = await ev(`(()=>{ const e = __low3d, r = e.canvasElement().getBoundingClientRect(), c = e.camera;
+    const f = new c.position.constructor(); c.getWorldDirection(f); f.y = 0; f.normalize();
+    const v = c.position.clone().add(f.multiplyScalar(5000)).project(c); return r.top + (1 - v.y) / 2 * r.height; })()`);
+  await trazo(600, Math.max(140, horizonte - 120), 160, 0);
+  if ((await ultimo()).n !== 1) mal("mirando al cielo se dibujó algo (no hay dónde apoyar)", await ultimo());
+  const aviso = await ev(`(()=>{ const c = document.querySelector(".studio-context"); return { clase: c.className, texto: c.textContent }; })()`);
+  if (!/is-aviso/.test(aviso.clase) || !/no hay dónde apoyar/i.test(aviso.texto)) mal("arrastrar sin apoyo no dijo por qué (el aviso no se ve)", aviso);
+
+  // ── 2. arrancar en la punta del trazo anterior: sigue en el piso
+  const punta = (await puntos()).at(-1);
+  const P = await aPantalla(punta);
+  await trazo(P.x, P.y, -60, 140);
+  const seguido = await puntos();
+  if ((await ultimo()).n !== 2) mal("arrancando en la punta de un trazo no se dibujó", await ultimo());
+  const fuera = Math.max(...seguido.map(q => Math.abs(q[1])));
+  if (fuera > 0.05) mal("el trazo que arranca en la punta de otro se despegó del piso (tomó el tubo)", { yMax: +fuera.toFixed(3) });
+
+  // ── 3. en la vista Arriba, la planta va EN el piso
+  await vista("top"); await w(400);
+  await trazo(500, 350, 200, 60);
+  t = await ultimo();
+  if (t.n !== 3) mal("en la vista Arriba no se dibujó", t);
+  if (Math.abs(t.y[0]) > 0.05 || Math.abs(t.y[1]) > 0.05) mal("en la vista Arriba la planta quedó flotando sobre el piso", t);
+
+  // ── 4. con el panel Cámara abierto, dibujar en Frente NO te devuelve a perspectiva
   await ev(`(()=>{ document.querySelector('[data-panel="persp"]').click(); return true; })()`); await w(300);
-  await ev(`(()=>{ const s = document.querySelector('[aria-label="Vista de cámara"]'); s.value = "front"; s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
-  await w(400);
+  await vista("front"); await w(400);
   if ((await ev(`__low3d.currentView()`)) !== "front") mal("no se pudo pasar a la vista Frente", {});
   await trazo(300, 400, 150, 30);
   await w(300);
-  const vista = await ev(`__low3d.currentView()`);
-  if (vista !== "front") mal("con el panel Perspectiva abierto, dibujar en Frente te devolvió a " + vista, {});
+  const enVista = await ev(`__low3d.currentView()`);
+  if (enVista !== "front") mal("con el panel Cámara abierto, dibujar en Frente te devolvió a " + enVista, {});
   t = await ultimo();
-  if (t.n !== 3) mal("en Frente, con la perspectiva de layout prendida, no se dibujó", t);
-
-  // ── 3. Habitación: el piso, el techo y la pared del fondo
-  await ev(`(()=>{ document.querySelector('[aria-label="Cerrar inspector"]')?.click(); __low3d.setPerspectiva({ activa: true, esquema: "habitacion", puntos: 1, giro: 0, inclinacion: 0, altura: 1.5 }); return true; })()`);
-  await w(500);
-  await trazo(620, 380, 120, 0);                      // al centro: la pared del fondo (z = -8)
-  t = await ultimo();
-  if (t.n !== 4 || Math.abs(t.z[0] + 8) > 0.3 || Math.abs(t.z[1] + 8) > 0.3) mal("en la habitación, el trazo al fondo no quedó en la pared del fondo", t);
+  if (t.n !== 4) mal("en Frente, con el panel Cámara abierto, no se dibujó", t);
 
   ws.close();
   try { await fetch(endpoint + "/json/close/" + target.id); } catch (_) { }
   const graves = errores.filter(e => !/ResizeObserver/.test(String(e)));
   if (graves.length) mal("hubo excepciones", graves.slice(0, 3));
-  console.log("E2E dibujar sobre la perspectiva 3D OK");
+  console.log("E2E dibujar en perspectiva sobre el piso del 3D OK");
 }
 
 main().catch(e => { console.error(e.stack || String(e)); process.exit(1); });

@@ -1,24 +1,26 @@
-/* 🏙 PERSPECTIVA PARA LAYOUTS EN EL ESTUDIO 3D, Y «MANDAR AL 2D».
+/* 🏙 LA CÁMARA DEL LAYOUT EN EL ESTUDIO 3D, Y «MANDAR AL 2D».
    CDP :9223 + mock :8791.
 
-   Pedido de Mauro (v3.26): «que tire muchas líneas de punto de fuga ya
-   predefinidos, con 1, 2 o 3; que se pueda cambiar el horizonte, girar la
-   vista; que tenga esquemas para exteriores e interiores», vinculado al 2D.
-
+   Historia: en v3.26 el panel «Perspectiva» armaba esquemas (Calle, Manzana,
+   Habitación) con cientos de líneas de colores. En v3.29.3 Mauro: «esa vista de
+   calle es de lo más inútil y tiene mucho ruido». Ahora el panel es «Cámara»:
+   sin esquemas; el espacio se arma con el piso, guías y cajas, y la cámara en
+   perspectiva hace fugar todo sola.
    A. En el estudio suelto:
-      1. El panel «Perspectiva» prende el esquema «Calle» con cientos de líneas.
-      2. EXACTITUD: cada recta del esquema, proyectada, pasa por su punto de fuga
-         (a menos de medio píxel). Con 1 punto fuga sólo Z, en el centro.
-      3. 2 puntos: fugan X y Z sobre el mismo horizonte, la vertical no fuga.
-         3 puntos: fugan los tres.
-      4. El horizonte (altura de los ojos) y el giro mueven la cámara; el giro
-         corre los puntos de fuga.
+      1. El panel «Cámara» no arma NINGUNA línea (cero ruido) y, con el cuadro
+         del 2D prendido, se ven el marco y el horizonte.
+      2. EXACTITUD: rectas paralelas a cada eje, proyectadas, pasan por el punto
+         de fuga marcado (a menos de medio píxel). De frente fuga sólo Z, en el
+         centro; la cámara NO salta a otro lugar al elegir un encuadre.
+      3. En esquina: fugan X y Z sobre el mismo horizonte, la vertical no fuga.
+         Desde arriba y desde abajo: fugan los tres.
+      4. La altura de los ojos y el giro mueven la cámara; el giro corre los
+         puntos de fuga.
       5. Se guarda con el proyecto (.low3d) y vuelve igual.
-   B. Dentro de LOW:
-      6. El estudio pide el tamaño del cuadro del 2D.
-      7. «Mandar al 2D» crea la capa de calco «Layout 3D» AL FONDO, con la
-         imagen del tamaño del cuadro, y la perspectiva de la escena pasa a ser
-         la de la cámara (mismos puntos, con su eje).
+   B. Dentro de LOW («Mandar este encuadre al 2D», en el panel Toma):
+      6. El estudio recibe el tamaño del cuadro del 2D.
+      7. Crea la capa de calco «Layout 3D» AL FONDO, con la imagen del tamaño
+         del cuadro, y la perspectiva de la escena pasa a ser la de la cámara.
       8. Volver a mandar REEMPLAZA el layout (no apila capas); Ctrl+Z vuelve. */
 const endpoint = process.argv[2] || "http://127.0.0.1:9223";
 const base = process.argv[3] || "http://127.0.0.1:8791/ui/";
@@ -63,11 +65,11 @@ const AYUDA = `
       const vp = { x: +c.getAttribute("cx"), y: +c.getAttribute("cy") };
       const fwd = new V(); cam.getWorldDirection(fwd);
       const k = { x: 0, y: 1, z: 2 }[eje], signo = fwd.getComponent(k) >= 0 ? 1 : -1;
-      const lineas = e.persp3d.group.children.find((l) => l.userData.eje === eje);
-      const pos = lineas.geometry.getAttribute("position");
+      // rectas paralelas al eje, en una grilla alrededor de la cámara
       let peor = 0, medidas = 0;
-      for (let s = 0; s < pos.count; s += 2) {
-        const p = new V(pos.getX(s), pos.getY(s), pos.getZ(s));
+      const otros = [0, 1, 2].filter((x) => x !== k);
+      for (const u of [-12, -6, -2, 2, 6, 12]) for (const v of [-12, -6, -2, 2, 6, 12]) {
+        const p = cam.position.clone(); p.setComponent(otros[0], p.getComponent(otros[0]) + u); p.setComponent(otros[1], p.getComponent(otros[1]) + v);
         const a = p.clone(), b = p.clone();
         a.setComponent(k, cam.position.getComponent(k) + signo * 60);
         b.setComponent(k, cam.position.getComponent(k) + signo * 400);
@@ -90,12 +92,21 @@ async function main() {
     if (r.exceptionDetails) throw Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result?.value; };
   for (let i = 0; i < 80; i++) { if (await ev("!!window.__low3d").catch(() => false)) break; await w(250); }
   await ev(`try{localStorage.clear()}catch(e){}; __low3d.newProject(); ${AYUDA}`);
+  const boton = await ev(`document.querySelector('[data-panel="persp"]').textContent.trim()`);
+  if (boton !== "Cámara") mal("el botón del panel no se llama «Cámara»", { boton });
   await ev(`document.querySelector('[data-panel="persp"]').click()`); await w(250);
-  if (!(await ev(`!!document.querySelector(".persp3d")`))) mal("el botón Perspectiva no abre el panel", {});
-  await ev(`__t.boton("Calle")`); await ev(`__t.boton("1 punto")`); await w(500);
-  let st = await ev(`({ a: __low3d.getPerspectiva(), lineas: __low3d.lineasDePerspectiva(), hz: !!__low3d.vpEl.querySelector('[data-p="horizonte"]'), marco: !!__low3d.vpEl.querySelector('[data-p="marco"]') })`);
-  if (!st.a.activa || st.a.esquema !== "calle" || st.lineas < 300) mal("«Calle» no armó el esquema", st);
+  if (!(await ev(`!!document.querySelector(".persp3d")`))) mal("el botón Cámara no abre el panel", {});
+  for (const viejo of ["Calle", "Manzana", "Habitación", "Sólo líneas", "Muchas líneas"])
+    if (await ev(`[...document.querySelectorAll(".persp3d button")].some(b => b.textContent.includes(${JSON.stringify(viejo)}))`)) mal("quedó un esquema viejo en el panel: " + viejo, {});
+  const antesXZ = await ev(`[__low3d.camera.position.x, __low3d.camera.position.z]`);
+  await ev(`__t.boton("De frente")`); await w(500);
+  let st = await ev(`({ a: __low3d.getPerspectiva(), lineas: __low3d.lineasDePerspectiva(), hijos: __low3d.persp3d.group.children.length,
+    hz: !!__low3d.vpEl.querySelector('[data-p="horizonte"]'), marco: !!__low3d.vpEl.querySelector('[data-p="marco"]'),
+    rayos: __low3d.vpEl.querySelectorAll('g[data-p^="vp-"] line').length, xz: [__low3d.camera.position.x, __low3d.camera.position.z] })`);
+  if (!st.a.activa) mal("«De frente» no prendió el cuadro del 2D", st);
+  if (st.lineas !== 0 || st.hijos !== 0 || st.rayos !== 0) mal("quedó ruido de líneas en la vista", st);
   if (!st.hz || !st.marco) mal("no se ven el horizonte ni el marco del cuadro", st);
+  if (Math.abs(st.xz[0] - antesXZ[0]) > 1e-6 || Math.abs(st.xz[1] - antesXZ[1]) > 1e-6) mal("elegir un encuadre hizo saltar la cámara a otro lugar", { antesXZ, despues: st.xz });
 
   // 2. exactitud con 1 punto: fuga sólo Z, en el centro del cuadro
   let ex = await ev(`__t.exactitud("z")`);
@@ -106,22 +117,25 @@ async function main() {
   if (r1.paralelas !== 2 || !r1.png.startsWith("data:image/png")) mal("faltan las paralelas o la imagen", r1);
 
   // 3. dos y tres puntos
-  await ev(`__t.boton("Manzana")`); await ev(`__t.boton("2 puntos")`); await w(400);
+  await ev(`__t.boton("En esquina")`); await w(400);
   const ex2 = { x: await ev(`__t.exactitud("x")`), z: await ev(`__t.exactitud("z")`) };
-  if (ex2.x.sinPunto || ex2.z.sinPunto || ex2.x.peor > 0.5 || ex2.z.peor > 0.5 || ex2.x.medidas < 10) mal("con 2 puntos las rectas no fugan exacto", ex2);
+  if (ex2.x.sinPunto || ex2.z.sinPunto || ex2.x.peor > 0.5 || ex2.z.peor > 0.5 || ex2.x.medidas < 10) mal("en esquina las rectas no fugan exacto", ex2);
   const r2 = await ev(`__low3d.mandarAl2D(1920, 1080)`);
   const ejes2 = r2.vps.map(v => v.eje).sort().join("");
   if (ejes2 !== "xz" || Math.abs(r2.vps[0].y - r2.vps[1].y) > 0.5) mal("2 puntos: X y Z tienen que fugar sobre el mismo horizonte", r2.vps);
   if (r2.paralelas.length !== 1 || Math.abs(r2.paralelas[0].ux) > 0.01) mal("2 puntos: la vertical tiene que quedar vertical", r2.paralelas);
-  await ev(`__t.boton("3 puntos")`); await w(400);
-  const r3 = await ev(`__low3d.mandarAl2D(1920, 1080).vps.map(v => v.eje).sort().join("")`);
-  if (r3 !== "xyz") mal("3 puntos: tienen que fugar los tres ejes", r3);
-  const ex3 = await ev(`__t.exactitud("y")`);
-  if (ex3.sinPunto || ex3.peor > 0.5) mal("3 puntos: las verticales no fugan exacto", ex3);
+  let r3 = "";
+  for (const desde of ["Desde arriba", "Desde abajo"]) {
+    await ev(`__t.boton(${JSON.stringify(desde)})`); await w(400);
+    r3 = await ev(`__low3d.mandarAl2D(1920, 1080).vps.map(v => v.eje).sort().join("")`);
+    if (r3 !== "xyz") mal(desde + ": tienen que fugar los tres ejes", r3);
+    const ex3 = await ev(`__t.exactitud("y")`);
+    if (ex3.sinPunto || ex3.peor > 0.5) mal(desde + ": las verticales no fugan exacto", ex3);
+  }
 
   // 4. horizonte y giro
-  await ev(`__t.boton("2 puntos")`); await w(200);
-  await ev(`__t.rango("Horizonte (altura de los ojos)", 7.5)`); await w(250);
+  await ev(`__t.boton("En esquina")`); await w(200);
+  await ev(`__t.rango("Altura de los ojos (horizonte)", 7.5)`); await w(250);
   st = await ev(`({ y: __low3d.camera.position.y, a: __low3d.getPerspectiva() })`);
   if (Math.abs(st.y - 7.5) > 1e-6 || st.a.altura !== 7.5) mal("el horizonte no subió la cámara", st);
   const antesGiro = await ev(`__low3d.mandarAl2D(1920, 1080).vps.find(v => v.eje === "z").x`);
@@ -134,7 +148,7 @@ async function main() {
   const vuelta = await ev(`(()=>{ const p = __low3d.exportProject(); const guardado = p.settings.perspectiva;
     __low3d.newProject(); const limpio = __low3d.getPerspectiva().activa;
     __low3d.importProject(JSON.parse(JSON.stringify(p))); return { guardado, limpio, vuelve: __low3d.getPerspectiva(), y: __low3d.camera.position.y }; })()`);
-  if (!vuelta.guardado || vuelta.guardado.esquema !== "manzana" || vuelta.limpio) mal("la perspectiva no se guarda o un proyecto nuevo la conserva", vuelta);
+  if (!vuelta.guardado || !vuelta.guardado.activa || vuelta.limpio) mal("la cámara del layout no se guarda o un proyecto nuevo la conserva", vuelta);
   if (!vuelta.vuelve.activa || vuelta.vuelve.giro !== 20 || Math.abs(vuelta.y - 7.5) > 1e-6) mal("al abrir el proyecto la perspectiva no vuelve igual", vuelta);
   const errA = pag.errores.filter(e => !/ResizeObserver/.test(String(e)));
   await pag.cerrar();
@@ -160,9 +174,11 @@ async function main() {
   let nota = "";
   for (let i = 0; i < 20; i++) { nota = await evIframe(`[...document.querySelectorAll(".persp3d-nota")].map(n=>n.textContent).join(" | ")`); if (nota.includes(doc.w + "×" + doc.h)) break; await w(150); }
   if (!nota.includes(doc.w + "×" + doc.h)) mal("el estudio no recibió el tamaño del cuadro del 2D", { nota, doc });
-  await evIframe(`__t.boton("Calle")`); await evIframe(`__t.boton("2 puntos")`); await w(300);
+  await evIframe(`__t.boton("En esquina")`); await w(300);
   const esperado = await evIframe(`__low3d.mandarAl2D(${doc.w}, ${doc.h}).vps`);
-  await evIframe(`__t.boton("Mandar al 2D")`);
+  // «Mandar este encuadre al 2D» vive en el panel Toma
+  await evIframe(`document.querySelector('[data-panel="toma"]').click()`); await w(400);
+  await evIframe(`__t.boton("Mandar este encuadre al 2D")`);
   let rec = null;
   for (let i = 0; i < 40; i++) {
     rec = await evHost(`(()=>{ const sc = DZ.doc.scene, ly = sc.layers[0], lv = ly && sc.level(ly.levelId), d = lv && lv.byNumber(1);
@@ -196,8 +212,10 @@ async function main() {
 
   // 8. volver a mandar reemplaza; Ctrl+Z vuelve
   await evHost(`openL3d()`); await w(300);
+  await evIframe(`document.querySelector('[data-panel="persp"]').click()`); await w(300);
   await evIframe(`__t.rango("Girar la vista", -25)`); await w(200);
-  await evIframe(`__t.boton("Mandar al 2D")`); await w(800);
+  await evIframe(`document.querySelector('[data-panel="toma"]').click()`); await w(300);
+  await evIframe(`__t.boton("Mandar este encuadre al 2D")`); await w(800);
   const dos = await evHost(`({ capas: DZ.doc.scene.layers.length, layouts: DZ.doc.scene.levels.filter(l => l.drawings.some(d => /data-low="layout-3d"/.test(d.content))).length, vp: DZ.doc.scene.perspective.vps.map(v => Math.round(v.x)) })`);
   if (dos.capas !== doc.capas + 1 || dos.layouts !== 1) mal("volver a mandar apiló otra capa en vez de reemplazar", dos);
   await evHost(`(()=>{ DZ.doc.history.undo(); DZ.doc.history.undo(); return true; })()`);
@@ -210,7 +228,7 @@ async function main() {
   const errB = pag.errores.filter(e => !/ResizeObserver/.test(String(e)));
   await pag.cerrar();
   if (errB.length) mal("excepciones en LOW", errB.slice(0, 3));
-  console.log("E2E perspectiva 3D OK " + JSON.stringify({ lineasCalle: st.lineas, exactitud1: +ex.peor.toFixed(3),
+  console.log("E2E cámara del layout 3D OK " + JSON.stringify({ lineas: st.lineas, exactitud1: +ex.peor.toFixed(3),
     exactitud2: [+ex2.x.peor.toFixed(3), +ex2.z.peor.toFixed(3)], ejes3: r3, layout: tam }));
 }
 

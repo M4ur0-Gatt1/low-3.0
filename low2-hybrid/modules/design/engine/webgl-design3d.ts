@@ -24,7 +24,7 @@ import { Joystick3D, type JoyMode } from './joystick3d';
 import { NavCubo3D, type NavVista } from './navcubo3d';
 import { frameGeometry } from './frame-content';
 import { Perspectiva3D, AJUSTES_INICIALES, ajustesValidos, posicionCamara, leerCamara, marcoEnVista,
-  fovVista, fovRender, puntosDeFuga, pintarSuperposicion, direccion, soporte as soporteEsquema, type Perspectiva3DAjustes,
+  fovVista, fovRender, puntosDeFuga, pintarSuperposicion, direccion, type Perspectiva3DAjustes,
   type PuntoDeFuga, type Eje } from './perspectiva3d';
 import { TOMA_INICIAL, tomaValida, ponerClave, quitarClave, camaraEn, type Toma3D, type V3 } from './toma3d';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
@@ -83,6 +83,12 @@ interface StrokeRecord {
    *  cortar, liquify, reabrir el proyecto) — antes se reusaba `this.brush`
    *  actual y un trazo viejo se repintaba con el pincel de ahora. */
   brush: BrushSettings;
+  /** EL PLANO SOBRE EL QUE SE DIBUJÓ (piso, cara, guía), en coordenadas LOCALES
+   *  del objeto: [nx, ny, nz, constante]. Si otro trazo arranca encima de éste,
+   *  sigue en ESTE plano y no en la inclinación de su tubo. MEDIDO antes
+   *  (v3.29.3): arrancar en la punta de una línea del piso despegaba la nueva
+   *  hasta 1,07 m. Viaja con el proyecto y sigue al objeto si se lo mueve. */
+  apoyo?: [number, number, number, number];
 }
 
 interface Command {
@@ -123,6 +129,7 @@ export interface Low3DProject {
     /** true = volumen: se reconstruye con buildSolidMesh a partir de `points`. */
     solid?: boolean;
     shape?: 'rect' | 'circle' | 'poly';
+    apoyo?: number[];
     /** true = la figura lleva cara sólida ADEMÁS del contorno (una sola pieza). */
     filled?: boolean;
   }>;
@@ -746,7 +753,8 @@ export class WebGLDesign3D {
     this.persp3d.actualizar(a, this.theme === 'dark');
     if (opciones.mover !== false && a.activa && this.view === 'persp') {
       if ((a.activa && !antes.activa) || toca('esquema') || toca('puntos')) {
-        const { pos, target } = posicionCamara(a);
+        // desde DONDE ESTÁ la cámara: ya no hay una «estación» por esquema
+        const { pos, target } = posicionCamara(a, this.camera.position.x, this.camera.position.z);
         this.camera.position.copy(pos);
         this.controls.target.copy(target);
       } else if (toca('altura') || toca('giro') || toca('inclinacion')) {
@@ -808,9 +816,10 @@ export class WebGLDesign3D {
    *  superficies-guía son ayudas del 3D: no van al layout. */
   mandarAl2D(W: number, H: number): { png: string; width: number; height: number; vps: PuntoDeFuga[];
     paralelas: { ux: number; uy: number; eje: Eje }[]; ajustes: Perspectiva3DAjustes } | null {
-    if (!this.perspAjustes.activa || !(W > 0) || !(H > 0)) return null;
+    // sin pedir que el marco esté prendido: lo que se ve en Perspectiva, con su lente
+    if (!(W > 0) || !(H > 0) || this.view !== 'persp') return null;
     this.detachRig();
-    const cam = new THREE.PerspectiveCamera(fovRender(this.perspAjustes.lente, W / H), W / H,
+    const cam = new THREE.PerspectiveCamera(fovRender(this.lenteActual(), W / H), W / H,
       this.perspCamera.near, this.perspCamera.far);
     cam.position.copy(this.perspCamera.position);
     cam.quaternion.copy(this.perspCamera.quaternion);
@@ -1610,8 +1619,16 @@ export class WebGLDesign3D {
         let obj: THREE.Object3D | null = h.object;
         while (obj?.parent && obj.parent !== this.strokesGroup && obj.parent !== this.surfacesGroup && obj.parent !== this.guidesGroup) obj = obj.parent;
         const target = obj ?? h.object;
-        const isStroke = !!this.strokes.find((s) => s.object === target || s.object === target.parent);
+        const recTocado = this.strokes.find((s) => s.object === target || s.object === target.parent);
+        const isStroke = !!recTocado;
         const isGuide = !!this.guides.find((g) => g.mesh === target || g.mesh === h.object);
+        // arrancar encima de un trazo: su PLANO DE APOYO, no la normal del tubo
+        const plano = recTocado ? this.planoDeApoyo(recTocado) : null;
+        if (plano) {
+          const n = plano.normal.clone();
+          if (n.dot(this.raycaster.ray.direction) > 0) n.negate();
+          return { point: plano.projectPoint(h.point, new THREE.Vector3()), normal: n, target, plane: plano, kind: 'stroke' };
+        }
         return { point: h.point.clone(), normal, target, kind: isGuide ? 'guide' : isStroke ? 'stroke' : 'surface' };
       }
     }
@@ -1632,17 +1649,24 @@ export class WebGLDesign3D {
     // único y evidente (es dibujar sobre "papel" en esa vista). Ahí se permite
     // el plano de cámara y, al soltar, `noSupport` auto-genera la guía real
     // desde el propio trazo — el flujo de Feather.
-    // LA PERSPECTIVA PARA LAYOUTS da dónde apoyar: el piso, las paredes y el
-    // techo de su esquema. Sin esto, sobre la calle o la habitación no se podía
-    // dibujar en perspectiva (las líneas del esquema son dibujo, no superficie).
-    if (this.tool !== 'guide' && this.view === 'persp' && this.perspAjustes.activa) {
-      const s = soporteEsquema(this.perspAjustes.esquema, this.raycaster.ray);
-      if (s) return { point: s.point, normal: s.normal, plane: s.plane, kind: 'surface' };
+    // EL PISO es apoyo siempre (v3.29.3). Medido: en Perspectiva, sin guía,
+    // arrastrar sobre la cuadrícula del piso no dibujaba NADA y no decía por
+    // qué. Como en Feather, el suelo es la primera superficie: el trazo cae
+    // en y = 0. Sólo si el rayo baja hacia el piso (mirando al cielo no hay
+    // dónde apoyar) y no lo roza de canto (lejísimos, en el horizonte, un
+    // pixel serían cientos de metros).
+    if (this.tool !== 'guide' && this.view === 'persp') {
+      return this.pisoBajoElCursor();
     }
-    if (this.tool !== 'guide' && this.view === 'persp') return null;
     const camDir = new THREE.Vector3();
     (this.camera as THREE.Camera).getWorldDirection(camDir);
-    this.fallbackPlane.setFromNormalAndCoplanarPoint(camDir.clone().negate(), this.controls.target);
+    // Desde ARRIBA o desde ABAJO el plano de la vista es el PISO (y = 0): pasaba
+    // por el punto de mira de la cámara (y = 0,6) y una planta dibujada desde
+    // arriba quedaba flotando 60 cm sobre el piso. Sigue siendo un plano fijo de
+    // esa vista (la regla de ortogonal): sólo cambia a qué altura está.
+    const base = this.view === 'top' || this.view === 'bottom'
+      ? new THREE.Vector3(this.controls.target.x, 0, this.controls.target.z) : this.controls.target;
+    this.fallbackPlane.setFromNormalAndCoplanarPoint(camDir.clone().negate(), base);
     const p = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(this.fallbackPlane, p)) {
       // `noSupport` dispara la auto-creación de una guía al soltar (ver
@@ -1653,6 +1677,38 @@ export class WebGLDesign3D {
       return { point: p.clone(), normal: this.fallbackPlane.normal.clone(), noSupport: this.view === 'persp', plane: this.fallbackPlane.clone(), kind: 'fallback' };
     }
     return null;
+  }
+
+  /** Un plano del mundo para guardar en un trazo NUEVO (su grupo nace en el
+   *  origen, así que local y mundo coinciden en ese momento). */
+  private apoyoDe(plano?: THREE.Plane | null): [number, number, number, number] | undefined {
+    if (!plano) return undefined;
+    const v = [plano.normal.x, plano.normal.y, plano.normal.z, plano.constant];
+    return v.every(Number.isFinite) ? v as [number, number, number, number] : undefined;
+  }
+  /** El plano de apoyo de un trazo, en el MUNDO (sigue al objeto movido). */
+  private planoDeApoyo(rec: StrokeRecord): THREE.Plane | null {
+    if (!rec.apoyo) return null;
+    rec.object.updateMatrixWorld(true);
+    const [x, y, z, c] = rec.apoyo;
+    return new THREE.Plane(new THREE.Vector3(x, y, z), c).applyMatrix4(rec.object.matrixWorld);
+  }
+
+  /** El piso (y = 0) bajo el cursor, o null si el rayo no baja hacia él o lo
+   *  toca casi de canto (más allá de 300 m). */
+  private pisoBajoElCursor(): { point: THREE.Vector3; normal: THREE.Vector3; plane: THREE.Plane; kind: 'surface' } | null {
+    const ray = this.raycaster.ray;
+    if (ray.direction.y > -1e-4 || ray.origin.y <= 1e-4) return null;
+    const plano = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const p = new THREE.Vector3();
+    if (!ray.intersectPlane(plano, p) || p.distanceTo(ray.origin) > 300) return null;
+    return { point: p, normal: new THREE.Vector3(0, 1, 0), plane: plano, kind: 'surface' };
+  }
+  /** Un aviso que SE VE (lo muestra el estudio arriba de la vista). Antes los
+   *  avisos iban al `title` del lienzo: un tooltip que casi nunca aparece, y
+   *  por eso «arrastrar y que no pase nada» no decía por qué. */
+  avisar(texto: string): void {
+    window.dispatchEvent(new CustomEvent('low3d:aviso', { detail: texto }));
   }
 
   // ---------------------------------------------------------------- dibujo libre ("en el aire")
@@ -2521,7 +2577,8 @@ export class WebGLDesign3D {
         // canto y el rayo del lápiz corre paralelo a ella. Decirlo, en vez del
         // mensaje genérico de "no hay guía" — que confunde, porque sí hay.
         ? 'La guía está de canto desde esta vista: orbitá (arrastrá) para verla de frente y dibujar sobre ella'
-        : 'Creá o activá una guía antes de dibujar';
+        : 'Acá no hay dónde apoyar el trazo: dibujá sobre el piso, una guía o una caja (o pasá a una vista de frente o de costado)';
+      this.avisar(this.canvas.title);
       this.cursorEl.style.borderColor = '#ff4d4d';
       setTimeout(() => { this.canvas.title = ''; this.cursorEl.style.borderColor = '#333'; }, 1400);
       return;
@@ -3328,6 +3385,7 @@ export class WebGLDesign3D {
       fill: conContorno ? undefined : true,
       filled: conRelleno && conContorno ? true : undefined,
       layerId: this.activeLayerId(), baseOpacity: this.brush.opacity, brush: { ...this.brush },
+      apoyo: this.apoyoDe(s.plane),
     };
     group.userData.strokeId = rec.id;
     this.addStrokeRecord(rec);
@@ -3349,6 +3407,7 @@ export class WebGLDesign3D {
       (l.material as THREE.Material).dispose();
     }
     let { points, pressures } = this.current;
+    const apoyo = this.apoyoDe(this.current.drawPlane);
     const { kind, baseNormal, noSupport, surfaceId } = this.current;
     this.current = null;
     if (points.length < 2) return;
@@ -3387,6 +3446,7 @@ export class WebGLDesign3D {
     const rec: StrokeRecord = {
       id: `stroke-${this.seq++}`, object: group, points, pressures, kind,
       layerId: this.activeLayerId(), baseOpacity: this.brush.opacity, brush: { ...this.brush },
+      apoyo: kind === 'stroke' ? apoyo : undefined,
     };
     group.userData.strokeId = rec.id;
     this.addStrokeRecord(rec);
@@ -5267,7 +5327,7 @@ export class WebGLDesign3D {
         quaternion: rec.object.quaternion.toArray(), scale: rec.object.scale.toArray(),
         brush: { ...rec.brush }, fill: rec.fill || undefined, filled: rec.filled || undefined,
         groupId: rec.groupId || undefined, solid: rec.solid || undefined,
-        shape: rec.shape || undefined,
+        shape: rec.shape || undefined, apoyo: rec.apoyo || undefined,
       })),
       // las guías también son parte del proyecto: sin ellas, al reabrir se
       // perdía el andamiaje sobre el que estabas dibujando.
@@ -5323,6 +5383,12 @@ export class WebGLDesign3D {
       } else {
         const tube = this.buildTube(points, pressures, brush, !!item.shape);
         if (tube) group.add(tube);
+        // una FIGURA con contorno y cara (`filled`) volvía sólo con el contorno:
+        // la cara se rearma igual que al crearla (endShape)
+        if (item.filled) {
+          const cara = this.buildFillMesh(points, brush);
+          if (cara) { cara.userData.esRelleno = true; group.add(cara); }
+        }
       }
       group.position.fromArray(item.position || [0, 0, 0]);
       group.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
@@ -5338,6 +5404,8 @@ export class WebGLDesign3D {
       rec.solid = item.solid || undefined;
       rec.shape = item.shape || undefined;
       rec.groupId = item.groupId || undefined;
+      if (Array.isArray(item.apoyo) && item.apoyo.length === 4 && item.apoyo.every((v: unknown) => Number.isFinite(Number(v))))
+        rec.apoyo = item.apoyo.map(Number) as [number, number, number, number];
       this.addStrokeRecord(rec);
     }
     // guías: se reconstruyen desde su trazo de origen + eje de extrusión
@@ -5364,6 +5432,17 @@ export class WebGLDesign3D {
     // la perspectiva vuelve como estaba, SIN mover la cámara que se acaba de restaurar
     this.setPerspectiva(ajustesValidos(doc.settings?.perspectiva), { mover: false });
     this.toma = tomaValida(doc.settings?.toma); this.avisarToma();
+    // IDS QUE NO SE REPITEN: los trazos y grupos vuelven con su id guardado
+    // («stroke-12», «grp-3»…), pero el contador arrancaba de nuevo. Como el
+    // estudio restaura el autoguardado al abrirse, el primer trazo nuevo volvía
+    // a ser «stroke-0» y chocaba con uno existente. El contador sigue después
+    // del número más alto que haya.
+    let mayor = -1;
+    const numero = (id?: string) => { const m = /-(\d+)$/.exec(id || ''); if (m) mayor = Math.max(mayor, Number(m[1])); };
+    for (const rec of this.strokes) { numero(rec.id); numero(rec.groupId); }
+    for (const g of this.guides) numero((g as { id?: string }).id);
+    for (const k of this.groupNames.keys()) numero(k);
+    this.seq = Math.max(this.seq, mayor + 1);
     this.applyLayerStyles();
     this.undoStack = [];
     this.redoStack = [];

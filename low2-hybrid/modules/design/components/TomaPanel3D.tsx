@@ -7,7 +7,10 @@ import { cuadrosARender, TOMA_INICIAL, type Toma3D } from '../engine/toma3d';
    clave… y la cámara pasa entre claves por una curva suave. «Mandar la toma
    al 2D» renderiza los cuadros (en unos, en dos o en tres) como JPG o PNG y
    llegan a una capa de fondo de la escena, cada uno en su cuadro.
-   La lógica vive en engine/toma3d.ts y en el motor; esto sólo la maneja. */
+   La lógica vive en engine/toma3d.ts y en el motor; esto sólo la maneja.
+   v3.29.3: también «Mandar este encuadre al 2D» (un solo fondo, con sus
+   puntos de fuga para el imán del 2D), que antes estaba en el panel de
+   perspectiva. Ya no hay «líneas de la perspectiva» que mandar. */
 
 const enLOW = () => window.parent !== window;
 
@@ -15,7 +18,7 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
   const [toma, setToma] = useState<Toma3D>(() => engine.current?.getToma() ?? TOMA_INICIAL);
   const [cuadro, setCuadro] = useState(1);
   const [marco, setMarco] = useState({ w: 1920, h: 1080, fps: 24, doc: false });
-  const [op, setOp] = useState<{ cada: number; formato: 'jpg' | 'png'; calidad: number; lineas: boolean }>({ cada: 2, formato: 'jpg', calidad: 90, lineas: false });
+  const [op, setOp] = useState<{ cada: number; formato: 'jpg' | 'png'; calidad: number }>({ cada: 2, formato: 'jpg', calidad: 90 });
   const [aviso, setAviso] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [jugando, setJugando] = useState(false);
@@ -31,6 +34,8 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
         const e = engine.current;
         // la toma dura lo que la escena del 2D, mientras nadie la haya cambiado a mano
         if (e && m.cuadros && m.cuadros > 1 && e.getToma().cuadros === TOMA_INICIAL.cuadros && !e.getToma().claves.length) setToma(e.setToma({ cuadros: m.cuadros }));
+      } else if (m.type === 'low:sent-to-2d') {
+        setAviso(m.error ? 'No se pudo mandar: ' + m.error : 'Listo: el encuadre está en el 2D, con sus puntos de fuga');
       } else if (m.type === 'low:toma-recibida') {
         setOcupado(false);
         setAviso(m.error ? 'No se pudo mandar: ' + m.error : (m.aviso || 'Listo: los fondos están en el 2D'));
@@ -72,6 +77,16 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
       if (f > toma.cuadros) parar();
     }, 1000 / Math.max(1, marco.fps));
   };
+  /** Un solo fondo: lo que se ve ahora en Perspectiva, del tamaño del cuadro
+   *  del 2D, con los puntos de fuga en esos píxeles (el 2D los usa para el imán). */
+  const mandarEncuadre = () => {
+    const e = engine.current; if (!e) return;
+    if (!enLOW()) { setAviso('Abrí el estudio desde LOW (botón 3D) para mandar el encuadre al 2D'); return; }
+    const r = e.mandarAl2D(marco.w, marco.h);
+    if (!r) { setAviso('Pasá a la vista Perspectiva para mandar el encuadre'); return; }
+    setAviso('Mandando al 2D…');
+    window.parent.postMessage({ type: 'low:send-to-2d', ...r }, '*');
+  };
   const mandar = async () => {
     const e = engine.current; if (!e || ocupado) return;
     if (!enLOW()) { setAviso('Abrí el estudio desde LOW (botón 3D) para mandar la toma al 2D'); return; }
@@ -79,7 +94,7 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
     parar();
     setOcupado(true);
     const cuadros = cuadrosARender(toma, op.cada);
-    const fotos = await e.tomaRender(cuadros, marco.w, marco.h, { formato: op.formato, calidad: op.calidad / 100, lineas: op.lineas },
+    const fotos = await e.tomaRender(cuadros, marco.w, marco.h, { formato: op.formato, calidad: op.calidad / 100 },
       (h, n) => setAviso(`Renderizando ${h} de ${n}…`));
     if (!fotos.length) { setOcupado(false); setAviso('No se pudo renderizar la toma'); return; }
     setAviso('Mandando al 2D…');
@@ -115,10 +130,10 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
         <option value="jpg">JPG (liviano)</option><option value="png">PNG (transparente)</option></select></label>
       {op.formato === 'jpg' && <label>Calidad<input type="number" aria-label="Calidad JPG" min={50} max={100} value={op.calidad}
         onChange={(ev) => setOp({ ...op, calidad: Math.max(50, Math.min(100, Number(ev.target.value) || 90)) })}/></label>}
-      <label className="toma3d-check"><input type="checkbox" checked={op.lineas} onChange={(ev) => setOp({ ...op, lineas: ev.target.checked })}/> Con las líneas de la perspectiva</label>
     </div>
     <button className="persp3d-boton persp3d-repetir-ya toma3d-mandar" disabled={ocupado} onClick={mandar}>
       {ocupado ? 'Trabajando…' : `Mandar la toma al 2D (${cuadrosARender(toma, op.cada).length} fondos)`}</button>
+    <button className="persp3d-boton toma3d-encuadre" onClick={mandarEncuadre} title="Un solo fondo: lo que se ve ahora, con sus puntos de fuga para dibujar encima en el 2D">Mandar este encuadre al 2D</button>
     <p className="persp3d-nota">Cuadro del 2D: {marco.w}×{marco.h} · {marco.fps} cuadros por segundo{marco.doc ? '' : ' · abrí un documento de animación en LOW'}</p>
     {aviso && <p className="persp3d-aviso" role="status">{aviso}</p>}
   </div>;
