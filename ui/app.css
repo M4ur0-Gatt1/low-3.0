@@ -1684,6 +1684,9 @@ body:not(.light) .dz3d-coords { color: #F4F4F2; }
 .dz-lay-row.active-layer { box-shadow:inset 2px 0 0 var(--accent, #F0450E); }
 .dz-lay-row.active-layer .dz-layer-t::after { content:" •"; color:var(--accent, #F0450E); }
 .dz-lay-row.dz-dropover { outline: 1.5px dashed var(--cyan); outline-offset: -2px; }
+/* la lista no se arma entera (panels/capas-tope.js): el resto, a pedido */
+.dz-lay-mas { display:block; width:100%; margin:4px 0 2px; padding:5px 6px; border:1px dashed var(--line); border-radius:6px; background:transparent; color:var(--faint); font:500 10.5px 'JetBrains Mono', monospace; text-align:left; cursor:pointer; }
+.dz-lay-mas:hover { color:var(--txt); background:var(--panel2); }
 .dz-layer-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
 .dz-eye { text-align: center; font-size: 10px; }

@@ -247,6 +247,7 @@ jobs:
           node tools/check_cebolla_ui.js
           node tools/check_borrar_dibujo_ui.js
           node tools/check_reproduccion_fluida_ui.js
+          node tools/check_capas_tope_ui.js
           node tools/check_taller_vector_ui.js
           node tools/check_rig_flujo_ui.js
           node tools/check_riel_herramientas_ui.js
