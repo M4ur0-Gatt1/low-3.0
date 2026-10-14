@@ -105,6 +105,12 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
 
   const enClave = toma.claves.some((k) => k.cuadro === cuadro);
   return <div className="persp3d toma3d">
+    {/* un fondo solo (lo más común): arriba de todo. Medido en la app real a
+        1366×705: abajo del panel quedaba fuera de la vista y había que hacer scroll */}
+    <h3>Un fondo</h3>
+    <label className="toma3d-check" title="Las cajas son andamio y no salen al 2D. Con esto salen como volúmenes grises, de referencia para dibujar encima"><input type="checkbox" checked={op.cajas} onChange={(ev) => setOp({ ...op, cajas: ev.target.checked })}/> Con las cajas (gris)</label>
+    <button className="persp3d-boton toma3d-encuadre" onClick={mandarEncuadre} title="Un solo fondo: lo que se ve ahora, con sus puntos de fuga para dibujar encima en el 2D">Mandar este encuadre al 2D</button>
+    <h3>Toma animada</h3>
     <p className="persp3d-nota">Mové la vista (en Perspectiva), elegí el cuadro y poné una clave. La cámara pasa de clave en clave por una curva suave.</p>
     <label className="toma3d-fila">Nombre<input aria-label="Nombre de la toma" value={toma.nombre} maxLength={60}
       onChange={(ev) => { const e = engine.current; if (e) setToma(e.setToma({ nombre: ev.target.value })); }}/></label>
@@ -134,8 +140,7 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
     </div>
     <button className="persp3d-boton persp3d-repetir-ya toma3d-mandar" disabled={ocupado} onClick={mandar}>
       {ocupado ? 'Trabajando…' : `Mandar la toma al 2D (${cuadrosARender(toma, op.cada).length} fondos)`}</button>
-    <label className="toma3d-check" title="Las cajas son andamio y no salen al 2D. Con esto salen como volúmenes grises, de referencia para dibujar encima"><input type="checkbox" checked={op.cajas} onChange={(ev) => setOp({ ...op, cajas: ev.target.checked })}/> Con las cajas (gris)</label>
-    <button className="persp3d-boton toma3d-encuadre" onClick={mandarEncuadre} title="Un solo fondo: lo que se ve ahora, con sus puntos de fuga para dibujar encima en el 2D">Mandar este encuadre al 2D</button>
+
     <p className="persp3d-nota">Cuadro del 2D: {marco.w}×{marco.h} · {marco.fps} cuadros por segundo{marco.doc ? '' : ' · abrí un documento de animación en LOW'}</p>
     {aviso && <p className="persp3d-aviso" role="status">{aviso}</p>}
   </div>;
