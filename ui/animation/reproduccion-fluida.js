@@ -72,6 +72,15 @@
     estado.lienzo = c;
     return c;
   }
+  /** El color de la hoja: el del papel del documento, o el fondo del svg, o blanco. */
+  function fondoDeHoja() {
+    const svg = hojaSvg();
+    const papel = svg && svg.querySelector("rect[data-low-page]");
+    const f = papel && papel.getAttribute("fill");
+    if (f && f !== "none" && !/^transparent$/i.test(f)) return f;
+    const bg = svg && getComputedStyle(svg).backgroundColor;
+    return bg && !/rgba\([^)]*,\s*0\)|transparent/i.test(bg) ? bg : "#ffffff";
+  }
   function ocultar() { if (estado.lienzo) estado.lienzo.hidden = true; estado.mostrado = null; }
 
   /** Muestra el cuadro f si está listo. Devuelve si lo mostró. */
@@ -84,6 +93,13 @@
     if (c.width !== t.w) c.width = t.w;
     if (c.height !== t.h) c.height = t.h;
     const g = c.getContext("2d");
+    // BORRAR y poner la hoja ANTES de cada imagen. En v3.29.1 sólo se pintaba
+    // encima: con los dibujos de una escena real —el papel está en el dibujo 1 y
+    // los que se crean después son transparentes— la reproducción ACUMULABA todos
+    // los cuadros, y por los huecos se veía la hoja vieja de abajo.
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = fondoDeHoja();
+    g.fillRect(0, 0, c.width, c.height);
     g.drawImage(bmp, 0, 0, c.width, c.height);
     c.hidden = false; estado.mostrado = f;
     return true;

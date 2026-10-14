@@ -70,7 +70,9 @@ async function main() {
           t+='<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' q'+(azar()*80-40).toFixed(1)+' '+(azar()*80-40).toFixed(1)+' '+(azar()*120-60).toFixed(1)+' '+(azar()*120-60).toFixed(1)+'" fill="none" stroke="#222" stroke-width="'+(2+azar()*6).toFixed(1)+'"/>';}
         // marca de cuadro: un círculo lleno que se corre en x
         t+='<circle cx="'+(100+f*35)+'" cy="560" r="60" fill="#d01010"/>';
-        const n=d.level.addDrawing(d.level.nextNumber(),papel+'<g data-low-art="colour"></g><g data-low-art="line">'+t+'</g>');d.setCell(f,n.number);}
+        // el PAPEL va sólo en el dibujo 1, como en una escena real: los dibujos que se
+        // crean después nacen transparentes (así se apilaban en v3.29.1)
+        const n=d.level.addDrawing(d.level.nextNumber(),(f===1?papel:'')+'<g data-low-art="colour"></g><g data-low-art="line">'+t+'</g>');d.setCell(f,n.number);}
       d.setPlaybackRange(1,48);d.scene.fps=24;d.goTo(1);d.emit('level');DZ.history.clear();await new Promise(r=>setTimeout(r,600));})()`);
     assert.equal(await ev("!!document.querySelector('#dzCanvas > svg rect[data-low-page]')"), true, "la hoja tiene que tener papel, como un documento real");
 
@@ -93,14 +95,19 @@ async function main() {
     assert.ok(con.pintados >= 44, "con los cuadros listos igual se corta: " + con.pintados + " de 48");
     assert.ok(con.imagenes > 20, "reproduciendo no se mostró la imagen pre-renderizada: " + JSON.stringify(con));
     assert.equal(con.malas, 0, "la imagen mostrada no era la del cuadro que tocaba: " + JSON.stringify(con));
-    // la imagen es la del cuadro: el círculo rojo está donde va en ese cuadro
+    // la imagen es la del cuadro: el círculo rojo está donde va en ese cuadro.
+    // Se muestra ANTES el cuadro 30: en v3.29.1 cada imagen se pintaba encima de la
+    // anterior sin borrarla y, con dibujos transparentes, la reproducción acumulaba
+    // todos los cuadros (reportado por Mauro con captura).
     const pixel = await ev(`(async()=>{const R=LOW.animation.reproduccionFluida;DZ.doc.goTo(10);
-      R.mostrar(10);const c=document.getElementById("dzReproFluida");
+      R.mostrar(30);R.mostrar(10);const c=document.getElementById("dzReproFluida");
       const svg=document.querySelector('#dzCanvas > svg'),vb=svg.viewBox.baseVal,k=c.width/vb.width;
       const g=c.getContext('2d');const en=(x)=>Array.from(g.getImageData(Math.round((x-vb.x)*k),Math.round((560-vb.y)*k),1,1).data);
-      const r={aca:en(100+10*35),alla:en(100+30*35)};R.ocultar();return r;})()`);
+      const fondo=Array.from(g.getImageData(Math.round((1700-vb.x)*k),Math.round((200-vb.y)*k),1,1).data);
+      const r={aca:en(100+10*35),alla:en(100+30*35),fondo};R.ocultar();return r;})()`);
     assert.ok(pixel.aca[0] > 150 && pixel.aca[1] < 90, "la imagen del cuadro 10 no tiene su marca roja: " + JSON.stringify(pixel));
-    assert.ok(!(pixel.alla[0] > 150 && pixel.alla[1] < 90), "la imagen del cuadro 10 tiene la marca de otro cuadro: " + JSON.stringify(pixel));
+    assert.ok(!(pixel.alla[0] > 150 && pixel.alla[1] < 90), "la reproducción ACUMULA cuadros: mostrando el 10 sigue la marca del 30: " + JSON.stringify(pixel));
+    assert.equal(pixel.fondo[3], 255, "la imagen del cuadro es transparente: deja ver la hoja vieja de abajo: " + JSON.stringify(pixel));
 
     // 3. al parar se ve la hoja real
     await ev(`(async()=>{DZ.doc.goTo(1);await new Promise(r=>setTimeout(r,200));})()`);
