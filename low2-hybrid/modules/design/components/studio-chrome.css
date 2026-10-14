@@ -61,6 +61,9 @@
 .studio-guide-tools input { display:block;width:100%;margin:12px 0; }
 .studio-brush-strip { position:absolute;bottom:42px;left:104px;height:50px;display:flex;align-items:center;gap:14px;padding:8px 12px; }
 .studio-brush-strip input[type=color] { width:27px;height:28px;border:0;background:none;padding:0;cursor:pointer; }
+/* rectas a los ejes: prendido en el naranja de LOW, apagado tachado */
+.studio-brush-strip .studio-fuga[aria-pressed="true"] { color:#F0450E;font-weight:700; }
+.studio-brush-strip .studio-fuga[aria-pressed="false"] { text-decoration:line-through;opacity:.6; }
 .studio-brush-strip input[type=color]::-webkit-color-swatch-wrapper { padding:2px; }
 .studio-brush-strip input[type=color]::-webkit-color-swatch { border:1px solid var(--studio-line);border-radius:50%; }
 .studio-brush-strip label { display:flex;align-items:center;gap:10px;font-size:11px;color:var(--studio-muted); }

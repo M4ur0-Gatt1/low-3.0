@@ -48,6 +48,10 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
  const active=tools.find(t=>t.id===state.currentTool);
  // los avisos del motor (p. ej. «acá no hay dónde apoyar») se VEN unos segundos en la barra de contexto
  const [aviso,setAviso]=useState('');
+ // RECTAS A LOS EJES (imán de fuga): se ve y se apaga desde la barra del pincel
+ const [fuga,setFuga]=useState(true);
+ useEffect(()=>{const sync=()=>{const e=engine.current;if(e)setFuga(e.getImanFuga());};sync();const t=window.setTimeout(sync,0);
+   window.addEventListener('low3d:fuga',sync);return()=>{clearTimeout(t);window.removeEventListener('low3d:fuga',sync);};},[engine]);
  useEffect(()=>{let t=0;const oir=(e:Event)=>{setAviso(String((e as CustomEvent).detail||''));clearTimeout(t);t=window.setTimeout(()=>setAviso(''),4500);};
    window.addEventListener('low3d:aviso',oir);return()=>{clearTimeout(t);window.removeEventListener('low3d:aviso',oir);};},[]);
  const toggle=(p:Panel)=>{setPanel(old=>old===p?null:p);setMenu(false);setHelp(false);};
@@ -115,6 +119,8 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <input type="color" aria-label="Color del pincel" value={state.brushSettings.color} onChange={e=>state.setBrushSettings({...state.brushSettings,color:e.target.value})}/>
      <label>Tamaño<input aria-label="Tamaño del pincel" type="range" min="1" max="100" value={state.brushSettings.size} onChange={e=>state.setBrushSettings({...state.brushSettings,size:Number(e.target.value)})}/><output>{state.brushSettings.size}</output></label>
      <button title="Ajustes de pincel" onClick={()=>toggle('brush')}>{Math.round(state.brushSettings.opacity*100)}%<span> opacidad</span></button>
+     <button className="studio-fuga" aria-pressed={fuga} title={fuga?'Rectas a los ejes: una línea casi recta, al soltarla, va exacta por la arista o el eje de su superficie y fuga sola. Shift o apagarlo: queda como la dibujaste':'Rectas a los ejes apagado: las líneas quedan como las dibujaste'}
+       onClick={()=>{const e=engine.current;if(e){e.setImanFuga(!fuga);setFuga(!fuga);}}}>Rectas a los ejes</button>
    </div>
    <div className="studio-view-strip studio-surface">
      <select aria-label="Vista de cámara" value={view} onChange={e=>{engine.current?.setView(e.target.value as ViewName);setView(e.target.value as ViewName);}}>{Object.entries(viewNames).map(([v,label])=><option value={v} key={v}>{label}</option>)}</select>

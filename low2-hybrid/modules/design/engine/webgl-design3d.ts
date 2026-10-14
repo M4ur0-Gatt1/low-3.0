@@ -256,8 +256,24 @@ export class WebGLDesign3D {
      *  genérico (sin guía ni superficie real de apoyo) — dispara la
      *  auto-creación de guía al cerrar el trazo, ver commitStroke(). */
     noSupport?: boolean;
+    /** Los dos ejes de la superficie de apoyo (cara de caja, piso…). */
+    ejes?: [THREE.Vector3, THREE.Vector3];
   } | null = null;
   private downScreen = new THREE.Vector2();
+  /** RECTAS A LOS EJES (v3.29.3), como el «Draw Shape» de Feather: al SOLTAR,
+   *  si el trazo quedó casi recto y va a menos de 22° de un eje de su superficie
+   *  (las aristas de la cara de una caja; X y Z en el piso), se reemplaza por la
+   *  recta exacta sobre ese eje: así fuga sola a su punto de fuga. Una curva no
+   *  se toca (en el 3D se dibuja mucho a mano: enderezar en vivo todo lo que
+   *  ARRANCA hacia un eje rompía las curvas). Shift o Alt: no se corrige. */
+  private imanFuga = (() => { try { return localStorage.getItem('low3d:iman-fuga') !== '0'; } catch { return true; } })();
+  private static readonly FUGA_LIBRE_DEG = 22;
+  getImanFuga(): boolean { return this.imanFuga; }
+  setImanFuga(v: boolean): void {
+    this.imanFuga = !!v;
+    try { localStorage.setItem('low3d:iman-fuga', v ? '1' : '0'); } catch { /* sin almacenamiento */ }
+    window.dispatchEvent(new Event('low3d:fuga'));
+  }
   private lastMoveWorld = new THREE.Vector3();
   private moveStart = new Map<THREE.Object3D, THREE.Vector3>();
   private lassoPts: [number, number][] = [];
@@ -1154,6 +1170,44 @@ export class WebGLDesign3D {
   private static readonly SMART_SNAP_DEG = 7;
   private smartGuide?: THREE.Line;
 
+  /** Los ejes en los que puede ir una recta SIN salirse de su apoyo: los de la
+   *  cara de la caja, o los del mundo que están en el plano (piso: X y Z; pared:
+   *  su horizontal y la vertical). En un plano inclinado, sus dos direcciones
+   *  propias. Antes Alt y Shift probaban los tres ejes del mundo y una recta
+   *  podía elegir uno que no estaba en el plano y despegarse del apoyo. */
+  private ejesDelTrazo(): THREE.Vector3[] {
+    const cur = this.current;
+    if (cur?.ejes) return cur.ejes.map((v) => v.clone().normalize());
+    const n = cur?.drawPlane?.normal;
+    if (!n) return WebGLDesign3D.VP_AXES.map(([a]) => a.clone());
+    const enPlano = WebGLDesign3D.VP_AXES.map(([a]) => a).filter((a) => Math.abs(a.dot(n)) < 0.1).map((a) => a.clone());
+    if (enPlano.length >= 2) return enPlano;
+    const menos = WebGLDesign3D.VP_AXES.map(([a]) => a).sort((a, b) => Math.abs(a.dot(n)) - Math.abs(b.dot(n)))[0];
+    const u = menos.clone().sub(n.clone().multiplyScalar(menos.dot(n))).normalize();
+    return [u, new THREE.Vector3().crossVectors(n, u).normalize()];
+  }
+  /** El color de una dirección: el del eje del mundo al que más se parece. */
+  private colorDeEje(d: THREE.Vector3): string {
+    let mejor = WebGLDesign3D.VP_AXES[0];
+    for (const par of WebGLDesign3D.VP_AXES) if (Math.abs(d.dot(par[0])) > Math.abs(d.dot(mejor[0]))) mejor = par;
+    return mejor[1];
+  }
+  /** El eje de la superficie al que va la recta de `a` a `b`, si está a menos de
+   *  FUGA_LIBRE_DEG; si no, null. Sólo con trazos sobre un plano (no en el aire
+   *  ni sobre una superficie curva). */
+  private ejeDeLaRecta(a: THREE.Vector3, b: THREE.Vector3): THREE.Vector3 | null {
+    if (!this.current?.drawPlane || this.current.surfaceId) return null;
+    const d = b.clone().sub(a);
+    if (d.lengthSq() < 1e-8) return null;
+    d.normalize();
+    let mejor: THREE.Vector3 | null = null, ang = Infinity;
+    for (const eje of this.ejesDelTrazo()) {
+      const x = Math.acos(Math.min(1, Math.abs(d.dot(eje))));
+      if (x < ang) { ang = x; mejor = eje; }
+    }
+    return mejor && ang <= THREE.MathUtils.degToRad(WebGLDesign3D.FUGA_LIBRE_DEG) ? mejor : null;
+  }
+
   /** Imanta `raw` al eje del mundo más parecido a la dirección del gesto, solo
    *  si está dentro de la tolerancia. Devuelve el punto corregido y el eje (o
    *  null si el gesto no está cerca de ningún paralelo). */
@@ -1164,9 +1218,9 @@ export class WebGLDesign3D {
     const dir = drag.clone().normalize();
     const cosTol = Math.cos(THREE.MathUtils.degToRad(WebGLDesign3D.SMART_SNAP_DEG));
     let best: { axis: THREE.Vector3; color: string; c: number } | null = null;
-    for (const [ax, color] of WebGLDesign3D.VP_AXES) {
+    for (const ax of this.ejesDelTrazo()) {
       const c = Math.abs(dir.dot(ax)); // ±eje: da igual el sentido
-      if (c >= cosTol && (!best || c > best.c)) best = { axis: ax, color, c };
+      if (c >= cosTol && (!best || c > best.c)) best = { axis: ax, color: this.colorDeEje(ax), c };
     }
     if (!best) return { point: raw, axis: null };
     // proyección sobre el eje → paralelo EXACTO, conservando el largo del gesto
@@ -1870,7 +1924,10 @@ export class WebGLDesign3D {
     collect(this.boxesGroup);
     const hits = this.raycaster.intersectObjects(meshes, false);
     if (!hits.length) return null;
-    let obj: THREE.Object3D | null = hits[0].object;
+    // la cara translúcida de una caja no tapa lo que se ve a través de ella: si
+    // bajo el cursor hay un trazo o una guía, gana; la caja, sólo si no hay nada más
+    const noCaja = hits.find((h) => !h.object.userData.caraDeCaja);
+    let obj: THREE.Object3D | null = (noCaja ?? hits[0]).object;
     while (obj && !obj.userData.strokeId) obj = obj.parent;
     if (!obj) return null;
     const rec = this.strokes.find((s) => s.id === obj!.userData.strokeId) ?? null;
@@ -2562,9 +2619,10 @@ export class WebGLDesign3D {
     const drag = raw.clone().sub(start);
     if (drag.lengthSq() < 1e-10) return raw;
     const dragN = drag.clone().normalize();
-    let bestAxis = WebGLDesign3D.VP_AXES[0][0];
+    const ejes = this.ejesDelTrazo();
+    let bestAxis = ejes[0];
     let bestAbsCos = -1;
-    for (const [axis] of WebGLDesign3D.VP_AXES) {
+    for (const axis of ejes) {
       const c = Math.abs(dragN.dot(axis));
       if (c > bestAbsCos) { bestAbsCos = c; bestAxis = axis; }
     }
@@ -2666,6 +2724,7 @@ export class WebGLDesign3D {
       // una línea existente, seguir su tubo torcía todo el trazo. Solo se
       // sigue la malla de una guía/superficie real (curvas incluidas).
       drawTarget: this.tool === 'pencil' && hit.kind !== 'stroke' && hit.kind !== 'box' ? hit.target : undefined,
+      ejes: hit.ejes ? [hit.ejes[0].clone(), hit.ejes[1].clone()] : undefined,
       // PLANO BLOQUEADO para todo el trazo. Si el soporte no traía plano
       // propio (una superficie plano/pared), se arma uno infinito con la
       // normal y el punto del primer contacto. Sin esto, al salirse del
@@ -2799,11 +2858,11 @@ export class WebGLDesign3D {
       const dirA = end.clone().sub(start);
       if (dirA.lengthSq() > 1e-8) {
         dirA.normalize();
-        let bestA: [THREE.Vector3, string] | null = null;
-        for (const pair of WebGLDesign3D.VP_AXES) {
-          if (!bestA || Math.abs(dirA.dot(pair[0])) > Math.abs(dirA.dot(bestA[0]))) bestA = pair;
+        let bestA: THREE.Vector3 | null = null;
+        for (const ax of this.ejesDelTrazo()) {
+          if (!bestA || Math.abs(dirA.dot(ax)) > Math.abs(dirA.dot(bestA))) bestA = ax;
         }
-        if (bestA) this.showSmartGuide(start, bestA[0], bestA[1]);
+        if (bestA) this.showSmartGuide(start, bestA, this.colorDeEje(bestA));
       }
       pts.length = 1;
       pressures.length = 1;
@@ -2844,6 +2903,11 @@ export class WebGLDesign3D {
     if (pts.length >= 1 && jump > MAX_DRAW_JUMP) return; // salto irreal (rayo rasante) → descartar
     pts.push(point);
     pressures.push(this.samplePressure(e));
+    // si ya va recto y alineado, la guía de color del eje se ve antes de soltar
+    if (this.imanFuga && this.current.kind === 'stroke' && pts.length >= 3 && this.isStrokeStraight(pts)) {
+      const eje = this.ejeDeLaRecta(pts[0], pts[pts.length - 1]);
+      if (eje) this.showSmartGuide(pts[0], eje, this.colorDeEje(eje));
+    }
     this.updatePreview();
   }
 
@@ -2880,6 +2944,18 @@ export class WebGLDesign3D {
       if (al.lines.length) {
         const p = this.pointFromScreen(al.px, al.py);
         if (p) pts[pts.length - 1] = p;
+      }
+      // RECTAS A LOS EJES: un trazo casi recto, a menos de 22° de un eje de su
+      // superficie, pasa a ser la recta exacta sobre ese eje
+      if (this.imanFuga && this.current.kind === 'stroke' && this.tool === 'pencil' && !e.shiftKey && !e.altKey
+          && pts.length >= 3 && this.isStrokeStraight(pts)) {
+        const a = pts[0], eje = this.ejeDeLaRecta(a, pts[pts.length - 1]);
+        if (eje) {
+          const fin = a.clone().addScaledVector(eje, pts[pts.length - 1].clone().sub(a).dot(eje));
+          const pr = this.current.pressures;
+          pts.length = 0; pts.push(a, fin);
+          pr.splice(0, pr.length, pr[0] ?? 1, pr[pr.length - 1] ?? 1);
+        }
       }
       const last = pts[pts.length - 1];
       // el enganche tiene la última palabra: tocar la línea gana a alinearse
@@ -5159,7 +5235,10 @@ export class WebGLDesign3D {
       // click corto: seleccionar/borrar el trazo bajo el cursor
       const rec = this.pickStroke();
       if (this.tool === 'eraser') {
-        if (rec) { this.setSelection([rec]); this.deleteSelection(); }
+        // la goma borra DIBUJO: una caja (un edificio entero) se borra eligiéndola
+        // con Mover y Supr. Un clic que erraba la línea por un píxel caía en la
+        // cara translúcida y se llevaba la caja.
+        if (rec && rec.kind !== 'box') { this.setSelection([rec]); this.deleteSelection(); }
         else {
           // click en una guía: borra solo esa. Si no hay guía, prueba con una
           // superficie (pared/primitiva) — es la única forma de borrarlas.
@@ -5174,7 +5253,7 @@ export class WebGLDesign3D {
     }
     const inside = this.strokesInLasso();
     if (this.tool === 'eraser') {
-      this.setSelection(inside);
+      this.setSelection(inside.filter((r) => r.kind !== 'box'));
       this.deleteSelection();
     } else {
       // Shift = el lazo SUMA a lo que ya estaba seleccionado.
