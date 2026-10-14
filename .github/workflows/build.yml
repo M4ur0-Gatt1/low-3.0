@@ -204,6 +204,7 @@ jobs:
           node tools/check_repetir_fuga_3d_ui.js
           node tools/check_toma_3d_ui.js
           node tools/check_3d_proyecto_ui.js
+          node tools/check_3d_cajas_ui.js
           node tools/check_limpieza_ui.js
           node tools/check_mover_en_linea_ui.js
           node tools/check_seleccion_alcance_ui.js

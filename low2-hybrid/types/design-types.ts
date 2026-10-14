@@ -21,7 +21,7 @@ export type ToolType = 'pencil' | 'guide' | 'move' | 'select' | 'eraser' | 'liqu
   // figuras planas: nacen sobre el plano de dibujo activo y quedan como
   // un trazo CERRADO (su perímetro), así se pueden rellenar, agrupar,
   // convertir en volumen y editar igual que una línea a mano
-  | 'rect' | 'circle' | 'poly';
+  | 'rect' | 'circle' | 'poly' | 'box';
 
 /** Modo del gizmo de transformación de la herramienta 'move' (con un solo
  *  trazo seleccionado): mover libremente por ejes, redimensionar, o rotar. */

@@ -50,7 +50,7 @@ interface StrokeRecord {
   /** Presión 0–1 por punto (mismo índice que `points`). Solo relevante para
    *  trazos ('stroke'); las guías no varían de ancho. */
   pressures: number[];
-  kind: 'stroke' | 'guide';
+  kind: 'stroke' | 'guide' | 'box';
   /** true = es un RELLENO (cara sólida de una forma cerrada), no una línea.
    *  Comparte toda la infraestructura de trazo (capas, goma, selección,
    *  historial) pero su malla se reconstruye como polígono, no como tubo. */
@@ -104,7 +104,10 @@ interface HitInfo {
   target?: THREE.Object3D;
   /** Plano matematico de respaldo cuando el target visible no recibe el rayo. */
   plane?: THREE.Plane;
-  kind?: 'guide' | 'surface' | 'stroke' | 'fallback' | 'free';
+  /** Los dos ejes de la superficie tocada (en el mundo): los de la cara de una
+   *  caja, X y Z en el piso. El paso 4 (rectas que fugan) los usa. */
+  ejes?: [THREE.Vector3, THREE.Vector3];
+  kind?: 'guide' | 'surface' | 'stroke' | 'fallback' | 'free' | 'box';
 }
 
 export interface Low3DProject {
@@ -130,6 +133,7 @@ export interface Low3DProject {
     solid?: boolean;
     shape?: 'rect' | 'circle' | 'poly';
     apoyo?: number[];
+    caja?: boolean;
     /** true = la figura lleva cara sólida ADEMÁS del contorno (una sola pieza). */
     filled?: boolean;
   }>;
@@ -161,6 +165,14 @@ export class WebGLDesign3D {
 
   private surfacesGroup!: THREE.Group;
   private guidesGroup!: THREE.Group;
+  /** CAJAS (v3.29.3): andamio para armar edificios y habitaciones. Van en su
+   *  propio grupo, no en strokesGroup: así «Mandar al 2D» y la Toma —que sólo
+   *  dejan visible strokesGroup— no las sacan al layout. */
+  private boxesGroup!: THREE.Group;
+  /** El gesto de la herramienta Caja: primero la base (arrastre), después la
+   *  altura (mover el mouse) y un clic la confirma. Esc la cancela. */
+  private cajaGesto: { fase: 'base' | 'altura'; obj: THREE.Group; origen: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3;
+    arriba: THREE.Vector3; q: THREE.Quaternion; plano: THREE.Plane; du: number; dv: number; alto: number } | null = null;
   private strokesGroup!: THREE.Group;
   private grid!: THREE.GridHelper;
 
@@ -371,7 +383,9 @@ export class WebGLDesign3D {
     this.guidesGroup = new THREE.Group();
     this.strokesGroup = new THREE.Group();
     this.handlesGroup = new THREE.Group();
-    this.scene.add(this.surfacesGroup, this.guidesGroup, this.strokesGroup, this.handlesGroup);
+    this.boxesGroup = new THREE.Group();
+    this.boxesGroup.name = 'cajas';
+    this.scene.add(this.surfacesGroup, this.guidesGroup, this.boxesGroup, this.strokesGroup, this.handlesGroup);
     this.scene.add(this.persp3d.group);
 
     // marcador del eje móvil de rotación: mismo estilo que los handles de
@@ -1609,8 +1623,16 @@ export class WebGLDesign3D {
     if (this.tool !== 'guide' && this.view === 'persp') {
       this.strokesGroup.traverse((o) => { if ((o as THREE.Mesh).isMesh) targets.push(o); });
     }
+    // las CAJAS son apoyo en todas las vistas (en ortogonal, sólo las caras de
+    // frente a la vista: la vista sigue mandando el plano)
+    if (this.tool !== 'guide') this.boxesGroup.traverse((o) => { if ((o as THREE.Mesh).isMesh) targets.push(o); });
     if (targets.length) {
-      const hits = this.raycaster.intersectObjects(targets, false);
+      const todos = this.raycaster.intersectObjects(targets, false);
+      // una cara de caja vista de CANTO no sirve de apoyo (el rayo la roza):
+      // se saltea y se prueba lo que haya detrás
+      const hits = todos.filter((x) => !(x.object.userData.caraDeCaja && x.face &&
+        Math.abs(x.face.normal.clone().transformDirection(x.object.matrixWorld).dot(this.raycaster.ray.direction)) < 0.08));
+      if (hits.length && hits[0].object.userData.caraDeCaja) return this.hitDeCaja(hits[0]);
       if (hits.length) {
         const h = hits[0];
         const normal = h.face
@@ -1677,6 +1699,22 @@ export class WebGLDesign3D {
       return { point: p.clone(), normal: this.fallbackPlane.normal.clone(), noSupport: this.view === 'persp', plane: this.fallbackPlane.clone(), kind: 'fallback' };
     }
     return null;
+  }
+
+  /** El apoyo en una cara de caja: el plano INFINITO de esa cara (no la malla:
+   *  si no, al cruzar una arista el trazo doblaba la esquina) y sus dos ejes. */
+  private hitDeCaja(h: THREE.Intersection): HitInfo {
+    const mesh = h.object, grupo = mesh.parent as THREE.Object3D;
+    grupo.updateMatrixWorld(true);
+    const local = h.face ? h.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+    const n = local.clone().transformDirection(mesh.matrixWorld).normalize();
+    if (n.dot(this.raycaster.ray.direction) > 0) n.negate();
+    const q = grupo.getWorldQuaternion(new THREE.Quaternion());
+    const ax = Math.abs(local.x) > 0.5 ? 0 : Math.abs(local.y) > 0.5 ? 1 : 2;
+    const base = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)].filter((_, i) => i !== ax)
+      .map((e) => e.applyQuaternion(q).normalize()) as [THREE.Vector3, THREE.Vector3];
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, h.point);
+    return { point: h.point.clone(), normal: n, target: grupo, plane, ejes: base, kind: 'box' };
   }
 
   /** Un plano del mundo para guardar en un trazo NUEVO (su grupo nace en el
@@ -1829,6 +1867,7 @@ export class WebGLDesign3D {
     const collect = (g: THREE.Group) => g.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o); });
     collect(this.strokesGroup);
     collect(this.guidesGroup);
+    collect(this.boxesGroup);
     const hits = this.raycaster.intersectObjects(meshes, false);
     if (!hits.length) return null;
     let obj: THREE.Object3D | null = hits[0].object;
@@ -1966,6 +2005,9 @@ export class WebGLDesign3D {
       this.onSelectPointerDown(e);
     } else if (this.tool === 'eraser') {
       this.beginLasso(e); // click corto = borrar bajo cursor; arrastre = lazo
+    } else if (this.tool === 'box') {
+      if (this.cajaGesto?.fase === 'altura') this.cajaConfirmar();
+      else this.cajaEmpezar(e);
     } else if (this.tool === 'rect' || this.tool === 'circle' || this.tool === 'poly') {
       this.beginShape(e);
     } else if (this.tool === 'fill') {
@@ -1983,7 +2025,8 @@ export class WebGLDesign3D {
     if (this.mode === 'draw' && e.pointerType === 'pen' && e.pressure === 0 && e.buttons === 0) return;
     this.updateCursor(e);
     this.setPointerFromEvent(e);
-    if (this.mode === 'draw') { if (this.shape) this.moveShape(e); else this.moveDraw(e); }
+    if (this.cajaGesto) this.cajaMover(e);
+    else if (this.mode === 'draw') { if (this.shape) this.moveShape(e); else this.moveDraw(e); }
     else if (this.mode === 'move') this.moveDrag(e);
     else if (this.mode === 'lasso') this.moveLasso(e);
     else if (this.mode === 'point-drag') this.movePointDrag();
@@ -2006,7 +2049,8 @@ export class WebGLDesign3D {
 
   private onPointerUp = (e: PointerEvent): void => {
     if (this.activePointerId !== null && e.pointerId !== this.activePointerId) return;
-    if (this.mode === 'draw') { if (this.shape) this.endShape(e); else this.endDraw(e); }
+    if (this.cajaGesto?.fase === 'base') this.cajaSoltarBase();
+    else if (this.mode === 'draw') { if (this.shape) this.endShape(e); else this.endDraw(e); }
     else if (this.mode === 'move') { this.endMove(); }
     else if (this.mode === 'lasso') { this.endLasso(e); }
     else if (this.mode === 'point-drag') { this.endPointDrag(); }
@@ -2066,6 +2110,7 @@ export class WebGLDesign3D {
   private static readonly TOOL_KEYS: Record<string, ToolType> = {
     p: 'pencil', g: 'guide', v: 'move', a: 'select', e: 'eraser', l: 'liquify', c: 'scissors', f: 'pencil-free',
     b: 'fill', // balde: rellenar la forma cerrada
+    x: 'box', // caja: base en el piso, después la altura
 
   };
 
@@ -2424,14 +2469,18 @@ export class WebGLDesign3D {
       }
       // CUERPO de la línea: el punto más cercano sobre cada segmento. Antes,
       // llegar al medio de una línea no enganchaba nada — solo sus vértices.
-      for (let i = 0; i + 1 < world.length; i++) {
-        const a = toScreen(world[i]), b = toScreen(world[i + 1]);
+      // En una CAJA los segmentos son sus 12 aristas, no esquinas seguidas.
+      const pares: [number, number][] = rec.kind === 'box' ? WebGLDesign3D.ARISTAS_CAJA
+        : world.slice(1).map((_, i) => [i, i + 1] as [number, number]);
+      for (const [ia, ib] of pares) {
+        const i = ia;
+        const a = toScreen(world[ia]), b = toScreen(world[ib]);
         const ab = b.clone().sub(a);
         const len2 = ab.lengthSq();
         if (len2 < 1e-6) continue;
         const t = THREE.MathUtils.clamp(
           ((px - a.x) * ab.x + (py - a.y) * ab.y) / len2, 0, 1);
-        probar(world[i].clone().lerp(world[i + 1], t), 'line');
+        probar(world[i].clone().lerp(world[ib], t), rec.kind === 'box' ? 'guide' : 'line');
       }
     }
     // anclajes y BORDES de las guías: llegar con una línea al canto de una
@@ -2569,7 +2618,11 @@ export class WebGLDesign3D {
     const snap = this.findSnapVertex(e, surf?.point, this.tool === 'guide' ? Infinity : 0.8);
     // `let`: si el gesto se apoya en una superficie curva, más abajo el punto
     // se pega a su piel (ver la INVARIANTE).
-    let hit = snap ? { point: snap, normal: surf?.normal ?? new THREE.Vector3(0, 0, 1) } : surf;
+    // el imán al arrancar no tiene que perder el plano ni los ejes del apoyo si
+    // la esquina enganchada está EN ese plano (arrancar en la esquina de una cara)
+    const enPlano = !!(snap && surf?.plane && Math.abs(surf.plane.distanceToPoint(snap)) < 1e-3);
+    let hit = snap ? { point: snap, normal: surf?.normal ?? new THREE.Vector3(0, 0, 1),
+      plane: enPlano ? surf?.plane : undefined, ejes: enPlano ? surf?.ejes : undefined, kind: enPlano ? surf?.kind : undefined } : surf;
     if (!hit) {
       this.canvas.title = this.activeGuideIsEdgeOn()
         // Caso normal, no un error: una guía de PARED está parada sobre la línea
@@ -2612,7 +2665,7 @@ export class WebGLDesign3D {
       // No se "engancha" a un trazo ya dibujado: si el gesto arranca encima de
       // una línea existente, seguir su tubo torcía todo el trazo. Solo se
       // sigue la malla de una guía/superficie real (curvas incluidas).
-      drawTarget: this.tool === 'pencil' && hit.kind !== 'stroke' ? hit.target : undefined,
+      drawTarget: this.tool === 'pencil' && hit.kind !== 'stroke' && hit.kind !== 'box' ? hit.target : undefined,
       // PLANO BLOQUEADO para todo el trazo. Si el soporte no traía plano
       // propio (una superficie plano/pared), se arma uno infinito con la
       // normal y el punto del primer contacto. Sin esto, al salirse del
@@ -3290,6 +3343,121 @@ export class WebGLDesign3D {
     return pts;
   }
 
+  /** Las 12 aristas de una caja, por índice de esquina (ver esquinasCaja). */
+  private static readonly ARISTAS_CAJA: [number, number][] = [
+    [0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+  /** Las 8 esquinas de la caja unidad (base en y = 0, de -0.5 a 0.5 en X y Z). */
+  private static esquinasCaja(): THREE.Vector3[] {
+    const out: THREE.Vector3[] = [];
+    for (const y of [0, 1]) for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]) out.push(new THREE.Vector3(x, y, z));
+    return out;
+  }
+  /** La caja: unidad con la base en y = 0. Su TAMAÑO es `scale` (así el gizmo
+   *  de escalar ya es «cambiar el tamaño», con su Ctrl+Z) y su posición es el
+   *  centro de la base. Cara casi transparente de los dos lados —se dibuja en la
+   *  pared de afuera o, con la cámara adentro, en la de adentro— y aristas firmes. */
+  private construirCaja(): THREE.Group {
+    const g = new THREE.Group();
+    g.userData.esCaja = true;
+    const geo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    const cara = new THREE.MeshBasicMaterial({ color: 0x33B5E8, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false });
+    cara.userData.opBase = 0.1;
+    const mesh = new THREE.Mesh(geo, cara);
+    mesh.userData.caraDeCaja = true;
+    const aristas = new THREE.LineSegments(new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ color: 0x1d8fc0, transparent: true, opacity: 0.9 }));
+    (aristas.material as THREE.Material).userData.opBase = 0.9;
+    aristas.raycast = () => undefined;     // se elige y se apoya por la cara, no por la línea
+    g.add(mesh, aristas);
+    return g;
+  }
+  /** Apretar sobre el piso (o la tapa de otra caja): empieza la base. */
+  private cajaEmpezar(e: PointerEvent): void {
+    this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    const hit = this.resolveHit() ?? (this.view !== 'persp' ? null : null);
+    const q = new THREE.Quaternion();
+    let arriba = new THREE.Vector3(0, 1, 0);
+    if (hit?.kind === 'box' && hit.target) { hit.target.getWorldQuaternion(q); arriba = new THREE.Vector3(0, 1, 0).applyQuaternion(q); }
+    if (!hit || hit.normal.dot(arriba) < 0.9) {
+      this.avisar(this.view === 'persp' || this.view === 'top' ? 'La caja se apoya en el piso o sobre la tapa de otra caja'
+        : 'La caja se arma en Perspectiva o desde Arriba: en esta vista no se ve el piso');
+      return;
+    }
+    const u = new THREE.Vector3(1, 0, 0).applyQuaternion(q), v = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    const obj = this.construirCaja();
+    obj.quaternion.copy(q);
+    obj.position.copy(hit.point);
+    obj.scale.set(1e-3, 1e-3, 1e-3);
+    this.boxesGroup.add(obj);
+    this.cajaGesto = { fase: 'base', obj, origen: hit.point.clone(), u, v, arriba, q,
+      plano: new THREE.Plane().setFromNormalAndCoplanarPoint(arriba, hit.point), du: 0, dv: 0, alto: 0 };
+    this.capturePointer(e);
+    this.activePointerId = e.pointerId;
+    this.mode = 'draw';
+    this.controls.enabled = false;
+  }
+  private cajaMover(e: PointerEvent): void {
+    const c = this.cajaGesto; if (!c) return;
+    this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    const p = new THREE.Vector3();
+    if (c.fase === 'base') {
+      if (!this.raycaster.ray.intersectPlane(c.plano, p)) return;
+      const d = p.sub(c.origen);
+      c.du = d.dot(c.u); c.dv = d.dot(c.v);
+      if (e.shiftKey) { const m = Math.max(Math.abs(c.du), Math.abs(c.dv)); c.du = Math.sign(c.du || 1) * m; c.dv = Math.sign(c.dv || 1) * m; }
+    } else {
+      // la altura se mide en el plano vertical que pasa por el centro de la base,
+      // de cara a la cámara
+      const centro = this.cajaCentro(c);
+      const haciaCam = new THREE.Vector3(); (this.camera as THREE.Camera).getWorldDirection(haciaCam);
+      haciaCam.sub(c.arriba.clone().multiplyScalar(haciaCam.dot(c.arriba)));
+      if (haciaCam.lengthSq() < 1e-6) return;
+      const pl = new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam.normalize(), centro);
+      if (!this.raycaster.ray.intersectPlane(pl, p)) return;
+      c.alto = Math.max(0.05, p.sub(centro).dot(c.arriba));
+    }
+    this.cajaAplicar(c);
+  }
+  private cajaCentro(c: NonNullable<WebGLDesign3D['cajaGesto']>): THREE.Vector3 {
+    return c.origen.clone().add(c.u.clone().multiplyScalar(c.du / 2)).add(c.v.clone().multiplyScalar(c.dv / 2));
+  }
+  private cajaAplicar(c: NonNullable<WebGLDesign3D['cajaGesto']>): void {
+    c.obj.position.copy(this.cajaCentro(c));
+    c.obj.scale.set(Math.max(Math.abs(c.du), 1e-3), Math.max(c.alto, 1e-3), Math.max(Math.abs(c.dv), 1e-3));
+  }
+  /** Soltar la base: si tiene tamaño, ahora la altura (desde Arriba no se ve:
+   *  va una de 3 m, que se ajusta con el gizmo de escalar). */
+  private cajaSoltarBase(): void {
+    const c = this.cajaGesto; if (!c) return;
+    if (Math.abs(c.du) < 0.05 || Math.abs(c.dv) < 0.05) { this.cajaCancelar(); this.avisar('Arrastrá para dibujar la base de la caja'); return; }
+    if (this.view === 'top' || this.view === 'bottom') { c.alto = 3; this.cajaAplicar(c); this.cajaConfirmar(); return; }
+    c.fase = 'altura';
+    c.alto = Math.min(Math.abs(c.du), Math.abs(c.dv));
+    this.cajaAplicar(c);
+    this.avisar('Ahora mové el mouse para darle altura y hacé clic · Esc cancela');
+  }
+  private cajaConfirmar(): void {
+    const c = this.cajaGesto; if (!c) return;
+    this.cajaGesto = null;
+    this.boxesGroup.remove(c.obj);
+    const rec: StrokeRecord = {
+      id: `box-${this.seq++}`, object: c.obj, points: WebGLDesign3D.esquinasCaja(), pressures: [], kind: 'box',
+      layerId: this.activeLayerId(), baseOpacity: 1, brush: { ...this.brush },
+    };
+    c.obj.userData.strokeId = rec.id;
+    this.addStrokeRecord(rec);
+    this.pushCmd({ undo: () => this.removeStrokeRecord(rec), redo: () => this.addStrokeRecord(rec) });
+    this.mode = 'idle';
+    this.controls.enabled = true;
+  }
+  private cajaCancelar(): void {
+    const c = this.cajaGesto; if (!c) return;
+    this.cajaGesto = null;
+    this.boxesGroup.remove(c.obj);
+    this.mode = 'idle';
+    this.controls.enabled = true;
+  }
+
   private beginShape(e: PointerEvent): void {
     // Una figura PLANA no es ambigua como un trazo libre: si no hay guía ni
     // superficie de apoyo, se usa el plano de la vista (perpendicular a la
@@ -3495,8 +3663,11 @@ export class WebGLDesign3D {
     }
   }
 
+  /** Dónde cuelga un registro: las cajas en su grupo, todo lo demás en el de trazos. */
+  private grupoDe(rec: StrokeRecord): THREE.Group { return rec.kind === 'box' ? this.boxesGroup : this.strokesGroup; }
+
   private addStrokeRecord(rec: StrokeRecord): void {
-    this.strokesGroup.add(rec.object);
+    this.grupoDe(rec).add(rec.object);
     if (!this.strokes.includes(rec)) this.strokes.push(rec);
     this.applyLayerStyles();
     this.publishObjects();
@@ -3507,7 +3678,7 @@ export class WebGLDesign3D {
     // primero — si no, `strokesGroup.remove` no encuentra un hijo directo y
     // el trazo queda fantasma, colgado del proxy.
     if (this.pivotOwnerObj === rec.object) this.unwrapPivot();
-    this.strokesGroup.remove(rec.object);
+    this.grupoDe(rec).remove(rec.object);
     this.strokes = this.strokes.filter((s) => s !== rec);
     this.selected.delete(rec);
     this.publishObjects();
@@ -3581,7 +3752,8 @@ export class WebGLDesign3D {
       rec.object.traverse((o) => {
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
         if (m && 'opacity' in m) {
-          m.opacity = rec.baseOpacity * op * depthMult;
+          const base = typeof m.userData?.opBase === 'number' ? m.userData.opBase : rec.baseOpacity;
+          m.opacity = base * op * depthMult;
           m.transparent = m.opacity < 1;
           m.needsUpdate = true;
         }
@@ -3976,7 +4148,7 @@ export class WebGLDesign3D {
     // orden: lo que está bajo el cursor, la forma que lo CONTIENE, o la línea
     // más cercana. El caso del medio es el que faltaba (clic dentro de una figura).
     const seed = this.pickStroke() ?? this.pickEnclosingStroke() ?? this.pickNearestStroke();
-    if (!seed || seed.fill || seed.solid) return false;
+    if (!seed || seed.fill || seed.solid || seed.kind === 'box') return false;
     // Un trazo que YA se cierra sobre sí mismo (una figura, o un círculo hecho
     // con Ctrl) se rellena directo: findClosedLoop busca ciclos ENTRE trazos
     // distintos y nunca encontraba este caso — el balde no hacía nada sobre un
@@ -4174,6 +4346,7 @@ export class WebGLDesign3D {
    *  entero, que es lo último que uno quiere mientras trabaja. El componente
    *  pregunta primero y solo cierra si acá no había nada que hacer. */
   escapeConsume(): boolean {
+    if (this.cajaGesto) { this.cajaCancelar(); return true; }
     if (this.joy?.arrastrando) { this.joyEndDrag(true); return true; }
     if (this.mode === 'draw' && this.current) { this.commitStroke(); return true; }
     if (this.selected.size || this.selectedGuide || this.selectedSurface || this.editingStroke) {
@@ -4320,7 +4493,8 @@ export class WebGLDesign3D {
     // ESCALA sobre trazos: no se envuelve nada, se deforman los puntos (ver
     // joyEscalarPuntos). El resto de los gestos si usan proxy/rig.
     const centroGesto = this.joyCentro();
-    if (Joystick3D.esEscala(part) && this.selected.size && centroGesto) {
+    // con una CAJA elegida no: escalar sus «puntos» (las esquinas) la volvería un tubo
+    if (Joystick3D.esEscala(part) && this.selected.size && centroGesto && ![...this.selected].some((r) => r.kind === 'box')) {
       this.joyPuntos = [...this.selected].map((r) => ({ rec: r, pts: r.points.map((q) => q.clone()) }));
       const escalar = (fu: number, fv: number, u: THREE.Vector3, v: THREE.Vector3, n: THREE.Vector3) =>
         this.joyEscalarPuntos(fu, fv, u, v, n, centroGesto);
@@ -4495,7 +4669,7 @@ export class WebGLDesign3D {
           id: rec.id,
           // "Rectángulo relleno" vs "Rectángulo": en la lista los dos se veían
           // idénticos y no había forma de saber cuál llevaba cara sólida
-          name: rec.solid ? 'Volumen' : rec.fill ? 'Relleno'
+          name: rec.kind === 'box' ? 'Caja' : rec.solid ? 'Volumen' : rec.fill ? 'Relleno'
             : rec.shape ? nombreFigura[rec.shape] + (rec.filled ? ' relleno' : '') : 'Línea',
           kind: rec.solid ? 'solid' : rec.fill ? 'fill' : 'stroke', count: 1, selected: sel,
         });
@@ -4765,7 +4939,7 @@ export class WebGLDesign3D {
     };
     const add = () => {
       for (const r of recs) {
-        (r.kind === 'guide' ? this.guidesGroup : this.strokesGroup).add(r.object);
+        (r.kind === 'guide' ? this.guidesGroup : this.grupoDe(r)).add(r.object);
         if (!this.strokes.includes(r)) this.strokes.push(r);
         if (r.kind === 'guide') { this.surfaces.push({ id: r.id, type: 'loft', mesh: r.object as THREE.Mesh }); this.activeGuide = { id: r.id, mesh: r.object as THREE.Mesh }; }
       }
@@ -4870,7 +5044,7 @@ export class WebGLDesign3D {
     // un VOLUMEN no se edita por nodos: sus "puntos" son la nube de trazos que
     // le dio origen, no un contorno. Mostrar cien handles y dejar arrastrarlos
     // solo produce un cuerpo roto — se transforma con el gizmo (Mover).
-    if (rec?.solid) { this.clearPointEdit(); this.setSelection([rec]); return; }
+    if (rec?.solid || rec?.kind === 'box') { this.clearPointEdit(); this.setSelection([rec]); return; }
     if (rec && rec.kind === 'stroke') this.showPointHandles(rec);
     else this.clearPointEdit();
   }
@@ -5178,7 +5352,7 @@ export class WebGLDesign3D {
     const recs = soloSeleccion && this.selected.size ? [...this.selected] : this.strokes;
     let solidos = 0, trazos = 0, rellenos = 0, caras = 0, triangulos = 0;
     for (const rec of recs) {
-      if (rec.kind === 'guide') continue;
+      if (rec.kind === 'guide' || rec.kind === 'box') continue;
       if (rec.fill) { rellenos++; continue; }
       // la figura sí se exporta (su contorno es un tubo), pero su cara no: es
       // una superficie sin espesor y hay que decirlo
@@ -5262,7 +5436,7 @@ export class WebGLDesign3D {
       { data: string | DataView; report: ReturnType<WebGLDesign3D['stlReport']> } | null {
     const escala = opts.scale && opts.scale > 0 ? opts.scale : 1;
     const recs = (opts.onlySelection && this.selected.size ? [...this.selected] : this.strokes)
-      .filter((r) => r.kind !== 'guide' && !r.fill);
+      .filter((r) => r.kind !== 'guide' && r.kind !== 'box' && !r.fill);
     if (!recs.length) return null;
 
     // Se arma un grupo con COPIAS de las mallas, ya en coordenadas de mundo:
@@ -5327,7 +5501,7 @@ export class WebGLDesign3D {
         quaternion: rec.object.quaternion.toArray(), scale: rec.object.scale.toArray(),
         brush: { ...rec.brush }, fill: rec.fill || undefined, filled: rec.filled || undefined,
         groupId: rec.groupId || undefined, solid: rec.solid || undefined,
-        shape: rec.shape || undefined, apoyo: rec.apoyo || undefined,
+        shape: rec.shape || undefined, apoyo: rec.apoyo || undefined, caja: rec.kind === 'box' || undefined,
       })),
       // las guías también son parte del proyecto: sin ellas, al reabrir se
       // perdía el andamiaje sobre el que estabas dibujando.
@@ -5357,6 +5531,18 @@ export class WebGLDesign3D {
       if (typeof v === 'string') this.groupNames.set(k, v);
     }
     for (const item of doc.strokes) {
+      if (item.caja) {
+        const obj = this.construirCaja();
+        obj.position.fromArray(item.position || [0, 0, 0]);
+        obj.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
+        obj.scale.fromArray(item.scale || [1, 1, 1]);
+        const rec: StrokeRecord = { id: item.id || `box-${this.seq++}`, object: obj, points: WebGLDesign3D.esquinasCaja(), pressures: [],
+          kind: 'box', layerId: item.layerId || this.activeLayerId(), baseOpacity: 1, brush: item.brush ? { ...item.brush } : { ...this.brush } };
+        obj.userData.strokeId = rec.id;
+        rec.groupId = item.groupId || undefined;
+        this.addStrokeRecord(rec);
+        continue;
+      }
       if (!Array.isArray(item.points) || item.points.length < 2) continue;
       const points = item.points.map((p) => new THREE.Vector3(Number(p[0]), Number(p[1]), Number(p[2])));
       const pressures = points.map((_, i) => Number(item.pressures?.[i] ?? 1));

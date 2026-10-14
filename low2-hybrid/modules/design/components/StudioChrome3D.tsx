@@ -15,7 +15,7 @@ type Panel = 'brush' | 'scene' | 'tools' | 'guides' | 'persp' | 'toma' | null;
 const paths: Record<string,string> = {
  pencil:'M4 17 16 5l3 3L7 20H4v-3ZM14 7l3 3', guide:'M3 17 11 5l10 4-8 12L3 17ZM8 11l10 4',
  move:'M12 3v18M3 12h18M9 6l3-3 3 3M6 9l-3 3 3 3M18 9l3 3-3 3M9 18l3 3 3-3',
- eraser:'m4 14 9-10 7 7-8 9H9l-5-6ZM9 9l7 7M12 20h9', rect:'M4 5h16v14H4z',
+ eraser:'m4 14 9-10 7 7-8 9H9l-5-6ZM9 9l7 7M12 20h9', rect:'M4 5h16v14H4z', box:'M12 3 20 7.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12v9M12 12 4 7.5',
  liquify:'M4 7c5-8 7 12 12 4s8 5 1 8M5 16c1-3 5-3 6 0', more:'M5 12h1m5 0h1m5 0h1',
  layers:'m3 8 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5M3 18l9 5 9-5',
  focus:'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 8h8v8H8z',
@@ -31,6 +31,7 @@ const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
  {id:'move',name:'Mover',key:'V',icon:'move',hint:'Seleccioná una pieza · arrastrá el control para transformarla'},
  {id:'eraser',name:'Borrar',key:'E',icon:'eraser',hint:'Tocá un trazo para quitarlo · Ctrl+Z lo recupera'},
  {id:'rect',name:'Figuras',key:'',icon:'rect',hint:'Arrastrá sobre la guía · Shift conserva las proporciones'},
+ {id:'box',name:'Caja',key:'X',icon:'box',hint:'Arrastrá la base sobre el piso · mové para la altura y clic · Esc cancela'},
  {id:'liquify',name:'Deformar',key:'L',icon:'liquify',hint:'Empujá el trazo · el tamaño del pincel define la zona de influencia'},
 ];
 const viewNames:Record<ViewName,string>={persp:'Perspectiva',front:'Frente',back:'Atrás',left:'Izquierda',right:'Derecha',top:'Arriba',bottom:'Abajo'};
