@@ -131,3 +131,15 @@
 .toma3d-mandar { width:100%;padding:8px; }
 .toma3d-mandar:disabled { opacity:.6;cursor:progress; }
 .persp3d-repetir-ya { background:var(--studio-accent)!important;color:#fff!important;border:0;font-weight:700; }
+
+/* guía «Armar un fondo» (primera vez) y aviso de vista vacía */
+.studio-guia { position:absolute;left:104px;top:118px;width:min(400px,calc(100% - 140px));z-index:7;padding:16px 18px; }
+.studio-guia h2 { margin:0 0 10px;font-size:15px; }
+.studio-guia ol { margin:0 0 14px;padding-left:20px;display:grid;gap:8px;color:var(--studio-muted);font-size:12.5px;line-height:1.5; }
+.studio-guia b { color:var(--studio-text,inherit); }
+/* la guía no tapa la mesa: los clics pasan al lienzo (y la cierran); sólo su botón los recibe */
+.studio-guia { pointer-events:none; }
+.studio-guia .studio-guia-ok { pointer-events:auto; background:#F0450E;color:#fff;border:0;border-radius:8px;padding:7px 16px;font-weight:600;cursor:pointer; }
+.studio-guia-link { background:none;border:0;padding:0;color:#F0450E;font-weight:600;cursor:pointer;text-decoration:underline; }
+.studio-vacia { position:absolute;left:50%;top:84px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:8px 10px 8px 16px;z-index:5;font-size:12px; }
+.studio-vacia button { background:#F0450E;color:#fff;border:0;border-radius:7px;padding:5px 12px;font-weight:600;cursor:pointer; }

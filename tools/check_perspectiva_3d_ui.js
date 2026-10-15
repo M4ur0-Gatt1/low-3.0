@@ -60,11 +60,15 @@ const AYUDA = `
       const e = __low3d, cam = e.perspCamera, V = cam.position.constructor;
       const w = e.canvas.clientWidth, h = e.canvas.clientHeight;
       const pr = (v) => { const n = v.clone().project(cam); return { x: (n.x + 1) / 2 * w, y: (1 - n.y) / 2 * h }; };
-      const c = e.vpEl.querySelector('g[data-p="vp-' + eje + '"] circle');
-      if (!c) return { sinPunto: true };
-      const vp = { x: +c.getAttribute("cx"), y: +c.getAttribute("cy") };
+      // el punto de fuga marcado (adentro de la vista: el círculo está EN el punto;
+      // afuera: hay una flecha en el borde, y el punto se calcula aparte)
+      const g = e.vpEl.querySelector('g[data-p="vp-' + eje + '"]');
+      if (!g) return { sinPunto: true };
       const fwd = new V(); cam.getWorldDirection(fwd);
       const k = { x: 0, y: 1, z: 2 }[eje], signo = fwd.getComponent(k) >= 0 ? 1 : -1;
+      let vp;
+      if (g.getAttribute("data-afuera")) { const d = new V(); d.setComponent(k, signo); vp = pr(cam.position.clone().add(d.multiplyScalar(1e5))); }
+      else { const c = g.querySelector("circle"); vp = { x: +c.getAttribute("cx"), y: +c.getAttribute("cy") }; }
       // rectas paralelas al eje, en una grilla alrededor de la cámara
       let peor = 0, medidas = 0;
       const otros = [0, 1, 2].filter((x) => x !== k);

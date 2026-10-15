@@ -210,13 +210,20 @@ function el(tag: string, attrs: Record<string, string | number>, padre?: Element
   return n as SVGElement;
 }
 
-/** Lo que se ve encima de la vista: el marco del cuadro del 2D (afuera, más
- *  oscuro), el horizonte, y los puntos de fuga con su abanico de rectas. */
-export function pintarSuperposicion(svg: SVGSVGElement, cam: THREE.PerspectiveCamera, w: number, h: number, aspecto: number): void {
+/** Lo que se ve encima de la vista en Perspectiva: el horizonte y los puntos
+ *  de fuga SIEMPRE (Mauro, v3.30.0: «no entiendo cómo uso el punto de fuga
+ *  acá» — sin tildar el cuadro del 2D no se veía ni el horizonte, y los puntos
+ *  casi siempre caen fuera de la pantalla). Un punto fuera de la vista lleva
+ *  una FLECHA en el borde que lo señala, con su letra, como en el 2D. El marco
+ *  del cuadro del 2D (afuera más oscuro), sólo si se pide. */
+export function pintarSuperposicion(svg: SVGSVGElement, cam: THREE.PerspectiveCamera, w: number, h: number, aspecto: number,
+    op: { marco?: boolean } = { marco: true }): void {
   while (svg.lastChild) svg.removeChild(svg.lastChild);
-  const m = marcoEnVista(w, h, aspecto);
-  el('path', { d: `M0 0H${w}V${h}H0Z M${m.x} ${m.y}V${m.y + m.h}H${m.x + m.w}V${m.y}Z`, fill: 'rgba(0,0,0,0.28)', 'fill-rule': 'evenodd' }, svg);
-  el('rect', { x: m.x, y: m.y, width: m.w, height: m.h, fill: 'none', stroke: '#F0450E', 'stroke-width': 1.5, 'data-p': 'marco' }, svg);
+  if (op.marco !== false) {
+    const m = marcoEnVista(w, h, aspecto);
+    el('path', { d: `M0 0H${w}V${h}H0Z M${m.x} ${m.y}V${m.y + m.h}H${m.x + m.w}V${m.y}Z`, fill: 'rgba(0,0,0,0.28)', 'fill-rule': 'evenodd' }, svg);
+    el('rect', { x: m.x, y: m.y, width: m.w, height: m.h, fill: 'none', stroke: '#F0450E', 'stroke-width': 1.5, 'data-p': 'marco' }, svg);
+  }
   const hz = horizonte(cam, w, h);
   if (hz) {
     const dx = hz.b.x - hz.a.x, dy = hz.b.y - hz.a.y, n = Math.hypot(dx, dy) || 1, L = (w + h) * 4;
@@ -224,12 +231,30 @@ export function pintarSuperposicion(svg: SVGSVGElement, cam: THREE.PerspectiveCa
       stroke: COLOR_HORIZONTE, 'stroke-width': 1.6, opacity: 0.9, 'data-p': 'horizonte' }, svg);
   }
   const { vps } = puntosDeFuga(cam, w, h);
+  // margen: a la izquierda va la barra de herramientas (≈ 90 px), que tapaba un punto
+  // que caía «adentro»: ahí también se lo señala con la flecha
+  const M = 24, MI = 96, cx = w / 2, cy = h / 2;
   for (const v of vps) {
-    if (Math.abs(v.x) > w * 30 || Math.abs(v.y) > h * 30) continue;
-    // sólo el punto: el abanico de 36 rayos por punto era ruido (v3.29.3)
     const g = el('g', { stroke: v.color, 'data-p': 'vp-' + v.eje }, svg);
-    el('circle', { cx: v.x, cy: v.y, r: 6, fill: '#fff', 'stroke-width': 2.5 }, g);
-    const t = el('text', { x: v.x + 10, y: v.y - 8, fill: v.color, stroke: 'none', 'font-size': 12, 'font-weight': 700, 'font-family': 'Figtree, sans-serif' }, g);
+    const adentro = v.x >= MI && v.x <= w - M && v.y >= M && v.y <= h - M;
+    if (adentro) {
+      // sólo el punto: el abanico de 36 rayos por punto era ruido (v3.29.3)
+      el('circle', { cx: v.x, cy: v.y, r: 6, fill: '#fff', 'stroke-width': 2.5 }, g);
+      const t = el('text', { x: v.x + 10, y: v.y - 8, fill: v.color, stroke: 'none', 'font-size': 12, 'font-weight': 700, 'font-family': 'Figtree, sans-serif' }, g);
+      t.textContent = v.eje.toUpperCase();
+      continue;
+    }
+    // afuera: flecha en el borde, en la dirección del punto
+    const dx = v.x - cx, dy = v.y - cy;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) continue;
+    const tx = dx ? ((dx > 0 ? w - M : MI) - cx) / dx : Infinity, ty = dy ? ((dy > 0 ? h - M : M) - cy) / dy : Infinity;
+    const k = Math.min(tx, ty), x = cx + dx * k, y = cy + dy * k, a = Math.atan2(dy, dx);
+    g.setAttribute('data-afuera', '1');
+    const punta = (r: number, da: number) => `${(x + Math.cos(a + da) * r).toFixed(1)},${(y + Math.sin(a + da) * r).toFixed(1)}`;
+    el('circle', { cx: x, cy: y, r: 13, fill: '#fff', 'stroke-width': 1.8, opacity: 0.95 }, g);
+    el('polygon', { points: [punta(9, 0), punta(6, 2.4), punta(6, -2.4)].join(' '), fill: v.color, stroke: 'none' }, g);
+    const t = el('text', { x: x - Math.cos(a) * 22, y: y - Math.sin(a) * 22 + 4, fill: v.color, stroke: 'none', 'text-anchor': 'middle',
+      'font-size': 12, 'font-weight': 700, 'font-family': 'Figtree, sans-serif' }, g);
     t.textContent = v.eje.toUpperCase();
   }
 }

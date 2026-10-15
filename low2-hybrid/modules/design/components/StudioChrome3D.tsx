@@ -48,6 +48,14 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
  const active=tools.find(t=>t.id===state.currentTool);
  // los avisos del motor (p. ej. «acá no hay dónde apoyar») se VEN unos segundos en la barra de contexto
  const [aviso,setAviso]=useState('');
+ // VISTA VACÍA: hay cosas pero la cámara no muestra ninguna → «Encuadrar lo dibujado»
+ const [vacia,setVacia]=useState(false);
+ useEffect(()=>{const oir=(e:Event)=>setVacia(!!(e as CustomEvent).detail);window.addEventListener('low3d:vista-vacia',oir);return()=>window.removeEventListener('low3d:vista-vacia',oir);},[]);
+ // GUÍA «Armar un fondo»: la primera vez que se abre el estudio; después, desde la ayuda (?)
+ const [guia,setGuia]=useState(()=>{try{return localStorage.getItem('low3d:guia-fondos')!=='1';}catch{return false;}});
+ const cerrarGuia=()=>{setGuia(false);try{localStorage.setItem('low3d:guia-fondos','1');}catch{/* sin almacenamiento */}};
+ // apenas se empieza a trabajar en la mesa, la guía se va sola (no tapa el dibujo)
+ useEffect(()=>{if(!guia)return;const ir=(e:PointerEvent)=>{if((e.target as HTMLElement)?.closest?.('.studio-guia-ok'))return;cerrarGuia();};window.addEventListener('pointerdown',ir,true);return()=>window.removeEventListener('pointerdown',ir,true);},[guia]);
  // RECTAS A LOS EJES (imán de fuga): se ve y se apaga desde la barra del pincel
  const [fuga,setFuga]=useState(true);
  useEffect(()=>{const sync=()=>{const e=engine.current;if(e)setFuga(e.getImanFuga());};sync();const t=window.setTimeout(sync,0);
@@ -129,7 +137,18 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <button aria-pressed={axes} title="Mostrar ejes y puntos de fuga" onClick={()=>setAxes(engine.current?.toggleAxes()??false)}>Ejes</button>
    </div>
    <div className="studio-navigation-hint">Espacio + arrastrar: desplazar <span>·</span> Botón derecho: orbitar <span>·</span> Rueda: acercar</div>
-   {help&&<section className="studio-help studio-surface" aria-label="Ayuda de navegación"><div className="studio-inspector-title"><h2>Dibujar en el espacio</h2><button aria-label="Cerrar ayuda" onClick={()=>setHelp(false)}>×</button></div><p>Creá una guía, dibujá sobre ella y orbitá para continuar desde otro ángulo.</p><dl>{[['P / G','Dibujar / crear guía'],['V / A','Mover / editar puntos'],['E / C','Borrar / cortar'],['F','Dibujo libre; rueda ajusta profundidad'],['J / T / K','Joystick / 2D–3D / precisión'],['Shift / Alt','Línea recta / eje fijo'],['Ctrl G / Ctrl ⇧ G','Agrupar / desagrupar'],['Ctrl E','Convertir selección en volumen'],['Ctrl C / Ctrl V','Copiar / pegar'],['Inicio','Encuadrar selección o escena'],['Tab / Esc','Concentración / cancelar']].map(([k,v])=><React.Fragment key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></React.Fragment>)}</dl></section>}
+   {guia&&!help&&<section className="studio-guia studio-surface" aria-label="Cómo armar un fondo">
+     <h2>Armar un fondo en 4 pasos</h2>
+     <ol>
+       <li><b>Cámara</b>: elegí un encuadre (de frente, en esquina…) y tildá «Ver el cuadro del 2D» para ver lo que sale de fondo. El horizonte es la línea amarilla; las letras X, Y, Z —o sus flechas en el borde— marcan los puntos de fuga.</li>
+       <li><b>Caja</b> (X): arrastrá la base sobre el piso, subí el mouse para la altura y hacé clic.</li>
+       <li><b>Dibujar</b> (P) sobre sus caras: una línea casi recta se acomoda sola y fuga. No hace falta apuntar al punto de fuga.</li>
+       <li><b>Toma</b> → «Mandar este encuadre al 2D»: el fondo y sus puntos de fuga pasan al 2D.</li>
+     </ol>
+     <button className="studio-guia-ok" onClick={cerrarGuia}>Entendido</button>
+   </section>}
+   {vacia&&!guia&&<div className="studio-vacia studio-surface" role="status">No se ve nada de lo dibujado<button onClick={()=>{engine.current?.frameContent();}}>Encuadrar lo dibujado</button></div>}
+   {help&&<section className="studio-help studio-surface" aria-label="Ayuda de navegación"><div className="studio-inspector-title"><h2>Dibujar en el espacio</h2><button aria-label="Cerrar ayuda" onClick={()=>setHelp(false)}>×</button></div><p><button className="studio-guia-link" onClick={()=>{setHelp(false);setGuia(true);}}>Cómo armar un fondo en 4 pasos</button></p><p>Creá una guía, dibujá sobre ella y orbitá para continuar desde otro ángulo.</p><dl>{[['P / G','Dibujar / crear guía'],['V / A','Mover / editar puntos'],['E / C','Borrar / cortar'],['F','Dibujo libre; rueda ajusta profundidad'],['J / T / K','Joystick / 2D–3D / precisión'],['Shift / Alt','Línea recta / eje fijo'],['Ctrl G / Ctrl ⇧ G','Agrupar / desagrupar'],['Ctrl E','Convertir selección en volumen'],['Ctrl C / Ctrl V','Copiar / pegar'],['Inicio','Encuadrar selección o escena'],['Tab / Esc','Concentración / cancelar']].map(([k,v])=><React.Fragment key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></React.Fragment>)}</dl></section>}
    {focus&&<button className="studio-focus-exit studio-surface" onClick={()=>setFocus(false)}>Mostrar interfaz <kbd>Tab</kbd></button>}
  </div>;
 }

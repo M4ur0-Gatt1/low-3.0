@@ -24,6 +24,14 @@ async function main(){
    const key=async(key,code,modifiers=0)=>{await send('Input.dispatchKeyEvent',{type:'keyDown',key,code,modifiers});await send('Input.dispatchKeyEvent',{type:'keyUp',key,code,modifiers});await new Promise(r=>setTimeout(r,80));};
    const stroke=async(x,y,dx,dy)=>{await send('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});for(let i=1;i<=14;i++)await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:x+dx*i/14,y:y+dy*Math.sin(i/14*Math.PI),button:'left',buttons:1});await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:x+dx,y,button:'left',clickCount:1});await new Promise(r=>setTimeout(r,150));};
    await assert('!!document.querySelector(".studio-chrome")','Falta la nueva interfaz');
+   // la primera vez aparece la guía «Armar un fondo en 4 pasos» (v3.30.1); «Entendido» la cierra y no vuelve sola
+   // como la primera vez: sin la marca de «ya la vi» (el Chrome de pruebas guarda localStorage entre pruebas)
+   await evaluate('localStorage.removeItem("low3d:guia-fondos");location.reload();true');
+   for(let i=0;i<60&&!(await evaluate('!!window.__low3d&&!!document.querySelector(".studio-chrome")').catch(()=>false));i++)await new Promise(r=>setTimeout(r,250));
+   await new Promise(r=>setTimeout(r,400));
+   await assert('!!document.querySelector(".studio-guia")','La primera vez no aparece la guía para armar un fondo');
+   await click('.studio-guia-ok');
+   await assert('!document.querySelector(".studio-guia") && localStorage.getItem("low3d:guia-fondos")==="1"','«Entendido» no cerró la guía o no se recuerda');
    await assert('!document.querySelector(".studio-inspector") && document.querySelectorAll("button").length<=26','La vista inicial vuelve a saturarse de paneles');
    await evaluate('__low3d.newProject();__low3d.setView("front")');
    await click('[data-tool="pencil"]');await stroke(350,330,180,55);

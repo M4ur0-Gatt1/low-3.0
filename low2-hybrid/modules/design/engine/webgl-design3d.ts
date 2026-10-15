@@ -696,6 +696,7 @@ export class WebGLDesign3D {
    *  eje (recalculados en vivo — es guía pura, jamás se dibuja ni exporta). */
   toggleAxes(): boolean {
     this.showAxes = !this.showAxes;
+    this.perspFirma = '';   // al volver, la superposición de la cámara se repinta
     this.axesHelper.visible = this.showAxes;
     this.updateVPOverlay();
     return this.showAxes;
@@ -826,18 +827,45 @@ export class WebGLDesign3D {
     }
   }
 
+  /** VISTA VACÍA: hay cosas dibujadas pero ninguna entra en la vista (medido en
+   *  la captura de Mauro: «Escena 3» y la pantalla en blanco, sin pista de dónde
+   *  estaba todo). Se revisa cada medio segundo y se avisa sólo al cambiar; el
+   *  estudio ofrece «Encuadrar lo dibujado». */
+  private vistaVaciaUltima = 0;
+  private vistaVaciaEstado: boolean | null = null;
+  private vistaVaciaRevisar(): void {
+    const ahora = performance.now();
+    if (ahora - this.vistaVaciaUltima < 500) return;
+    this.vistaVaciaUltima = ahora;
+    const objs: THREE.Object3D[] = [...this.strokes.map((r) => r.object), ...this.guides.map((g) => g.mesh)];
+    let vacia = false;
+    if (objs.length && !this.mode.endsWith('drag') && this.mode !== 'draw') {
+      const cam = this.camera as THREE.Camera;
+      cam.updateMatrixWorld(true);
+      const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(
+        (cam as THREE.PerspectiveCamera).projectionMatrix, cam.matrixWorldInverse));
+      const caja = new THREE.Box3();
+      vacia = !objs.some((o) => { caja.setFromObject(o); return !caja.isEmpty() && fr.intersectsBox(caja); });
+    }
+    if (vacia !== this.vistaVaciaEstado) {
+      this.vistaVaciaEstado = vacia;
+      window.dispatchEvent(new CustomEvent('low3d:vista-vacia', { detail: vacia }));
+    }
+  }
+
   /** Marco, horizonte y puntos de fuga encima de la vista. Sólo se rehace si
    *  cambió la cámara o el tamaño: no se reescribe el SVG en cada cuadro. */
   private perspSuperponer(): void {
     if (!this.vpEl) return;
     const w = this.canvas.clientWidth || 1, h = this.canvas.clientHeight || 1;
     const c = this.perspCamera;
-    const firma = [w, h, this.aspecto2D, c.fov, ...c.position.toArray(), ...c.quaternion.toArray()]
+    const marco = this.perspAjustes.activa;
+    const firma = [w, h, this.aspecto2D, c.fov, marco ? 1 : 0, ...c.position.toArray(), ...c.quaternion.toArray()]
       .map((n) => Number(n).toFixed(4)).join(',');
+    this.vpEl.style.display = 'block';
     if (firma === this.perspFirma) return;
     this.perspFirma = firma;
-    this.vpEl.style.display = 'block';
-    pintarSuperposicion(this.vpEl, c, w, h, this.aspecto2D);
+    pintarSuperposicion(this.vpEl, c, w, h, this.aspecto2D, { marco });
   }
 
   /** «Mandar al 2D»: las líneas y lo modelado, renderizados del tamaño del
@@ -5818,8 +5846,12 @@ export class WebGLDesign3D {
     // el cubo copia la orientación de la cámara y se dibuja aparte: su canvas
     // no entra en el picking del dibujo ni en el export
     this.refrescarNavCubo();
-    if (this.perspAjustes.activa && this.view === 'persp') this.perspSuperponer();
-    else if (this.showAxes) this.updateVPOverlay();
+    // en Perspectiva el horizonte y los puntos de fuga se ven SIEMPRE (el marco
+    // del cuadro del 2D, sólo si está prendido); «Ejes» muestra los abanicos
+    if (this.showAxes) this.updateVPOverlay();
+    else if (this.view === 'persp') this.perspSuperponer();
+    else if (this.vpEl && this.vpEl.style.display !== 'none') this.vpEl.style.display = 'none';
+    this.vistaVaciaRevisar();
     // onion-skin por profundidad (depende de la cámara): solo si la vista es
     // ortogonal Y la cámara/target/cantidad de trazos cambió desde el frame
     // anterior.
