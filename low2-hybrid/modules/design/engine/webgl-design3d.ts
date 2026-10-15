@@ -23,6 +23,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { Joystick3D, type JoyMode } from './joystick3d';
 import { NavCubo3D, type NavVista } from './navcubo3d';
 import { frameGeometry } from './frame-content';
+import { PisoInfinito } from './piso-infinito';
 import { Perspectiva3D, AJUSTES_INICIALES, ajustesValidos, posicionCamara, leerCamara, marcoEnVista,
   fovVista, fovRender, puntosDeFuga, pintarSuperposicion, direccion, type Perspectiva3DAjustes,
   type PuntoDeFuga, type Eje } from './perspectiva3d';
@@ -174,7 +175,7 @@ export class WebGLDesign3D {
   private cajaGesto: { fase: 'base' | 'altura'; obj: THREE.Group; origen: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3;
     arriba: THREE.Vector3; q: THREE.Quaternion; plano: THREE.Plane; du: number; dv: number; alto: number } | null = null;
   private strokesGroup!: THREE.Group;
-  private grid!: THREE.GridHelper;
+  private grid!: PisoInfinito;
 
   private surfaces: SurfaceObj[] = [];
   private strokes: StrokeRecord[] = [];
@@ -659,11 +660,9 @@ export class WebGLDesign3D {
     rim.position.set(-5, 2, -4);
     this.scene.add(rim);
 
-    this.grid = new THREE.GridHelper(20, 40, 0xc2c8d2, 0xd7dce4);
-    const gm = this.grid.material as THREE.Material;
-    gm.transparent = true;
-    gm.opacity = 0.5;
-    this.scene.add(this.grid);
+    // el piso SIN FIN, con el centro de trabajo en magenta (engine/piso-infinito.ts)
+    this.grid = new PisoInfinito();
+    this.scene.add(this.grid.mesh);
   }
 
   setTheme(theme: Theme): void {
@@ -671,16 +670,7 @@ export class WebGLDesign3D {
     this.persp3d.actualizar(this.perspAjustes, theme === 'dark');
     const dark = theme === 'dark';
     this.scene.fog = dark ? new THREE.FogExp2(0x34383a, 0.025) : null;
-    const gm = this.grid.material as THREE.LineBasicMaterial;
-    const colors = this.grid.geometry.getAttribute('color') as THREE.BufferAttribute;
-    const c1 = new THREE.Color(dark ? 0x858d92 : 0xc2c8d2);
-    const c2 = new THREE.Color(dark ? 0x687177 : 0xd7dce4);
-    for (let i = 0; i < colors.count; i++) {
-      const c = i < colors.count / 2 ? c1 : c2;
-      colors.setXYZ(i, c.r, c.g, c.b);
-    }
-    colors.needsUpdate = true;
-    gm.opacity = dark ? 0.23 : 0.24;
+    this.grid.tema(dark);
     // el anillo del pincel, con doble borde: uno oscuro y un halo claro por
     // fuera. Así se ve tanto sobre el fondo como sobre un trazo negro, que es
     // donde más se perdía.
@@ -5842,6 +5832,7 @@ export class WebGLDesign3D {
     this.controls.update();
     this.joyRefresh();
     this.perspPreRender();
+    this.grid.seguir(this.camera as THREE.Camera);   // el piso sin fin va debajo de la cámara
     this.renderer.render(this.scene, this.camera as THREE.Camera);
     // el cubo copia la orientación de la cámara y se dibuja aparte: su canvas
     // no entra en el picking del dibujo ni en el export
