@@ -135,6 +135,7 @@ export interface Low3DProject {
     shape?: 'rect' | 'circle' | 'poly';
     apoyo?: number[];
     caja?: boolean;
+    hueco?: boolean;
     /** true = la figura lleva cara sólida ADEMÁS del contorno (una sola pieza). */
     filled?: boolean;
   }>;
@@ -3503,13 +3504,24 @@ export class WebGLDesign3D {
    *  de escalar ya es «cambiar el tamaño», con su Ctrl+Z) y su posición es el
    *  centro de la base. Cara casi transparente de los dos lados —se dibuja en la
    *  pared de afuera o, con la cámara adentro, en la de adentro— y aristas firmes. */
-  private construirCaja(): THREE.Group {
+  private construirCaja(hueco = false): THREE.Group {
     const g = new THREE.Group();
     g.userData.esCaja = true;
+    g.userData.hueco = hueco;
     const geo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    // un HUECO no tiene tapa (su cara de arriba está al ras del piso): así sus
+    // paredes de adentro se ven y se dibujan desde arriba
+    const tapa = hueco ? geo.groups.find((gr) => gr.materialIndex === 2) : null;
+    const caraGeo = tapa ? (() => {
+      const idx = Array.from(geo.getIndex()!.array);
+      const sinTapa = geo.clone();
+      sinTapa.setIndex(idx.filter((_, i) => i < tapa.start || i >= tapa.start + tapa.count));
+      sinTapa.clearGroups();
+      return sinTapa;
+    })() : geo;
     const cara = new THREE.MeshBasicMaterial({ color: 0x33B5E8, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false });
     cara.userData.opBase = 0.1;
-    const mesh = new THREE.Mesh(geo, cara);
+    const mesh = new THREE.Mesh(caraGeo, cara);
     mesh.userData.caraDeCaja = true;
     const aristas = new THREE.LineSegments(new THREE.EdgesGeometry(geo),
       new THREE.LineBasicMaterial({ color: 0x1d8fc0, transparent: true, opacity: 0.9 }));
@@ -3561,7 +3573,10 @@ export class WebGLDesign3D {
       if (haciaCam.lengthSq() < 1e-6) return;
       const pl = new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam.normalize(), centro);
       if (!this.raycaster.ray.intersectPlane(pl, p)) return;
-      c.alto = Math.max(0.05, p.sub(centro).dot(c.arriba));
+      // HACIA ARRIBA construye; HACIA ABAJO cava (Mauro: «hacia abajo cava el
+      // hueco, hacia arriba construye»)
+      const alto = p.sub(centro).dot(c.arriba);
+      c.alto = Math.abs(alto) < 0.05 ? (alto < 0 ? -0.05 : 0.05) : alto;
     }
     this.cajaAplicar(c);
   }
@@ -3569,8 +3584,11 @@ export class WebGLDesign3D {
     return c.origen.clone().add(c.u.clone().multiplyScalar(c.du / 2)).add(c.v.clone().multiplyScalar(c.dv / 2));
   }
   private cajaAplicar(c: NonNullable<WebGLDesign3D['cajaGesto']>): void {
-    c.obj.position.copy(this.cajaCentro(c));
-    c.obj.scale.set(Math.max(Math.abs(c.du), 1e-3), Math.max(c.alto, 1e-3), Math.max(Math.abs(c.dv), 1e-3));
+    // un hueco es la misma caja corrida hacia abajo: su «tapa» queda al ras del piso
+    const centro = this.cajaCentro(c);
+    if (c.alto < 0) centro.addScaledVector(c.arriba, c.alto);
+    c.obj.position.copy(centro);
+    c.obj.scale.set(Math.max(Math.abs(c.du), 1e-3), Math.max(Math.abs(c.alto), 1e-3), Math.max(Math.abs(c.dv), 1e-3));
   }
   /** Soltar la base: si tiene tamaño, ahora la altura (desde Arriba no se ve:
    *  va una de 3 m, que se ajusta con el gizmo de escalar). */
@@ -3581,17 +3599,24 @@ export class WebGLDesign3D {
     c.fase = 'altura';
     c.alto = Math.min(Math.abs(c.du), Math.abs(c.dv));
     this.cajaAplicar(c);
-    this.avisar('Ahora mové el mouse para darle altura y hacé clic · Esc cancela');
+    this.avisar('Ahora mové el mouse: hacia arriba construye, hacia abajo cava un hueco · clic confirma · Esc cancela');
   }
   private cajaConfirmar(): void {
     const c = this.cajaGesto; if (!c) return;
     this.cajaGesto = null;
     this.boxesGroup.remove(c.obj);
+    // un hueco se arma sin tapa (ver construirCaja), con la misma posición y tamaño
+    let obj = c.obj;
+    if (c.alto < 0) {
+      const h = this.construirCaja(true);
+      h.position.copy(obj.position); h.quaternion.copy(obj.quaternion); h.scale.copy(obj.scale);
+      obj = h;
+    }
     const rec: StrokeRecord = {
-      id: `box-${this.seq++}`, object: c.obj, points: WebGLDesign3D.esquinasCaja(), pressures: [], kind: 'box',
+      id: `box-${this.seq++}`, object: obj, points: WebGLDesign3D.esquinasCaja(), pressures: [], kind: 'box',
       layerId: this.activeLayerId(), baseOpacity: 1, brush: { ...this.brush },
     };
-    c.obj.userData.strokeId = rec.id;
+    obj.userData.strokeId = rec.id;
     this.addStrokeRecord(rec);
     this.pushCmd({ undo: () => this.removeStrokeRecord(rec), redo: () => this.addStrokeRecord(rec) });
     this.mode = 'idle';
@@ -5655,7 +5680,7 @@ export class WebGLDesign3D {
         quaternion: rec.object.quaternion.toArray(), scale: rec.object.scale.toArray(),
         brush: { ...rec.brush }, fill: rec.fill || undefined, filled: rec.filled || undefined,
         groupId: rec.groupId || undefined, solid: rec.solid || undefined,
-        shape: rec.shape || undefined, apoyo: rec.apoyo || undefined, caja: rec.kind === 'box' || undefined,
+        shape: rec.shape || undefined, apoyo: rec.apoyo || undefined, caja: rec.kind === 'box' || undefined, hueco: (rec.kind === 'box' && rec.object.userData.hueco) || undefined,
       })),
       // las guías también son parte del proyecto: sin ellas, al reabrir se
       // perdía el andamiaje sobre el que estabas dibujando.
@@ -5686,7 +5711,7 @@ export class WebGLDesign3D {
     }
     for (const item of doc.strokes) {
       if (item.caja) {
-        const obj = this.construirCaja();
+        const obj = this.construirCaja(!!item.hueco);
         obj.position.fromArray(item.position || [0, 0, 0]);
         obj.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
         obj.scale.fromArray(item.scale || [1, 1, 1]);
