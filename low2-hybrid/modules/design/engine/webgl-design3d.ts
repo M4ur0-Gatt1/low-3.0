@@ -208,7 +208,7 @@ export class WebGLDesign3D {
     try { const t = window.localStorage.getItem('low3d:calle-tipo'); return t === 'pasaje' || t === 'avenida' ? t : 'calle'; } catch { return 'calle'; }
   })();
   private cajaGesto: { fase: 'base' | 'altura'; obj: THREE.Group; origen: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3;
-    arriba: THREE.Vector3; q: THREE.Quaternion; plano: THREE.Plane; du: number; dv: number; alto: number } | null = null;
+    arriba: THREE.Vector3; q: THREE.Quaternion; plano: THREE.Plane; du: number; dv: number; alto: number ; enTerreno?: boolean } | null = null;
   private strokesGroup!: THREE.Group;
   private grid!: PisoInfinito;
 
@@ -1884,6 +1884,16 @@ export class WebGLDesign3D {
    *  toca casi de canto (más allá de 300 m). */
   /** El último intento de apoyo cayó en el piso demasiado lejos o de canto. */
   private pisoLejos = false;
+  /** COLOCAR (caja, pieza, calle) no es dibujar: un clic lejos sobre el piso
+   *  vale aunque cada píxel cubra metros. La regla de «medio metro por píxel»
+   *  es para que un TRAZO no salte; aplicada a la caja, a la altura de los ojos
+   *  el piso «no existía» a más de ~23 m (Mauro: «no funciona en toda la
+   *  cuadrícula»). */
+  private apoyoPermisivo = false;
+  private conApoyoPermisivo<T>(f: () => T): T {
+    const antes = this.apoyoPermisivo; this.apoyoPermisivo = true;
+    try { return f(); } finally { this.apoyoPermisivo = antes; }
+  }
   private pisoBajoElCursor(): { point: THREE.Vector3; normal: THREE.Vector3; plane: THREE.Plane; kind: 'surface'; terreno?: boolean } | null {
     const ray = this.raycaster.ray;
     this.pisoLejos = false;
@@ -1900,7 +1910,7 @@ export class WebGLDesign3D {
     const cam = this.camera as THREE.PerspectiveCamera;
     const alto = this.canvas.clientHeight || 1;
     const porPixel = p.distanceTo(ray.origin) * (THREE.MathUtils.degToRad(cam.fov || 45) / alto) / Math.max(1e-6, -ray.direction.y);
-    if (porPixel > 0.5) { this.pisoLejos = true; return null; }
+    if (porPixel > 0.5 && !this.apoyoPermisivo) { this.pisoLejos = true; return null; }
     return { point: p, normal: new THREE.Vector3(0, 1, 0), plane: plano, kind: 'surface' };
   }
   /** Un aviso que SE VE (lo muestra el estudio arriba de la vista). Antes los
@@ -3651,6 +3661,16 @@ export class WebGLDesign3D {
     if (this.terreno.plano()) return null;
     const r = this.raycaster.ray;
     const p = this.terreno.rayo(r.origin.toArray() as [number, number, number], r.direction.toArray() as [number, number, number]);
+    // el AGUA: si el rayo toca un espejo de agua antes que el fondo, apoya ahí
+    // (un muelle, un bote, un reflejo dibujado sobre el lago)
+    const aguas = this.terrenoGroup.children.filter((o) => o.userData.agua);
+    if (aguas.length) {
+      const h = this.raycaster.intersectObjects(aguas, false)[0];
+      if (h && (!p || h.distance < r.origin.distanceTo(new THREE.Vector3(...p)))) {
+        const n = new THREE.Vector3(0, 1, 0);
+        return { point: h.point.clone(), normal: n, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(n, h.point), kind: 'surface', terreno: true };
+      }
+    }
     if (!p) return null;
     const point = new THREE.Vector3(...p), normal = new THREE.Vector3(...this.terreno.normalEn(p[0], p[2]));
     return { point, normal, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(normal, point), kind: 'surface', terreno: true };
@@ -3724,8 +3744,7 @@ export class WebGLDesign3D {
     }
     geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, mat);
-    m.raycast = () => undefined;
-    m.userData.agua = a.tipo;
+    m.userData.agua = a.tipo;            // se toca (es superficie): ver terrenoBajoRayo
     return m;
   }
 
@@ -3870,6 +3889,122 @@ export class WebGLDesign3D {
     this.avisar((tipo === 'rio' ? 'Río listo' : 'Lago listo') + ' · Ctrl+Z lo saca');
   }
 
+  // ══ EL EDITOR DE ELEMENTOS (el «generador» de la escenografía) ═══════════════
+  // Mauro: «tengo que poder generar cada elemento 3D y guardarlo en su
+  // biblioteca». Editar un elemento deja la mesa VACÍA (o con ese elemento en el
+  // origen) para dibujarlo con todas las herramientas; Guardar lo convierte en
+  // elemento (la base es el piso) y vuelve a tu escena como estaba, con su
+  // Ctrl+Z. Las CAJAS del elemento se guardan como VOLÚMENES macizos del color
+  // con que se armaron: en la escena son andamio, en un elemento son cuerpo.
+  /** Lo que espera afuera mientras se edita un elemento: los MISMOS objetos
+   *  (no una copia en datos: el Ctrl+Z de tu escena apunta a ellos; rearmarla
+   *  desde datos dejaba el historial apuntando a objetos que ya no estaban). */
+  private edicion: { escena: Low3DProject; deshacer: Command[]; rehacer: Command[]; nombre: string; categoria: Categoria; id: string | null;
+    aparte: { strokes: StrokeRecord[]; guias: WebGLDesign3D['guides']; superficies: WebGLDesign3D['surfaces']; guiaActiva: WebGLDesign3D['activeGuide'];
+      nombres: Map<string, string>; alturas: Float32Array<ArrayBufferLike>; aguas: Agua[];
+      camara: { view: ViewName; pos: THREE.Vector3; mira: THREE.Vector3 } } } | null = null;
+  enEdicion(): { nombre: string; categoria: Categoria; id: string | null } | null {
+    return this.edicion ? { nombre: this.edicion.nombre, categoria: this.edicion.categoria, id: this.edicion.id } : null;
+  }
+  editarElemento(p: Pieza | null, nombre: string, categoria: Categoria): boolean {
+    if (this.edicion) return false;
+    this.detachRig();
+    this.calleCancelar(); this.aguaCancelar(); this.cajaCancelar();
+    const escena = this.exportProject();             // sólo para el autoguardado
+    const guias = this.guides.slice(), idsGuias = new Set(guias.map((g) => g.id));
+    const aparte = { strokes: this.strokes.slice(), guias, superficies: this.surfaces.filter((s) => idsGuias.has(s.id)), guiaActiva: this.activeGuide,
+      nombres: new Map(this.groupNames), alturas: this.terreno.h.slice(), aguas: this.aguas,
+      camara: { view: this.view, pos: this.camera.position.clone(), mira: this.controls.target.clone() } };
+    this.edicion = { escena, deshacer: this.undoStack, rehacer: this.redoStack, nombre: (nombre || p?.nombre || 'Elemento').slice(0, 60),
+      categoria, id: p?.id ?? null, aparte };
+    // la escena se APARTA (no se borra): sus objetos salen de la vista tal cual son
+    this.selected.clear(); this.gizmo?.detach(); this.clearPointEdit();
+    for (const r of aparte.strokes) r.object.parent?.remove(r.object);
+    for (const g of guias) this.guidesGroup.remove(g.mesh);
+    this.strokes = []; this.guides = []; this.surfaces = this.surfaces.filter((s) => !idsGuias.has(s.id)); this.activeGuide = null;
+    this.groupNames.clear();
+    this.terreno.deTexto(''); this.aguas = []; this.rearmarTerreno();
+    this.undoStack = []; this.redoStack = [];
+    this.publishObjects();
+    if (p) {
+      // el elemento en el origen, SIN agrupar: cada parte se edita suelta
+      const recs = this.colocarPieza(p, new THREE.Vector3(0, 0, 0), { escala: 1, giro: 0, sinVariar: true });
+      for (const r of recs) r.groupId = undefined;
+      this.publishObjects();
+    }
+    if (this.view !== 'persp') this.setView('persp');
+    const r = p ? Math.max(4, Math.hypot(...p.tam) * 0.9) : 6;
+    this.camera.position.set(r * 0.9, r * 0.7, r * 1.25);
+    this.controls.target.set(0, p ? p.tam[1] * 0.4 : 0.8, 0);
+    this.camera.lookAt(this.controls.target); this.controls.update();
+    window.dispatchEvent(new Event('low3d:edicion'));
+    window.dispatchEvent(new Event('low3d:history'));
+    this.avisar('Editando «' + this.edicion.nombre + '»: dibujá, armá cajas y volúmenes · la base es el piso · «Guardar» lo lleva a la escenografía');
+    return true;
+  }
+  /** Todo lo de la mesa como elemento (sin volver todavía). null si no hay nada. */
+  private elementoDeLaMesa(): Pieza | null {
+    if (!this.edicion) return null;
+    this.detachRig();
+    const recs = this.strokes.filter((r) => r.kind !== 'guide' && !r.calle && !(r.kind === 'box' && r.object.userData.hueco));
+    if (!recs.length) return null;
+    const box = new THREE.Box3();
+    for (const r of recs) { r.object.updateMatrixWorld(true); box.expandByObject(r.object); }
+    if (box.isEmpty()) return null;
+    const c = box.getCenter(new THREE.Vector3()), tam = box.getSize(new THREE.Vector3());
+    const base = new THREE.Vector3(c.x, box.min.y, c.z);
+    const items = recs.map((r) => {
+      const it = this.itemDe(r);
+      const pos = new THREE.Vector3().fromArray(it.position).sub(base);
+      const comun = { ...it, id: '', groupId: undefined, layerId: '', position: pos.toArray() };
+      if (r.kind !== 'box') return comun;
+      // la caja, maciza: un volumen con sus 8 esquinas (unidad) y su tamaño en la escala
+      return { ...comun, caja: undefined, hueco: undefined, solid: true, points: WebGLDesign3D.esquinasCaja().map((q) => q.toArray()),
+        pressures: Array(8).fill(1), brush: { ...r.brush, opacity: 1 } };
+    });
+    const r3 = (v: number) => Math.round(v * 1000) / 1000;
+    return { id: this.edicion.id || 'propia-' + Date.now().toString(36), nombre: this.edicion.nombre, categoria: this.edicion.categoria, items,
+      tam: [r3(tam.x), r3(tam.y), r3(tam.z)], variacion: { escalaMin: 1, escalaMax: 1, giro: 'recto' } };
+  }
+  /** Sale del editor. Con `guardar`, devuelve el elemento armado (o null si la
+   *  mesa estaba vacía: entonces NO sale, para no perder nada). */
+  terminarEdicion(guardar: boolean, cambios?: { nombre?: string; categoria?: Categoria }): { ok: boolean; pieza: Pieza | null } {
+    const ed = this.edicion;
+    if (!ed) return { ok: false, pieza: null };
+    if (cambios?.nombre) ed.nombre = cambios.nombre.slice(0, 60);
+    if (cambios?.categoria) ed.categoria = cambios.categoria;
+    let pieza: Pieza | null = null;
+    if (guardar) {
+      pieza = this.elementoDeLaMesa();
+      if (!pieza) { this.avisar('La mesa está vacía: dibujá el elemento antes de guardarlo (o «Cancelar»)'); return { ok: false, pieza: null }; }
+    }
+    this.calleCancelar(); this.aguaCancelar(); this.cajaCancelar();
+    this.edicion = null;
+    // fuera lo del elemento; vuelve TU escena con sus mismos objetos
+    this.selected.clear(); this.gizmo?.detach(); this.clearPointEdit();
+    for (const r of this.strokes) r.object.parent?.remove(r.object);
+    for (const g of this.guides) this.guidesGroup.remove(g.mesh);
+    const idsEd = new Set(this.guides.map((g) => g.id));
+    this.surfaces = this.surfaces.filter((s) => !idsEd.has(s.id));
+    const a = ed.aparte;
+    this.strokes = [];
+    this.groupNames.clear(); for (const [k, v] of a.nombres) this.groupNames.set(k, v);
+    this.terreno.h = a.alturas; this.aguas = a.aguas; this.rearmarTerreno();
+    for (const r of a.strokes) { this.grupoDe(r).add(r.object); this.strokes.push(r); }
+    if (this.strokes.some((r) => r.calle)) this.regenerarCalles();
+    for (const g of a.guias) this.guidesGroup.add(g.mesh);
+    this.guides = a.guias; this.surfaces.push(...a.superficies); this.activeGuide = a.guiaActiva;
+    if (this.view !== a.camara.view) this.setView(a.camara.view);
+    this.camera.position.copy(a.camara.pos); this.controls.target.copy(a.camara.mira);
+    this.camera.lookAt(this.controls.target); this.controls.update();
+    this.applyLayerStyles(); this.publishObjects();
+    this.undoStack = ed.deshacer; this.redoStack = ed.rehacer;
+    window.dispatchEvent(new Event('low3d:edicion'));
+    window.dispatchEvent(new Event('low3d:history'));
+    this.avisar(pieza ? '«' + pieza.nombre + '» guardado en la escenografía · elegilo en la biblioteca para colocarlo' : 'Edición cancelada: tu escena quedó como estaba');
+    return { ok: true, pieza };
+  }
+
   // ══ PIEZAS DE LA BIBLIOTECA (N) ═════════════════════════════════════════════
   // Ver biblioteca3d.ts. Clic sobre el piso (o la tapa de una caja) coloca la
   // pieza elegida; arrastrar SIEMBRA copias separadas (árboles, rocas). Cada
@@ -3889,11 +4024,18 @@ export class WebGLDesign3D {
   /** Dónde se apoya una pieza bajo el cursor: el piso o la tapa de una caja. */
   private apoyoDePieza(): THREE.Vector3 | null {
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
-    const hit = this.resolveHit();
+    const hit = this.conApoyoPermisivo(() => this.resolveHit());
     if (!hit) return null;
     const q = new THREE.Quaternion();
     let arriba = new THREE.Vector3(0, 1, 0);
     if (hit.kind === 'box' && hit.target) { hit.target.getWorldQuaternion(q); arriba = new THREE.Vector3(0, 1, 0).applyQuaternion(q); }
+    if ((hit as HitInfo).terreno) {
+      if (hit.normal.y < 0.35) return null;                     // un barranco no
+      // asentada en lo más bajo debajo de la pieza: en una ladera no flota
+      const p = this.piezaActiva, r = p ? Math.max(p.tam[0], p.tam[2]) * 0.3 : 0, en = hit.point.clone();
+      for (const [dx, dz] of [[r, 0], [-r, 0], [0, r], [0, -r]]) en.y = Math.min(en.y, this.terreno.alturaEn(en.x + dx, en.z + dz));
+      return en;
+    }
     return hit.normal.dot(arriba) > 0.7 ? hit.point.clone() : null;
   }
 
@@ -4080,10 +4222,16 @@ export class WebGLDesign3D {
     if (!yo) return;
     const pz = piezasDeCalle(yo, red);
     const inv = rec.object.matrixWorld.clone().invert();
-    const local = (q: THREE.Vector2, y: number) => new THREE.Vector3(q.x, y, q.y).applyMatrix4(inv);
+    // el PERFIL de la calle: la altura de su eje (0 en piso plano; sobre el
+    // terreno, la del camino nivelado)
+    const eje = rec.points.map((q) => q.clone().applyMatrix4(rec.object.matrixWorld));
+    const conPerfil = eje.some((q) => Math.abs(q.y) > 1e-4);
+    const perfil = (q: THREE.Vector2) => conPerfil ? WebGLDesign3D.alturaEnEje(eje, q) : 0;
+    const local = (q: THREE.Vector2, y: number) => new THREE.Vector3(q.x, perfil(q) + y, q.y).applyMatrix4(inv);
     // de abajo hacia arriba: vereda, calzada, pintura (donde se cruzan, manda la calzada)
     const relleno = (poly: THREE.Vector2[], y: number, color: string) => {
-      const m = this.buildFillMesh(poly.map((q) => local(q, y)), { ...rec.brush, color, opacity: 1 });
+      const m = conPerfil ? this.mallaApoyada(poly.map((q) => local(q, y)), { ...rec.brush, color, opacity: 1 })
+        : this.buildFillMesh(poly.map((q) => local(q, y)), { ...rec.brush, color, opacity: 1 });
       if (m) { m.userData.esRelleno = true; rec.object.add(m); }
     };
     relleno(pz.vereda, 0.006, this.estiloCalles.vereda);
@@ -4097,6 +4245,64 @@ export class WebGLDesign3D {
     }
   }
 
+  /** La altura del eje (x, z con su y) en el punto más cercano a q. */
+  private static alturaEnEje(eje: THREE.Vector3[], q: THREE.Vector2): number {
+    let mejor = Infinity, y = eje[0]?.y ?? 0;
+    for (let i = 0; i < eje.length - 1; i++) {
+      const a = eje[i], b = eje[i + 1], dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz || 1e-9;
+      const s = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.z) * dz) / L2));
+      const d = Math.hypot(q.x - a.x - dx * s, q.y - a.z - dz * s);
+      if (d < mejor) { mejor = d; y = a.y + (b.y - a.y) * s; }
+    }
+    return y;
+  }
+  /** Un relleno APOYADO: el contorno se triangula en planta y cada vértice
+   *  conserva su altura (no se aplana contra un plano como buildFillMesh). */
+  private mallaApoyada(contorno: THREE.Vector3[], brush: BrushSettings): THREE.Mesh | null {
+    if (contorno.length < 4 || contorno.length % 2) return null;
+    // las piezas de una calle son FRANJAS (calles.ts: un borde de ida y el otro
+    // de vuelta): se arman como cinta, borde con borde. Triangular el contorno
+    // en planta hacía cuñas en las curvas (el contorno se cruza consigo mismo).
+    const n = contorno.length / 2, L = contorno.slice(0, n), R = contorno.slice(n).reverse();
+    const pos: number[] = [], idx: number[] = [];
+    for (let i = 0; i < n; i++) pos.push(L[i].x, L[i].y, L[i].z, R[i].x, R[i].y, R[i].z);
+    for (let i = 0; i < n - 1; i++) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: new THREE.Color(brush.color), roughness: 0.85, metalness: 0,
+      side: THREE.DoubleSide, transparent: brush.opacity < 1, opacity: brush.opacity }));
+    m.renderOrder = -1;
+    return m;
+  }
+  /** Nivela el terreno debajo de un camino: hasta `ancho` del eje queda al
+   *  perfil del camino (un poquito abajo); en 3 m de banquina se funde con el
+   *  original. Devuelve el rectángulo tocado de la grilla. */
+  private nivelarBajoCalle(eje: THREE.Vector3[], ancho: number): [number, number, number, number] | null {
+    const banquina = 3, r = ancho + banquina;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const q of eje) { x0 = Math.min(x0, q.x - r); x1 = Math.max(x1, q.x + r); z0 = Math.min(z0, q.z - r); z1 = Math.max(z1, q.z + r); }
+    const [gi0, gj0] = Terreno.aGrilla(x0, z0), [gi1, gj1] = Terreno.aGrilla(x1, z1);
+    const i0 = Math.max(0, Math.floor(gi0)), j0 = Math.max(0, Math.floor(gj0)), i1 = Math.min(LADO_TERRENO, Math.ceil(gi1)), j1 = Math.min(LADO_TERRENO, Math.ceil(gj1));
+    if (i0 > i1 || j0 > j1) return null;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const [x, z] = Terreno.aMundo(i, j);
+      let mejor = Infinity, y = 0;
+      for (let s = 0; s < eje.length - 1; s++) {
+        const a = eje[s], b = eje[s + 1], dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz || 1e-9;
+        const u = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / L2));
+        const d = Math.hypot(x - a.x - dx * u, z - a.z - dz * u);
+        if (d < mejor) { mejor = d; y = a.y + (b.y - a.y) * u; }
+      }
+      if (mejor > r) continue;
+      const id = Terreno.idx(i, j), camino = y - 0.05;
+      const k = mejor <= ancho ? 1 : 1 - (mejor - ancho) / banquina;
+      this.terreno.h[id] += (camino - this.terreno.h[id]) * Math.max(0, Math.min(1, k));
+    }
+    return [i0, j0, i1, j1];
+  }
+
   private calleClic(e: PointerEvent): void {
     const g = this.calleGesto;
     // el segundo clic de un doble clic termina la calle (el primero ya marcó el punto)
@@ -4105,7 +4311,7 @@ export class WebGLDesign3D {
     this.calleUltimoClic = { t: doble ? 0 : ahora, x: e.clientX, y: e.clientY };
     if (g && doble) { this.calleTerminar(); return; }
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
-    const piso = this.pisoBajoElCursor();
+    const piso = this.conApoyoPermisivo(() => this.pisoBajoElCursor());
     if (!piso) {
       this.avisar(this.pisoLejos ? 'Ahí el piso queda muy lejos: acercá la cámara o mirá más desde arriba'
         : 'Las calles se marcan sobre el piso: miralo en Perspectiva o desde Arriba');
@@ -4148,7 +4354,7 @@ export class WebGLDesign3D {
     const g = this.calleGesto; if (!g) return;
     const pts = g.pts.slice();
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
-    const piso = this.pisoBajoElCursor();
+    const piso = this.conApoyoPermisivo(() => this.pisoBajoElCursor());
     if (piso) pts.push(this.calleDondeCae(new THREE.Vector2(piso.point.x, piso.point.z), false).p);
     g.linea.geometry.dispose();
     g.linea.geometry = new THREE.BufferGeometry().setFromPoints(pts.map((q) => new THREE.Vector3(q.x, 0.05, q.y)));
@@ -4192,19 +4398,50 @@ export class WebGLDesign3D {
       pts = [...base, ...nuevo.slice(1)];
       seguida = rec;
     }
+    // SOBRE EL TERRENO (Mauro: «todas las herramientas deben poder trabajar en
+    // los terrenos»): el eje se densifica (un punto cada ~3 m), toma la altura
+    // del suelo suavizada, y el terreno se NIVELA debajo (calzada y veredas),
+    // fundiéndose con el original en la banquina. En piso plano, como siempre.
+    const conRelieve = !this.terreno.plano();
+    let alturas: number[] = pts.map(() => 0);
+    const antesH = conRelieve ? this.terreno.h.slice() : null;
+    if (conRelieve) {
+      const densos: THREE.Vector2[] = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1], n = Math.max(1, Math.ceil(a.distanceTo(b) / 3));
+        for (let k = 0; k < n; k++) densos.push(a.clone().lerp(b, k / n));
+      }
+      densos.push(pts[pts.length - 1].clone());
+      pts = densos;
+      const crudas = pts.map((q) => this.terreno.alturaEn(q.x, q.y));
+      alturas = crudas.map((_, i) => { let s = 0, c = 0; for (let k = -2; k <= 2; k++) { const j = i + k; if (j >= 0 && j < crudas.length) { s += crudas[j]; c++; } } return s / c; });
+    }
     const group = new THREE.Group();
     const rec: StrokeRecord = {
-      id: `calle-${this.seq++}`, object: group, points: pts.map((q) => new THREE.Vector3(q.x, 0, q.y)),
+      id: `calle-${this.seq++}`, object: group, points: pts.map((q, i) => new THREE.Vector3(q.x, alturas[i], q.y)),
       pressures: pts.map(() => 1), kind: 'stroke', calle: tipo, layerId: seguida?.layerId ?? this.activeLayerId(),
       baseOpacity: 1, brush: { ...this.brush }, apoyo: [0, 1, 0, 0],
     };
     group.userData.strokeId = rec.id;
     if (seguida) this.removeStrokeRecord(seguida);
+    // la nivelación: antes de sumar la calle (su malla se arma sobre el perfil)
+    let parches: { antes: Parche; despues: Parche } | null = null;
+    if (antesH) {
+      const r = this.nivelarBajoCalle(rec.points, MEDIDAS[tipo].calzada / 2 + MEDIDAS[tipo].vereda);
+      if (r) {
+        const despues = this.terreno.copiar(...r);
+        const actual = this.terreno.h; this.terreno.h = antesH;
+        const antes = this.terreno.copiar(...r);
+        this.terreno.h = actual;
+        parches = { antes, despues };
+        this.rearmarTerreno();
+      }
+    }
     this.addStrokeRecord(rec);
     const vieja = seguida;
     this.pushCmd({
-      undo: () => { this.removeStrokeRecord(rec); if (vieja) this.addStrokeRecord(vieja); },
-      redo: () => { if (vieja) this.removeStrokeRecord(vieja); this.addStrokeRecord(rec); },
+      undo: () => { this.removeStrokeRecord(rec); if (vieja) this.addStrokeRecord(vieja); if (parches) { this.terreno.pegar(parches.antes); this.rearmarTerreno(); } },
+      redo: () => { if (parches) { this.terreno.pegar(parches.despues); this.rearmarTerreno(); } if (vieja) this.removeStrokeRecord(vieja); this.addStrokeRecord(rec); },
     });
     this.avisar((vieja ? 'Calle continuada' : ({ pasaje: 'Pasaje listo', calle: 'Calle lista', avenida: 'Avenida lista' } as const)[tipo]) +
       ' · marcá otra con clics o Ctrl+Z la saca');
@@ -4212,11 +4449,14 @@ export class WebGLDesign3D {
 
   private cajaEmpezar(e: PointerEvent): void {
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
-    const hit = this.resolveHit() ?? (this.view !== 'persp' ? null : null);
+    const hit = this.conApoyoPermisivo(() => this.resolveHit());
     const q = new THREE.Quaternion();
     let arriba = new THREE.Vector3(0, 1, 0);
     if (hit?.kind === 'box' && hit.target) { hit.target.getWorldQuaternion(q); arriba = new THREE.Vector3(0, 1, 0).applyQuaternion(q); }
-    if (!hit || hit.normal.dot(arriba) < 0.9) {
+    // en el TERRENO vale una ladera (no un barranco): la base va horizontal y
+    // se apoya en lo más bajo debajo de ella (ver cajaAplicar)
+    const enTerreno = !!(hit as HitInfo | null)?.terreno;
+    if (!hit || (enTerreno ? hit.normal.y < 0.35 : hit.normal.dot(arriba) < 0.9)) {
       this.avisar(this.view === 'persp' || this.view === 'top' ? 'La caja se apoya en el piso o sobre la tapa de otra caja'
         : 'La caja se arma en Perspectiva o desde Arriba: en esta vista no se ve el piso');
       return;
@@ -4228,7 +4468,7 @@ export class WebGLDesign3D {
     obj.scale.set(1e-3, 1e-3, 1e-3);
     this.boxesGroup.add(obj);
     this.cajaGesto = { fase: 'base', obj, origen: hit.point.clone(), u, v, arriba, q,
-      plano: new THREE.Plane().setFromNormalAndCoplanarPoint(arriba, hit.point), du: 0, dv: 0, alto: 0 };
+      plano: new THREE.Plane().setFromNormalAndCoplanarPoint(arriba, hit.point), du: 0, dv: 0, alto: 0, enTerreno };
     this.capturePointer(e);
     this.activePointerId = e.pointerId;
     this.mode = 'draw';
@@ -4239,7 +4479,11 @@ export class WebGLDesign3D {
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
     const p = new THREE.Vector3();
     if (c.fase === 'base') {
-      if (!this.raycaster.ray.intersectPlane(c.plano, p)) return;
+      // en una ladera la esquina va al punto del TERRENO bajo el cursor (en x, z):
+      // el plano horizontal del primer punto la mandaba lejos, cuesta arriba
+      const t = c.enTerreno ? this.terrenoBajoRayo() : null;
+      if (t) p.copy(t.point).setY(c.origen.y);
+      else if (!this.raycaster.ray.intersectPlane(c.plano, p)) return;
       const d = p.sub(c.origen);
       c.du = d.dot(c.u); c.dv = d.dot(c.v);
       if (e.shiftKey) { const m = Math.max(Math.abs(c.du), Math.abs(c.dv)); c.du = Math.sign(c.du || 1) * m; c.dv = Math.sign(c.dv || 1) * m; }
@@ -4266,8 +4510,19 @@ export class WebGLDesign3D {
     // un hueco es la misma caja corrida hacia abajo: su «tapa» queda al ras del piso
     const centro = this.cajaCentro(c);
     if (c.alto < 0) centro.addScaledVector(c.arriba, c.alto);
+    let extra = 0;
+    if (c.enTerreno && c.alto > 0) {
+      // sobre una ladera: la base baja hasta lo más bajo del terreno debajo de
+      // la caja (no queda flotando) y el techo sigue donde se marcó
+      let bajo = Infinity;
+      for (const [s, r] of [[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0.5]]) {
+        const q = c.origen.clone().addScaledVector(c.u, c.du * s).addScaledVector(c.v, c.dv * r);
+        bajo = Math.min(bajo, this.terreno.alturaEn(q.x, q.z));
+      }
+      if (Number.isFinite(bajo) && bajo < centro.y) { extra = centro.y - bajo; centro.y = bajo; }
+    }
     c.obj.position.copy(centro);
-    c.obj.scale.set(Math.max(Math.abs(c.du), 1e-3), Math.max(Math.abs(c.alto), 1e-3), Math.max(Math.abs(c.dv), 1e-3));
+    c.obj.scale.set(Math.max(Math.abs(c.du), 1e-3), Math.max(Math.abs(c.alto) + extra, 1e-3), Math.max(Math.abs(c.dv), 1e-3));
   }
   /** Soltar la base: si tiene tamaño, ahora la altura (desde Arriba no se ve:
    *  va una de 3 m, que se ajusta con el gizmo de escalar). */
@@ -6096,7 +6351,10 @@ export class WebGLDesign3D {
     if (this.autosaveTimer) window.clearTimeout(this.autosaveTimer);
     this.autosaveTimer = window.setTimeout(() => {
       try {
-        window.localStorage.setItem(WebGLDesign3D.AUTOSAVE_KEY, JSON.stringify(this.exportProject()));
+        // editando un elemento, lo que se resguarda es TU ESCENA (la que espera
+        // afuera), no el elemento a medio hacer
+        const datos = this.edicion ? this.edicion.escena : this.exportProject();
+        window.localStorage.setItem(WebGLDesign3D.AUTOSAVE_KEY, JSON.stringify(datos));
       } catch {
         // sin espacio o storage bloqueado: no romper el dibujo por esto
       }

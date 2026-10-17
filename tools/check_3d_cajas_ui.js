@@ -141,6 +141,36 @@ async function main() {
       const g = c.getContext("2d"); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, 320, 180).data; let m = 0; for (let i = 3; i < d.length; i += 4) m = Math.max(m, d[i]); return m; })()`);
     if (maxAlfa !== 0) mal("la caja salió en el layout del 2D (es andamio)", { maxAlfa });
 
+    // ── 7. EN TODA LA CUADRÍCULA (Mauro, v3.33: «no funciona en toda la
+    // cuadrícula… ¿o porque tenía terreno?»). Con la cámara de inicio (a la
+    // altura de los ojos), el piso a más de ~23 m se rechazaba: la regla de
+    // «medio metro por píxel» es para que el DIBUJO no salte, no para apoyar
+    // una caja. Y sobre una ladera, la caja exigía una normal casi vertical.
+    await ev(`(()=>{ const e = __low3d; e.newProject(); e.setView("persp"); return true; })()`); await w(200);
+    await herramienta("box");
+    // los puntos del gesto, sobre el SUELO (el piso o la superficie del terreno)
+    const suelo = (x, z) => ev(`__low3d.alturaTerreno(${x}, ${z})`);
+    const lejos = async (x, z) => {
+      const a = await aPantalla([x - 2, await suelo(x - 2, z + 2), z + 2]), b = await aPantalla([x + 2, await suelo(x + 2, z - 2), z - 2]);
+      await arrastrar(a, b);
+      const h = await aPantalla([x, (await suelo(x, z)) + 4, z]); await mover(h); await clic(h);
+    };
+    await lejos(0, -40);
+    c = await cajas();
+    if (c.length !== 1 || Math.abs(c[0].pos[2] + 40) > 0.6 || Math.abs(c[0].pos[1]) > 1e-3) mal("una caja a 40 m de la cámara no se pudo armar (el piso lejano se rechazaba)", c);
+    // sobre una LADERA del terreno (~34°: la caja exigía normal > 0,9): base horizontal, apoyada en lo más bajo debajo de ella
+    await ev(`(()=>{ const e = __low3d, T = e.terreno; for (let k = 0; k < 4; k++) T.pincelar(14, -20, { modo: "levantar", radio: 18, fuerza: .8 }, 1); e.rearmarTerreno(); return true; })()`);
+    const ladera = await ev(`({ y: __low3d.alturaTerreno(6, -20), n: __low3d.terreno.normalEn(6, -20) })`);
+    if (!(ladera.y > 1 && ladera.n[1] < 0.9 && ladera.n[1] > 0.6)) mal("la prueba no armó una ladera razonable", ladera);
+    // la cámara mirando la ladera de frente (desde la cámara de inicio se ve de canto: el rayo la roza)
+    await camara([-22, 16, -8], [8, 3, -20]); await w(200);
+    await lejos(6, -20);
+    c = await cajas();
+    const enLadera = c.find((k) => Math.abs(k.pos[0] - 6) < 0.8 && Math.abs(k.pos[2] + 20) < 0.8);
+    if (!enLadera) mal("sobre una ladera del terreno no se pudo armar una caja", { c, ladera });
+    const bajo = await ev(`Math.min(...[[-2,-2],[2,-2],[-2,2],[2,2],[0,0]].map(([dx,dz]) => __low3d.alturaTerreno(${enLadera.pos[0]} + dx * ${enLadera.tam[0]} / 4, ${enLadera.pos[2]} + dz * ${enLadera.tam[2]} / 4)))`);
+    if (enLadera.pos[1] > bajo + 0.05) mal("la caja en la ladera quedó flotando (su base no está en lo más bajo debajo de ella)", { enLadera, bajo });
+
     const graves = errores.filter((e) => !/ResizeObserver/.test(String(e)));
     if (graves.length) mal("hubo excepciones", graves.slice(0, 3));
     console.log("E2E cajas del 3D OK", JSON.stringify({ caja: { pos: [cx, cy, cz], tam: [sx, sy, sz] } }));
