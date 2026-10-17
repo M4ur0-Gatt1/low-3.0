@@ -25,8 +25,9 @@ import type { ItemProyecto } from './webgl-design3d';
 
 export type Categoria = 'edificio' | 'casa' | 'arbol' | 'vegetacion' | 'calle' | 'roca' | 'otro';
 export const CATEGORIAS: { id: Categoria; nombre: string }[] = [
+  // decorados (lo que arma el lugar), ambientación (lo que lo viste), utilería (lo que se usa)
   { id: 'casa', nombre: 'Casas' }, { id: 'edificio', nombre: 'Edificios' }, { id: 'arbol', nombre: 'Árboles' },
-  { id: 'vegetacion', nombre: 'Plantas' }, { id: 'calle', nombre: 'Equipamiento' }, { id: 'roca', nombre: 'Rocas' }, { id: 'otro', nombre: 'Otras' },
+  { id: 'vegetacion', nombre: 'Plantas' }, { id: 'calle', nombre: 'Ambientación' }, { id: 'roca', nombre: 'Rocas' }, { id: 'otro', nombre: 'Utilería' },
 ];
 
 /** Cómo varía cada copia al colocarla. */

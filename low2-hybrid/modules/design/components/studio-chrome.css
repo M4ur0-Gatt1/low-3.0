@@ -146,6 +146,13 @@
 .biblio3d-cats button { border:1px solid var(--studio-line);border-radius:999px;padding:3px 9px;background:var(--studio-input);color:var(--studio-fg);font-size:11.5px;cursor:pointer; }
 .biblio3d-cats button[aria-selected=true] { border-color:var(--studio-accent);color:var(--studio-accent); }
 .biblio3d-grilla { display:grid;grid-template-columns:repeat(3,1fr);gap:6px; }
+.biblio3d-carta { position:relative;display:flex; }
+.biblio3d-carta > button:first-child { flex:1; }
+.biblio3d-carta.on > button:first-child { border-color:var(--studio-accent);box-shadow:0 0 0 1px var(--studio-accent); }
+.biblio3d-grilla .biblio3d-editar { position:absolute;top:3px;right:3px;width:22px;height:22px;padding:0;border-radius:6px;font-size:12px;opacity:.75; }
+.biblio3d-grilla .biblio3d-editar:hover { opacity:1;border-color:var(--studio-accent); }
+.biblio3d-grilla .biblio3d-nuevo { justify-content:center;border-style:dashed;min-height:96px;font-weight:600; }
+.biblio3d-editando { margin:0;padding:6px 8px;border-radius:8px;background:var(--studio-accent);color:#fff;font-weight:700;font-size:12px;text-align:center; }
 .biblio3d-grilla button { display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 3px;border:1px solid var(--studio-line);border-radius:9px;background:var(--studio-input);color:var(--studio-fg);cursor:pointer;font-size:11px;line-height:1.2; }
 .biblio3d-grilla button.on { border-color:var(--studio-accent);box-shadow:0 0 0 1px var(--studio-accent); }
 .biblio3d-grilla img, .biblio3d-cargando { width:64px;height:64px;display:block; }

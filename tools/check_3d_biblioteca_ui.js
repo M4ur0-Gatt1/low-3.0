@@ -92,9 +92,9 @@ async function main() {
     // ── 1. Construir → Piezas abre la biblioteca
     await clicEn(".studio-tool-rail .studio-grupo .studio-grupo-caret");
     await clicEn('.studio-grupo-menu [data-tool="pieza"]');
-    const panel = await ev(`({ titulo: (document.querySelector(".studio-inspector-title h2") || {}).textContent, kit: (document.querySelector('[aria-label="Kit de piezas"]') || {}).value,
+    const panel = await ev(`({ titulo: (document.querySelector(".studio-inspector-title h2") || {}).textContent, kit: (document.querySelector('[aria-label="Escenografía"]') || {}).value,
       piezas: [...document.querySelectorAll(".biblio3d-grilla [data-pieza]")].map(b => b.textContent.trim()), tool: __lowStore.getState().currentTool })`);
-    if (panel.titulo !== "Biblioteca de piezas" || panel.tool !== "pieza") mal("Construir → Piezas no abrió la biblioteca", panel);
+    if (panel.titulo !== "Biblioteca de escenografía" || panel.tool !== "pieza") mal("Construir → Piezas no abrió la biblioteca", panel);
     if (panel.kit !== "fabrica-plano" || panel.piezas.length < 8 || !panel.piezas.includes("Árbol")) mal("la biblioteca no trae el kit «Color plano» con sus piezas", panel);
     let minis = 0;
     for (let i = 0; i < 40 && minis < panel.piezas.length; i++) { minis = await ev(`[...document.querySelectorAll(".biblio3d-grilla img")].filter(i => i.src.startsWith("data:image/png") && i.src.length > 500).length`); if (minis < panel.piezas.length) await w(250); }
@@ -130,14 +130,14 @@ async function main() {
     // ── 5. una pieza propia a partir de lo elegido
     await ev(`(()=>{ const o = __lowStore.getState().objects.find(o => o.name === "Pino"); __low3d.selectObjectById(o.id); return true; })()`); await w(150);
     await clicEn(".biblio3d-guardar");
-    await ev(`(()=>{ const i = document.querySelector('[aria-label="Nombre de la pieza"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, "Mi pino"); i.dispatchEvent(new Event("input", { bubbles: true }));
-      const s = document.querySelector('[aria-label="Categoría de la pieza"]'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "arbol"); s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+    await ev(`(()=>{ const i = document.querySelector('[aria-label="Nombre del elemento"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, "Mi pino"); i.dispatchEvent(new Event("input", { bubbles: true }));
+      const s = document.querySelector('[aria-label="Categoría del elemento"]'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "arbol"); s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
     await w(100);
     await ev(`(()=>{ [...document.querySelectorAll(".biblio3d .persp3d-boton")].find(b => b.textContent === "Guardar").click(); return true; })()`);
     await w(400);
-    const propio = await ev(`({ kit: document.querySelector('[aria-label="Kit de piezas"]').selectedOptions[0].textContent, piezas: [...document.querySelectorAll(".biblio3d-grilla [data-pieza]")].map(b => b.textContent.trim()),
+    const propio = await ev(`({ kit: document.querySelector('[aria-label="Escenografía"]').selectedOptions[0].textContent, piezas: [...document.querySelectorAll(".biblio3d-grilla [data-pieza]")].map(b => b.textContent.trim()),
       guardado: JSON.parse(localStorage.getItem("low3d:kits") || "[]").map(k => ({ nombre: k.nombre, n: k.piezas.length })) })`);
-    if (propio.kit !== "Color plano (mío)" || !propio.piezas.includes("Mi pino")) mal("guardar lo elegido no creó tu copia del kit con la pieza nueva", propio);
+    if (propio.kit !== "Color plano (mía)" || !propio.piezas.includes("Mi pino")) mal("guardar lo elegido no creó tu copia del kit con la pieza nueva", propio);
     if (!propio.guardado.length || propio.guardado[0].n !== panel.piezas.length + 1) mal("el kit propio no quedó guardado", propio.guardado);
     await ev(`(()=>{ const b = [...document.querySelectorAll(".biblio3d-grilla [data-pieza]")].find(b => b.textContent.trim() === "Mi pino"); b.click(); return true; })()`); await w(150);
     await clicMundo([-8, 0, -6], 8);
@@ -147,7 +147,7 @@ async function main() {
 
     // ── 6. otro estilo: las calles cambian de color
     const antes = await ev(`__low3d.getEstiloCalles().calzada`);
-    await ev(`(()=>{ const s = document.querySelector('[aria-label="Kit de piezas"]'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "fabrica-linea"); s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+    await ev(`(()=>{ const s = document.querySelector('[aria-label="Escenografía"]'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "fabrica-linea"); s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
     await w(300);
     const despues = await ev(`({ calzada: __low3d.getEstiloCalles().calzada, piezas: [...document.querySelectorAll(".biblio3d-grilla [data-pieza]")].length })`);
     if (despues.calzada === antes || despues.calzada !== "#f4f2ee" || despues.piezas < 6) mal("el kit «Boceto en línea» no cambió el estilo (o no tiene piezas)", { antes, despues });

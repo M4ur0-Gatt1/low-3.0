@@ -131,6 +131,34 @@ async function main() {
     if ((await ev(`__low3d.terrenoInfo().aguas.length`)) !== 1 || !((await alto(-39, -33)) > -0.5)) mal("Ctrl+Z no sacó el lago con su hondonada", await ev(`__low3d.terrenoInfo()`));
     await tecla("z", "KeyZ", 90, 2 | 8);
 
+    // ── 5b. TODAS LAS HERRAMIENTAS SOBRE EL TERRENO Y EL AGUA (Mauro, v3.33)
+    // dibujar sobre el lago: el trazo queda en el ESPEJO de agua, no en el fondo
+    await ev(`__lowStore.setCurrentTool("pencil"); true`); await w(150);
+    const nivelLago = lago.nivel[0];
+    const antesAgua = await ev(`__low3d.strokes.length`);
+    await gesto(Array.from({ length: 13 }, (_, k) => [-45 + k * 0.8, nivelLago, -34 + k * 0.2]));
+    if ((await ev(`__low3d.strokes.length`)) !== antesAgua + 1) mal("dibujar sobre el lago no dejó un trazo", { antesAgua });
+    const sobreAgua = await ev(`(()=>{ const s = __low3d.strokes.at(-1); s.object.updateMatrixWorld(true);
+      const ys = s.points.map(p => p.clone().applyMatrix4(s.object.matrixWorld).y); return { min: Math.min(...ys), max: Math.max(...ys) }; })()`);
+    if (Math.abs(sobreAgua.min - nivelLago) > 0.15 || Math.abs(sobreAgua.max - nivelLago) > 0.15) mal("el trazo sobre el lago no quedó en el espejo de agua (cayó al fondo)", { sobreAgua, nivelLago });
+    // una calle que cruza la ladera de la montaña: sigue el relieve y lo nivela debajo
+    const antesCalle = await alto(-3, 3);
+    await ev(`__lowStore.setCurrentTool("calle"); __low3d.setCalleTipo("calle"); true`); await w(150);
+    for (const m of [[-22, 0, 3], [22, 0, 3]]) await clicMundo([m[0], await alto(m[0], m[2]), m[2]]);
+    await tecla("Enter", "Enter", 13);
+    const calle = await ev(`(()=>{ const s = __low3d.strokes.filter(s => s.calle).at(-1); if (!s) return null; s.object.updateMatrixWorld(true);
+      const ys = s.points.map(p => p.clone().applyMatrix4(s.object.matrixWorld).y); const B = []; s.object.traverse(m => { const a = m.geometry && m.geometry.attributes.position; if (!a) return; m.updateMatrixWorld(true);
+        for (let i = 0; i < a.count; i++) B.push(new m.position.constructor(a.getX(i), a.getY(i), a.getZ(i)).applyMatrix4(m.matrixWorld).y); });
+      return { puntos: ys.length, ejeMax: Math.max(...ys), mallaMax: Math.max(...B) }; })()`);
+    if (!calle || calle.ejeMax < 1 || calle.mallaMax < 1) mal("la calle no sigue el relieve (quedó plana a la altura 0)", calle);
+    const nivelada = await alto(-3, 3), perfil = await ev(`(()=>{ const s = __low3d.strokes.filter(s => s.calle).at(-1); s.object.updateMatrixWorld(true);
+      const e = s.points.map(p => p.clone().applyMatrix4(s.object.matrixWorld)); const V2 = __low3d.pointer.constructor;
+      return __low3d.constructor.alturaEnEje(e, new V2(-3, 3)); })()`);   // el perfil interpolado, como lo usa el estudio
+    if (Math.abs(nivelada - (perfil - 0.05)) > 0.06) mal("el terreno debajo de la calle no quedó nivelado al perfil del camino", { nivelada, perfil });
+    await tecla("z", "KeyZ", 90, 2);
+    if (Math.abs((await alto(-3, 3)) - antesCalle) > 0.02 || (await ev(`__low3d.strokes.filter(s => s.calle).length`)) !== 0) mal("Ctrl+Z no sacó la calle Y la nivelación juntas", { antesCalle, ahora: await alto(-3, 3) });
+    await tecla("z", "KeyZ", 90, 2 | 8);
+
     // ── 6. viaja con el proyecto y sale en las tomas
     const muestras = [[0, 0], [30, -20], [-10, 32], [-39, -33]];
     const antes = []; for (const [x, z] of muestras) antes.push(await alto(x, z));

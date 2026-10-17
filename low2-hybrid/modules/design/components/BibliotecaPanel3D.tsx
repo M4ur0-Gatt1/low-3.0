@@ -4,10 +4,17 @@ import type { WebGLDesign3D } from '../engine/webgl-design3d';
 import { CATEGORIAS, cargarKitsPropios, guardarKitsPropios, kitAArchivo, kitDeArchivo, kitsDeFabrica,
   type Categoria, type EstiloKit, type Kit, type Pieza } from '../engine/biblioteca3d';
 
-/* Panel «Biblioteca» del estudio: los kits de piezas (estilos) y sus piezas.
-   Elegir una pieza deja lista la herramienta Piezas (N): clic coloca, arrastrar
-   siembra. Los kits de fábrica no se cambian: se DUPLICAN y la copia es tuya.
-   La lógica de datos vive en engine/biblioteca3d.ts; la de colocar, en el motor. */
+/* Panel «Biblioteca de escenografía». Mauro: «tengo que poder generar cada
+   elemento 3D y guardarlo en su biblioteca». Cómo se llaman las cosas (como en
+   teatro, cine y animación):
+   - una ESCENOGRAFÍA es un juego de elementos con su estilo (en el código, Kit);
+   - un ELEMENTO es cada cosa que la compone: decorados (casas, edificios),
+     ambientación (faroles), utilería, vegetación, rocas (en el código, Pieza).
+   Elegir un elemento deja lista la herramienta Elementos (N): clic coloca,
+   arrastrar siembra. «Nuevo elemento» / «Editar» abren el EDITOR: la mesa
+   vacía para dibujarlo con todas las herramientas; «Guardar» lo lleva a la
+   escenografía y vuelve a tu escena como estaba. Las de fábrica no se cambian:
+   lo que guardes va a tu copia («… (mía)»). */
 
 const enLOW = () => window.parent !== window;
 const CLAVE_ACTIVO = 'low3d:kit-activo';
@@ -21,15 +28,20 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
   const [cat, setCat] = useState<Categoria | 'todas'>('todas');
   const [activa, setActiva] = useState<string | null>(() => engine.current?.getPiezaActiva()?.id ?? null);
   const [aviso, setAviso] = useState('');
-  const [nueva, setNueva] = useState<{ nombre: string; categoria: Categoria } | null>(null);
+  const [nueva, setNueva] = useState<{ nombre: string; categoria: Categoria; desde: 'mesa' | 'cero' } | null>(null);
   const [borrar, setBorrar] = useState(false);
   const [sep, setSep] = useState(() => engine.current?.getSeparacionSiembra() ?? 1.2);
+  const [edicion, setEdicion] = useState(() => engine.current?.enEdicion() ?? null);
+  const [edNombre, setEdNombre] = useState(edicion?.nombre ?? '');
+  const [edCat, setEdCat] = useState<Categoria>(edicion?.categoria ?? 'casa');
+  /** en qué escenografía y con qué id se guarda lo que se está editando */
+  const destino = useRef<{ kitId: string; piezaId: string | null } | null>(null);
   const minis = useRef(new Map<string, string>());
   const [, setVersion] = useState(0);
 
   const persistir = (lista: Kit[]) => {
     setPropios(lista);
-    if (!guardarKitsPropios(lista)) setAviso('No entró en el almacenamiento del estudio: exportá el kit (.lowkit) para no perderlo');
+    if (!guardarKitsPropios(lista)) setAviso('No entró en el almacenamiento del estudio: exportá la escenografía (.lowkit) para no perderla');
   };
   const cambiarKit = (id: string) => {
     setKitId(id);
@@ -38,8 +50,14 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
     if (k) engine.current?.setEstiloCalles(k.estilo);
     setActiva(null); engine.current?.setPiezaActiva(null); setBorrar(false);
   };
-  // al abrir el panel, el estilo de las calles es el del kit en uso
+  // al abrir el panel, el estilo de las calles y del paisaje es el de la escenografía en uso
   useEffect(() => { engine.current?.setEstiloCalles(kit.estilo); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // el editor se prende y se apaga desde el motor
+  useEffect(() => {
+    const oir = () => { const ed = engine.current?.enEdicion() ?? null; setEdicion(ed); if (ed) { setEdNombre(ed.nombre); setEdCat(ed.categoria); } };
+    window.addEventListener('low3d:edicion', oir);
+    return () => window.removeEventListener('low3d:edicion', oir);
+  }, [engine]);
 
   // miniaturas de a poco (cada una es un render): primero lo que se ve
   const piezas = kit.piezas.filter((p) => cat === 'todas' || p.categoria === cat);
@@ -55,14 +73,14 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
     };
     una();
     return () => { vivo = false; };
-  }, [kit.id, cat, kit.piezas.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kit.id, cat, kit.piezas.length, edicion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // la respuesta de LOW al guardar/abrir un .lowkit
   useEffect(() => {
     const oir = (ev: MessageEvent) => {
       const m = ev.data as { type?: string; ok?: boolean; error?: string; content?: string; path?: string } | null;
       if (!m || typeof m !== 'object') return;
-      if (m.type === 'low:kit-guardado') setAviso(m.error ? 'No se pudo exportar: ' + m.error : m.ok ? 'Kit exportado' + (m.path ? ': ' + m.path : '') : '');
+      if (m.type === 'low:kit-guardado') setAviso(m.error ? 'No se pudo exportar: ' + m.error : m.ok ? 'Escenografía exportada' + (m.path ? ': ' + m.path : '') : '');
       else if (m.type === 'low:kit-abierto') { if (m.error) setAviso('No se pudo abrir: ' + m.error); else if (m.content) importarTexto(m.content); }
     };
     window.addEventListener('message', oir);
@@ -74,36 +92,69 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
     engine.current?.setPiezaActiva(p);
     lowStore.setCurrentTool('pieza');
     setAviso(p.categoria === 'arbol' || p.categoria === 'vegetacion' || p.categoria === 'roca'
-      ? `${p.nombre}: clic para colocar, arrastrá para sembrar varias · Shift: sin variar`
-      : `${p.nombre}: clic sobre el piso o una caja para colocar`);
+      ? `${p.nombre}: clic para colocar, arrastrá para sembrar varios · Shift: sin variar`
+      : `${p.nombre}: clic sobre el piso, el terreno o una caja para colocarlo`);
   };
-  /** Un kit propio para guardar cosas: el elegido si ya es tuyo; si es de fábrica, una copia. */
+  /** Una escenografía TUYA para guardar: la elegida si ya es tuya; si es de fábrica, tu copia. */
   const kitPropio = (): Kit => {
     if (!kit.fabrica) return kit;
-    const copia: Kit = { ...JSON.parse(JSON.stringify(kit)), id: 'kit-' + Date.now().toString(36), nombre: kit.nombre + ' (mío)', fabrica: undefined };
+    const yaHay = propios.find((k) => k.nombre === kit.nombre + ' (mía)');
+    if (yaHay) { cambiarKit(yaHay.id); return yaHay; }
+    const copia: Kit = { ...JSON.parse(JSON.stringify(kit)), id: 'kit-' + Date.now().toString(36), nombre: kit.nombre + ' (mía)', fabrica: undefined };
     persistir([...propios, copia]);
     cambiarKit(copia.id);
     return copia;
   };
   const actualizar = (k: Kit) => persistir(propios.map((x) => (x.id === k.id ? k : x)));
-  const duplicar = () => { const c = kitPropio(); if (c === kit) { const d = { ...JSON.parse(JSON.stringify(kit)), id: 'kit-' + Date.now().toString(36), nombre: kit.nombre + ' (copia)' }; persistir([...propios, d]); cambiarKit(d.id); } setAviso('Copia lista: este kit es tuyo, cambiale piezas y colores'); };
-  const vacio = () => { const k: Kit = { id: 'kit-' + Date.now().toString(36), nombre: 'Mi kit', descripcion: '', estilo: { ...kit.estilo }, piezas: [] }; persistir([...propios, k]); cambiarKit(k.id); setAviso('Kit vacío: elegí objetos en la escena y «Guardar lo elegido como pieza»'); };
-  const guardarPieza = () => {
-    const e = engine.current; if (!e || !nueva) return;
-    const p = e.piezaDesdeSeleccion(nueva.nombre.trim() || 'Pieza', nueva.categoria);
-    if (!p) { setAviso('Elegí primero lo que va a ser la pieza (Mover, V) y después guardala'); return; }
-    const k = kitPropio();
-    const destino = propios.find((x) => x.id === k.id) || k;
-    const conPieza = { ...destino, piezas: [...destino.piezas, p] };
-    persistir([...propios.filter((x) => x.id !== k.id), conPieza]);
+  /** Guarda (o reemplaza) un elemento en una escenografía propia. */
+  const guardarEn = (k: Kit, p: Pieza) => {
+    const base = propios.find((x) => x.id === k.id) || k;
+    const yaEsta = base.piezas.some((x) => x.id === p.id);
+    const nuevo = { ...base, piezas: yaEsta ? base.piezas.map((x) => (x.id === p.id ? p : x)) : [...base.piezas, p] };
+    persistir([...propios.filter((x) => x.id !== k.id), nuevo]);
+    minis.current.delete(k.id + '/' + p.id);
+    return nuevo;
+  };
+  const duplicar = () => {
+    const d = { ...JSON.parse(JSON.stringify(kit)), id: 'kit-' + Date.now().toString(36), nombre: kit.nombre + (kit.fabrica ? ' (mía)' : ' (copia)'), fabrica: undefined };
+    persistir([...propios, d]); cambiarKit(d.id); setAviso('Copia lista: esta escenografía es tuya, cambiale elementos y colores');
+  };
+  const vacio = () => { const k: Kit = { id: 'kit-' + Date.now().toString(36), nombre: 'Mi escenografía', descripcion: '', estilo: { ...kit.estilo }, piezas: [] }; persistir([...propios, k]); cambiarKit(k.id); setAviso('Escenografía vacía: «+ Nuevo elemento» para dibujar el primero'); };
+
+  /* ── el editor de elementos ── */
+  const editar = (p: Pieza | null, nombre: string, categoria: Categoria) => {
+    const e = engine.current; if (!e) return;
+    // lo de fábrica se guarda en TU copia; lo tuyo, en su lugar
+    destino.current = { kitId: kit.fabrica ? '' : kit.id, piezaId: kit.fabrica ? null : p?.id ?? null };
+    if (!e.editarElemento(p, nombre, categoria)) setAviso('Ya estás editando un elemento: guardalo o cancelalo primero');
     setNueva(null);
-    setAviso(`«${p.nombre}» guardada en «${conPieza.nombre}» (${p.tam.map((v) => v.toFixed(1)).join(' × ')} m)`);
+  };
+  const guardarEdicion = () => {
+    const e = engine.current; if (!e) return;
+    const r = e.terminarEdicion(true, { nombre: edNombre.trim() || 'Elemento', categoria: edCat });
+    if (!r.ok || !r.pieza) return;
+    const d = destino.current;
+    const k = d && d.kitId ? (propios.find((x) => x.id === d.kitId) || kitPropio()) : kitPropio();
+    const p = { ...r.pieza, id: d?.piezaId || 'propia-' + Date.now().toString(36) };
+    const nuevo = guardarEn(k, p);
+    destino.current = null;
+    setAviso(`«${p.nombre}» guardado en «${nuevo.nombre}» (${p.tam.map((v) => v.toFixed(1)).join(' × ')} m) · elegilo para colocarlo`);
+  };
+  const cancelarEdicion = () => { engine.current?.terminarEdicion(false); destino.current = null; };
+
+  const guardarSeleccion = () => {
+    const e = engine.current; if (!e || !nueva) return;
+    const p = e.piezaDesdeSeleccion(nueva.nombre.trim() || 'Elemento', nueva.categoria);
+    if (!p) { setAviso('Elegí primero lo que va a ser el elemento (Mover, V) y después guardalo'); return; }
+    const nuevo = guardarEn(kitPropio(), p);
+    setNueva(null);
+    setAviso(`«${p.nombre}» guardado en «${nuevo.nombre}» (${p.tam.map((v) => v.toFixed(1)).join(' × ')} m)`);
   };
   const quitarPieza = (p: Pieza) => { if (kit.fabrica) return; actualizar({ ...kit, piezas: kit.piezas.filter((x) => x.id !== p.id) }); if (activa === p.id) { setActiva(null); engine.current?.setPiezaActiva(null); } };
   const variar = (p: Pieza, v: Partial<Pieza['variacion']>) => {
     const np = { ...p, variacion: { ...p.variacion, ...v } };
     if (!kit.fabrica) actualizar({ ...kit, piezas: kit.piezas.map((x) => (x.id === p.id ? np : x)) });
-    else Object.assign(p.variacion, v);           // en un kit de fábrica, sólo por esta sesión
+    else Object.assign(p.variacion, v);           // en una de fábrica, sólo por esta sesión
     if (activa === p.id) engine.current?.setPiezaActiva(np);
     setVersion((x) => x + 1);
   };
@@ -121,8 +172,8 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
   };
   const importarTexto = (texto: string) => {
     const k = kitDeArchivo(texto);
-    if (!k) { setAviso('Ese archivo no es un kit de LOW (.lowkit)'); return; }
-    persistir([...propios, k]); cambiarKit(k.id); setAviso(`Kit «${k.nombre}» importado: ${k.piezas.length} piezas`);
+    if (!k) { setAviso('Ese archivo no es una escenografía de LOW (.lowkit)'); return; }
+    persistir([...propios, k]); cambiarKit(k.id); setAviso(`Escenografía «${k.nombre}» importada: ${k.piezas.length} elementos`);
   };
   const importar = () => {
     if (enLOW()) { window.parent.postMessage({ type: 'low:abrir-kit' }, '*'); return; }
@@ -131,52 +182,75 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
     i.click();
   };
 
+  const selCategoria = (valor: Categoria, cambiar: (c: Categoria) => void, etiqueta: string) =>
+    <select aria-label={etiqueta} value={valor} onChange={(ev) => cambiar(ev.target.value as Categoria)}>
+      {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>;
+
+  /* ── EDITANDO: sólo el editor ── */
+  if (edicion) return <div className="persp3d biblio3d biblio3d-editor">
+    <p className="biblio3d-editando">Editando un elemento</p>
+    <label className="toma3d-fila">Nombre<input aria-label="Nombre del elemento" value={edNombre} maxLength={60} onChange={(ev) => setEdNombre(ev.target.value)}/></label>
+    <label className="toma3d-fila">Categoría{selCategoria(edCat, setEdCat, 'Categoría del elemento')}</label>
+    <p className="persp3d-nota">Dibujalo con todas las herramientas: Dibujar, Figuras, Caja (se guarda maciza, del color del pincel), Volumen (Ctrl+E). La base del elemento es el piso; el centro, la marca magenta.</p>
+    <div className="biblio3d-acciones">
+      <button className="persp3d-boton persp3d-repetir-ya biblio3d-guardar-edicion" onClick={guardarEdicion}>Guardar en la escenografía</button>
+      <button className="persp3d-boton" onClick={cancelarEdicion}>Cancelar</button>
+    </div>
+    {aviso && <p className="persp3d-aviso" role="status">{aviso}</p>}
+  </div>;
+
   const p = kit.piezas.find((x) => x.id === activa) || null;
   return <div className="persp3d biblio3d">
-    <label className="toma3d-fila">Kit<select aria-label="Kit de piezas" value={kit.id} onChange={(ev) => cambiarKit(ev.target.value)}>
+    <label className="toma3d-fila">Escenografía<select aria-label="Escenografía" value={kit.id} onChange={(ev) => cambiarKit(ev.target.value)}>
       <optgroup label="De fábrica">{fabrica.map((k) => <option key={k.id} value={k.id}>{k.nombre}</option>)}</optgroup>
-      {propios.length > 0 && <optgroup label="Mis kits">{propios.map((k) => <option key={k.id} value={k.id}>{k.nombre}</option>)}</optgroup>}
+      {propios.length > 0 && <optgroup label="Mis escenografías">{propios.map((k) => <option key={k.id} value={k.id}>{k.nombre}</option>)}</optgroup>}
     </select></label>
-    {kit.fabrica ? <p className="persp3d-nota">{kit.descripcion} · De fábrica: duplicalo para cambiarlo.</p>
-      : <label className="toma3d-fila">Nombre<input aria-label="Nombre del kit" value={kit.nombre} maxLength={60} onChange={(ev) => actualizar({ ...kit, nombre: ev.target.value })}/></label>}
+    {kit.fabrica ? <p className="persp3d-nota">{kit.descripcion} · De fábrica: lo que guardes va a tu copia.</p>
+      : <label className="toma3d-fila">Nombre<input aria-label="Nombre de la escenografía" value={kit.nombre} maxLength={60} onChange={(ev) => actualizar({ ...kit, nombre: ev.target.value })}/></label>}
     <div className="biblio3d-cats" role="tablist" aria-label="Categorías">
-      {[{ id: 'todas' as const, nombre: 'Todas' }, ...CATEGORIAS.filter((c) => kit.piezas.some((x) => x.categoria === c.id))].map((c) =>
+      {[{ id: 'todas' as const, nombre: 'Todos' }, ...CATEGORIAS.filter((c) => kit.piezas.some((x) => x.categoria === c.id))].map((c) =>
         <button key={c.id} role="tab" aria-selected={cat === c.id} onClick={() => setCat(c.id)}>{c.nombre}</button>)}
     </div>
-    <div className="biblio3d-grilla" aria-label="Piezas del kit">
-      {piezas.length ? piezas.map((x) => {
+    <div className="biblio3d-grilla" aria-label="Elementos de la escenografía">
+      {piezas.map((x) => {
         const m = minis.current.get(kit.id + '/' + x.id);
-        return <button key={x.id} data-pieza={x.id} className={activa === x.id ? 'on' : ''} aria-pressed={activa === x.id} title={`${x.nombre} · ${x.tam.map((v) => v.toFixed(1)).join(' × ')} m`} onClick={() => elegir(x)}>
-          {m ? <img src={m} alt=""/> : <span className="biblio3d-cargando"/>}<span>{x.nombre}</span></button>;
-      }) : <p className="persp3d-nota">{kit.piezas.length ? 'Nada en esta categoría' : 'Este kit está vacío: armá algo en la escena, elegilo y guardalo como pieza'}</p>}
+        return <div key={x.id} className={'biblio3d-carta' + (activa === x.id ? ' on' : '')}>
+          <button data-pieza={x.id} aria-pressed={activa === x.id} title={`${x.nombre} · ${x.tam.map((v) => v.toFixed(1)).join(' × ')} m`} onClick={() => elegir(x)}>
+            {m ? <img src={m} alt=""/> : <span className="biblio3d-cargando"/>}<span>{x.nombre}</span></button>
+          <button className="biblio3d-editar" data-editar={x.id} title={kit.fabrica ? 'Editar una copia (va a tu escenografía)' : 'Editar este elemento'} aria-label={'Editar ' + x.nombre} onClick={() => editar(x, x.nombre, x.categoria)}>✎</button>
+        </div>;
+      })}
+      <button className="biblio3d-nuevo" onClick={() => setNueva({ nombre: '', categoria: cat === 'todas' ? 'casa' : cat, desde: 'cero' })} title="Abre la mesa vacía para dibujar un elemento nuevo">+ Nuevo elemento</button>
     </div>
+    {!piezas.length && <p className="persp3d-nota">{kit.piezas.length ? 'Nada en esta categoría' : 'Escenografía vacía: «+ Nuevo elemento» para dibujar el primero'}</p>}
+    {nueva && <div className="persp3d-repetir biblio3d-nueva">
+      <label>Nombre<input aria-label="Nombre del elemento" autoFocus value={nueva.nombre} maxLength={60} onChange={(ev) => setNueva({ ...nueva, nombre: ev.target.value })}/></label>
+      <label>Categoría{selCategoria(nueva.categoria, (c) => setNueva({ ...nueva, categoria: c }), 'Categoría del elemento')}</label>
+      {nueva.desde === 'cero'
+        ? <button className="persp3d-boton persp3d-repetir-ya biblio3d-empezar" onClick={() => editar(null, nueva.nombre.trim() || 'Elemento', nueva.categoria)}>Dibujarlo</button>
+        : <button className="persp3d-boton persp3d-repetir-ya" onClick={guardarSeleccion}>Guardar</button>}
+      <button className="persp3d-boton" onClick={() => setNueva(null)}>Cancelar</button>
+    </div>}
     {p && <div className="persp3d-repetir biblio3d-variar">
       <label>Tamaño mín.<input type="number" aria-label="Tamaño mínimo" step={0.05} min={0.1} max={10} value={p.variacion.escalaMin} onChange={(ev) => variar(p, { escalaMin: Number(ev.target.value) || 1 })}/></label>
       <label>Tamaño máx.<input type="number" aria-label="Tamaño máximo" step={0.05} min={0.1} max={10} value={p.variacion.escalaMax} onChange={(ev) => variar(p, { escalaMax: Number(ev.target.value) || 1 })}/></label>
       <label>Giro<select aria-label="Giro de cada copia" value={p.variacion.giro} onChange={(ev) => variar(p, { giro: ev.target.value as Pieza['variacion']['giro'] })}>
         <option value="libre">Al azar</option><option value="recto">Derecho</option><option value="no">Nunca</option></select></label>
       <label>Separación<input type="number" aria-label="Separación al sembrar" step={0.1} min={0.3} max={6} value={sep} onChange={(ev) => { const v = Number(ev.target.value) || 1.2; setSep(v); engine.current?.setSeparacionSiembra(v); }}/></label>
-      {!kit.fabrica && <button className="persp3d-boton" onClick={() => quitarPieza(p)}>Quitar del kit</button>}
+      {!kit.fabrica && <button className="persp3d-boton" onClick={() => quitarPieza(p)}>Quitar de la escenografía</button>}
     </div>}
-    <h3>Piezas propias</h3>
-    {nueva ? <div className="persp3d-repetir">
-      <label>Nombre<input aria-label="Nombre de la pieza" autoFocus value={nueva.nombre} maxLength={60} onChange={(ev) => setNueva({ ...nueva, nombre: ev.target.value })}/></label>
-      <label>Categoría<select aria-label="Categoría de la pieza" value={nueva.categoria} onChange={(ev) => setNueva({ ...nueva, categoria: ev.target.value as Categoria })}>
-        {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
-      <button className="persp3d-boton persp3d-repetir-ya" onClick={guardarPieza}>Guardar</button>
-      <button className="persp3d-boton" onClick={() => setNueva(null)}>Cancelar</button>
-    </div> : <button className="persp3d-boton biblio3d-guardar" onClick={() => setNueva({ nombre: '', categoria: 'casa' })} title="Lo elegido con Mover (V) pasa a ser una pieza del kit: después se coloca con un clic">Guardar lo elegido como pieza</button>}
-    {!kit.fabrica && <><h3>Colores de las calles</h3>
+    <button className="persp3d-boton biblio3d-guardar" onClick={() => setNueva({ nombre: '', categoria: 'casa', desde: 'mesa' })} title="Lo elegido con Mover (V) en tu escena pasa a ser un elemento">Guardar lo elegido como elemento</button>
+    {!kit.fabrica && <><h3>Colores de las calles y el paisaje</h3>
       <div className="biblio3d-colores">
-        {(['calzada', 'vereda', 'pintura', 'tinta'] as const).map((c) => <label key={c}><input type="color" aria-label={'Color: ' + c} value={kit.estilo[c]} onChange={(ev) => colores({ [c]: ev.target.value })}/>{c[0].toUpperCase() + c.slice(1)}</label>)}
+        {(['calzada', 'vereda', 'pintura', 'tinta', 'pasto', 'tierra', 'roca', 'nieve', 'agua'] as const).map((c) => <label key={c}><input type="color" aria-label={'Color: ' + c} value={kit.estilo[c] || '#888888'} onChange={(ev) => colores({ [c]: ev.target.value })}/>{c[0].toUpperCase() + c.slice(1)}</label>)}
       </div></>}
-    <h3>Kits</h3>
+    <h3>Escenografías</h3>
     <div className="biblio3d-acciones">
-      <button className="persp3d-boton" onClick={duplicar}>Duplicar kit</button>
-      <button className="persp3d-boton" onClick={vacio}>Kit vacío</button>
+      <button className="persp3d-boton" onClick={duplicar}>Duplicar</button>
+      <button className="persp3d-boton" onClick={vacio}>Nueva vacía</button>
       <button className="persp3d-boton" onClick={exportar}>Exportar…</button>
       <button className="persp3d-boton" onClick={importar}>Importar…</button>
-      {!kit.fabrica && <button className="persp3d-boton biblio3d-borrar" onClick={borrarKit}>{borrar ? '¿Seguro? Borrar' : 'Borrar kit'}</button>}
+      {!kit.fabrica && <button className="persp3d-boton biblio3d-borrar" onClick={borrarKit}>{borrar ? '¿Seguro? Borrar' : 'Borrar escenografía'}</button>}
     </div>
     {aviso && <p className="persp3d-aviso" role="status">{aviso}</p>}
   </div>;

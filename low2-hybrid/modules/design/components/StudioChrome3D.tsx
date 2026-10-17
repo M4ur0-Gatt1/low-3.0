@@ -44,7 +44,7 @@ const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
  {id:'rect',name:'Figuras',key:'',icon:'rect',hint:'Arrastrá sobre la guía · Shift conserva las proporciones'},
  {id:'box',name:'Caja',key:'X',icon:'box',hint:'Arrastrá la base sobre el piso · mové para la altura y clic · Esc cancela'},
  {id:'calle',name:'Calles',key:'R',icon:'calle',hint:'Marcá el recorrido con clics sobre el piso · doble clic o Enter termina · Esc cancela · Shift: tramos a 15°'},
- {id:'pieza',name:'Piezas',key:'N',icon:'pieza',hint:'Elegí una pieza en la biblioteca · clic coloca · arrastrá para sembrar · Shift: sin variar'},
+ {id:'pieza',name:'Elementos',key:'N',icon:'pieza',hint:'Elegí un elemento de la escenografía · clic coloca · arrastrá para sembrar · Shift: sin variar'},
  {id:'terreno',name:'Terreno',key:'T',icon:'terreno',hint:'Pintá el relieve: levantar, hundir, suavizar o aplanar · Shift invierte · el anillo es el pincel'},
  {id:'rio',name:'Río',key:'',icon:'rio',hint:'Marcá el recorrido de la naciente a la desembocadura · doble clic o Enter termina · el agua no sube'},
  {id:'lago',name:'Lago',key:'',icon:'lago',hint:'Marcá el contorno con clics · doble clic o Enter lo cierra · cava la hondonada y la llena'},
@@ -83,6 +83,8 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
   useEffect(()=>{if(GRUPO_CONSTRUIR.includes(state.currentTool))setConstruir(state.currentTool);
     // Piezas sin su biblioteca no sirve: elegir la herramienta la abre
     if(state.currentTool==='pieza')setPanel('biblioteca');},[state.currentTool]);
+  // editando un elemento, la biblioteca queda a la vista (ahí están Guardar y Cancelar)
+  useEffect(()=>{const oir=()=>{if(engine.current?.enEdicion())setPanel('biblioteca');};window.addEventListener('low3d:edicion',oir);return()=>window.removeEventListener('low3d:edicion',oir);},[engine]);
   const abrirConstruir=(b:HTMLElement)=>{const r=b.getBoundingClientRect();setMenuConstruir({x:r.right+8,y:Math.max(8,r.top-6)});};
  // EL PINCEL DE TERRENO y el ancho del río (engine/terreno3d.ts)
  const [terreno,setTerreno]=useState<{modo:'levantar'|'hundir'|'suavizar'|'aplanar';radio:number;fuerza:number}>({modo:'levantar',radio:10,fuerza:0.5});
@@ -152,7 +154,7 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <button aria-pressed={joystick} onClick={()=>{engine.current?.setJoystick(!joystick);setJoystick(!joystick);}}>Joystick</button>
    </div>}
    {panel&&<aside className="studio-inspector studio-surface" aria-label="Inspector 3D">
-     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Cámara del layout',toma:'Toma: fondos para el 2D',biblioteca:'Biblioteca de piezas'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
+     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Cámara del layout',toma:'Toma: fondos para el 2D',biblioteca:'Biblioteca de escenografía'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
      <div className="studio-inspector-content">
        {panel==='tools'&&<Toolbar3D engine={engine}/>}
        {panel==='persp'&&<PerspectivaPanel3D engine={engine}/>}
