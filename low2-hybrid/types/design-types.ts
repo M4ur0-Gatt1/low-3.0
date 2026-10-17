@@ -25,7 +25,9 @@ export type ToolType = 'pencil' | 'guide' | 'move' | 'select' | 'eraser' | 'liqu
   // el pavimentador: calles con clics sobre el piso
   | 'calle'
   // piezas de la biblioteca: clic coloca, arrastrar siembra
-  | 'pieza';
+  | 'pieza'
+  // el paisaje: relieve (montañas, valles), ríos y lagos
+  | 'terreno' | 'rio' | 'lago';
 
 /** Modo del gizmo de transformación de la herramienta 'move' (con un solo
  *  trazo seleccionado): mover libremente por ejes, redimensionar, o rotar. */

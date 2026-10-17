@@ -140,6 +140,8 @@
 .toma3d-check { flex-direction:row!important;align-items:center;grid-column:1 / -1; }
 .toma3d-mandar { width:100%;padding:8px; }
 .toma3d-mandar:disabled { opacity:.6;cursor:progress; }
+.studio-terreno label { display:inline-flex;align-items:center;gap:5px;font-size:11.5px;margin-left:6px; }
+.studio-terreno input[type=range] { width:84px; }
 .biblio3d-cats { display:flex;flex-wrap:wrap;gap:4px; }
 .biblio3d-cats button { border:1px solid var(--studio-line);border-radius:999px;padding:3px 9px;background:var(--studio-input);color:var(--studio-fg);font-size:11.5px;cursor:pointer; }
 .biblio3d-cats button[aria-selected=true] { border-color:var(--studio-accent);color:var(--studio-accent); }

@@ -19,6 +19,9 @@ const paths: Record<string,string> = {
  eraser:'m4 14 9-10 7 7-8 9H9l-5-6ZM9 9l7 7M12 20h9', rect:'M4 5h16v14H4z', box:'M12 3 20 7.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12v9M12 12 4 7.5',
  calle:'M8 3 4 21M16 3l4 18M12 4v3m0 4v3m0 4v3',
  pieza:'M12 3c3 2 5 5 5 8a5 5 0 0 1-10 0c0-3 2-6 5-8ZM12 16v5M8 21h8',
+ terreno:'M2 19 9 8l4 6 3-4 6 9H2Z',
+ rio:'M5 3c4 3-3 6 1 9s-3 6 1 9M14 3c4 3-3 6 1 9s-3 6 1 9',
+ lago:'M4 13c0-4 4-7 8-7s8 3 8 7-4 6-8 6-8-2-8-6ZM8 13h3m2 2h3',
  liquify:'M4 7c5-8 7 12 12 4s8 5 1 8M5 16c1-3 5-3 6 0', more:'M5 12h1m5 0h1m5 0h1',
  layers:'m3 8 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5M3 18l9 5 9-5',
  focus:'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 8h8v8H8z',
@@ -32,7 +35,7 @@ export const StudioIcon=({name}:{name:string})=><svg width="20" height="20" view
    vengan: edificios, árboles, terreno, agua) son UN botón de la barra con su
    lista, como los grupos de Toon Boom. Cada una sumada suelta saturaba la
    vista inicial (check_3d_studio_ui la limita a propósito). */
-const GRUPO_CONSTRUIR:ToolType[]=['box','calle','pieza'];
+const GRUPO_CONSTRUIR:ToolType[]=['box','calle','pieza','terreno','rio','lago'];
 const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
  {id:'pencil',name:'Dibujar',key:'P',icon:'pencil',hint:'Arrastrá para dibujar · Shift mantiene la línea recta'},
  {id:'guide',name:'Guía',key:'G',icon:'guide',hint:'Dibujá una guía para orientar el próximo trazo en el espacio'},
@@ -42,6 +45,9 @@ const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
  {id:'box',name:'Caja',key:'X',icon:'box',hint:'Arrastrá la base sobre el piso · mové para la altura y clic · Esc cancela'},
  {id:'calle',name:'Calles',key:'R',icon:'calle',hint:'Marcá el recorrido con clics sobre el piso · doble clic o Enter termina · Esc cancela · Shift: tramos a 15°'},
  {id:'pieza',name:'Piezas',key:'N',icon:'pieza',hint:'Elegí una pieza en la biblioteca · clic coloca · arrastrá para sembrar · Shift: sin variar'},
+ {id:'terreno',name:'Terreno',key:'T',icon:'terreno',hint:'Pintá el relieve: levantar, hundir, suavizar o aplanar · Shift invierte · el anillo es el pincel'},
+ {id:'rio',name:'Río',key:'',icon:'rio',hint:'Marcá el recorrido de la naciente a la desembocadura · doble clic o Enter termina · el agua no sube'},
+ {id:'lago',name:'Lago',key:'',icon:'lago',hint:'Marcá el contorno con clics · doble clic o Enter lo cierra · cava la hondonada y la llena'},
  {id:'liquify',name:'Deformar',key:'L',icon:'liquify',hint:'Empujá el trazo · el tamaño del pincel define la zona de influencia'},
 ];
 const viewNames:Record<ViewName,string>={persp:'Perspectiva',front:'Frente',back:'Atrás',left:'Izquierda',right:'Derecha',top:'Arriba',bottom:'Abajo'};
@@ -78,6 +84,11 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
     // Piezas sin su biblioteca no sirve: elegir la herramienta la abre
     if(state.currentTool==='pieza')setPanel('biblioteca');},[state.currentTool]);
   const abrirConstruir=(b:HTMLElement)=>{const r=b.getBoundingClientRect();setMenuConstruir({x:r.right+8,y:Math.max(8,r.top-6)});};
+ // EL PINCEL DE TERRENO y el ancho del río (engine/terreno3d.ts)
+ const [terreno,setTerreno]=useState<{modo:'levantar'|'hundir'|'suavizar'|'aplanar';radio:number;fuerza:number}>({modo:'levantar',radio:10,fuerza:0.5});
+ const [anchoRio,setAnchoRio]=useState(6);
+ useEffect(()=>{const sync=()=>{const e=engine.current;if(e){setTerreno(e.getPincelTerreno());setAnchoRio(e.getAnchoRio());}};sync();const t=window.setTimeout(sync,0);
+   window.addEventListener('low3d:terreno',sync);return()=>{clearTimeout(t);window.removeEventListener('low3d:terreno',sync);};},[engine]);
  const [fuga,setFuga]=useState(true);
  useEffect(()=>{const sync=()=>{const e=engine.current;if(e)setFuga(e.getImanFuga());};sync();const t=window.setTimeout(sync,0);
    window.addEventListener('low3d:fuga',sync);return()=>{clearTimeout(t);window.removeEventListener('low3d:fuga',sync);};},[engine]);
@@ -158,6 +169,10 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <button title="Ajustes de pincel" onClick={()=>toggle('brush')}>{Math.round(state.brushSettings.opacity*100)}%<span> opacidad</span></button>
      <button className="studio-fuga" aria-pressed={fuga} title={fuga?'Rectas a los ejes: una línea casi recta, al soltarla, va exacta por la arista o el eje de su superficie y fuga sola. Shift o apagarlo: queda como la dibujaste':'Rectas a los ejes apagado: las líneas quedan como las dibujaste'}
        onClick={()=>{const e=engine.current;if(e){e.setImanFuga(!fuga);setFuga(!fuga);}}}>Rectas a los ejes</button>
+     {state.currentTool==='terreno'&&<span className="studio-calle-tipo studio-terreno" role="group" aria-label="Pincel de terreno">{(['levantar','hundir','suavizar','aplanar'] as const).map(m=><button key={m} data-terreno={m} aria-pressed={terreno.modo===m} onClick={()=>{engine.current?.setPincelTerreno({modo:m});}}>{m[0].toUpperCase()+m.slice(1)}</button>)}
+       <label title="Radio del pincel, en metros">Radio<input type="range" aria-label="Radio del pincel de terreno" min={2} max={40} value={terreno.radio} onChange={ev=>engine.current?.setPincelTerreno({radio:Number(ev.target.value)})}/>{terreno.radio} m</label>
+       <label title="Cuánto cambia en cada pasada">Fuerza<input type="range" aria-label="Fuerza del pincel de terreno" min={5} max={100} value={Math.round(terreno.fuerza*100)} onChange={ev=>engine.current?.setPincelTerreno({fuerza:Number(ev.target.value)/100})}/></label></span>}
+     {state.currentTool==='rio'&&<span className="studio-calle-tipo" role="group" aria-label="Ancho del río"><label title="De orilla a orilla, en metros">Ancho<input type="range" aria-label="Ancho del río" min={2} max={30} value={anchoRio} onChange={ev=>{const v=Number(ev.target.value);engine.current?.setAnchoRio(v);setAnchoRio(v);}}/>{anchoRio} m</label></span>}
      {state.currentTool==='calle'&&<span className="studio-calle-tipo" role="group" aria-label="Ancho de la calle">{(['pasaje','calle','avenida'] as const).map((t,i)=><button key={t} data-calle={t} aria-pressed={calle===t} title={['Pasaje: 4 m de calzada','Calle: 7,5 m de calzada','Avenida: 14 m de calzada, doble línea'][i]} onClick={()=>{engine.current?.setCalleTipo(t);setCalle(t);}}>{['Pasaje','Calle','Avenida'][i]}</button>)}</span>}
    </div>
    <div className="studio-view-strip studio-surface">

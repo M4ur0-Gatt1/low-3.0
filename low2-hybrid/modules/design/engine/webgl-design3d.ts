@@ -18,8 +18,9 @@
  */
 
 import * as THREE from 'three';
-import { piezasDeCalle, pegarARed, estirarPuntas, franja, MEDIDAS, type CalleRed, type TipoCalle } from './calles';
+import { piezasDeCalle, pegarARed, estirarPuntas, franja, correr, MEDIDAS, type CalleRed, type TipoCalle } from './calles';
 import { ESTILO_BASE, type EstiloKit, type Pieza, type Categoria } from './biblioteca3d';
+import { Terreno, LADO as LADO_TERRENO, PINCEL_INICIAL, type PincelTerreno, type Parche } from './terreno3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { Joystick3D, type JoyMode } from './joystick3d';
@@ -115,6 +116,8 @@ interface HitInfo {
    *  caja, X y Z en el piso. El paso 4 (rectas que fugan) los usa. */
   ejes?: [THREE.Vector3, THREE.Vector3];
   kind?: 'guide' | 'surface' | 'stroke' | 'fallback' | 'free' | 'box';
+  /** el punto es del TERRENO (relieve): un trazo que arranca acá lo sigue */
+  terreno?: boolean;
 }
 
 export interface Low3DProject {
@@ -149,6 +152,10 @@ export interface Low3DProject {
     /** true = la figura lleva cara sólida ADEMÁS del contorno (una sola pieza). */
     filled?: boolean;
   }>;
+  /** El relieve (terreno3d.ts: centímetros Int16 en base64; vacío = plano). */
+  terreno?: string;
+  /** Ríos y lagos: su recorrido/contorno y el nivel del agua. */
+  aguas?: Agua[];
   /** Nombre de cada grupo (Ctrl+G), por id. Sin esto, al reabrir el proyecto
    *  los objetos perdían su nombre y volvían a ser "Objeto 1, 2, 3…". */
   groupNames?: Record<string, string>;
@@ -160,6 +167,9 @@ export interface Low3DProject {
 /** Un objeto del estudio como DATOS (lo que guarda el .low3d y lo que guarda
  *  una pieza de biblioteca). */
 export type ItemProyecto = Low3DProject['strokes'][number];
+
+/** Un río (recorrido + nivel por punto) o un lago (contorno + nivel). */
+export interface Agua { tipo: 'rio' | 'lago'; pts: [number, number][]; ancho: number; nivel: number[] }
 
 const MIN_SAMPLE_DIST = 0.012;
 // salto máximo (mundo) entre puntos consecutivos de un trazo a mano alzada. Un
@@ -270,6 +280,9 @@ export class WebGLDesign3D {
     /** Plano de guía fijado al comenzar el gesto. Evita saltos de profundidad
      *  si la punta sale de los límites visibles de la guía. */
     drawPlane?: THREE.Plane;
+    /** El trazo arrancó sobre el TERRENO: cada punto sigue el relieve (en la
+     *  ladera de una montaña el plano del primer punto se despegaba metros). */
+    sobreTerreno?: boolean;
     /** Superficie/malla fijada al comenzar el gesto. Evita que el raycast
      *  cambie a otra guía, stroke o primitiva mientras el usuario dibuja. */
     drawTarget?: THREE.Object3D;
@@ -428,6 +441,7 @@ export class WebGLDesign3D {
     this.boxesGroup = new THREE.Group();
     this.boxesGroup.name = 'cajas';
     this.scene.add(this.surfacesGroup, this.guidesGroup, this.boxesGroup, this.strokesGroup, this.handlesGroup);
+    this.scene.add(this.terrenoGroup);   // el relieve y el agua (terreno3d.ts)
     this.scene.add(this.persp3d.group);
 
     // marcador del eje móvil de rotación: mismo estilo que los handles de
@@ -915,7 +929,7 @@ export class WebGLDesign3D {
     const antes = new Map<THREE.Object3D, boolean>();
     for (const o of this.scene.children) {
       antes.set(o, o.visible);
-      o.visible = o === this.persp3d.group || o === this.strokesGroup || (o as THREE.Light).isLight === true
+      o.visible = o === this.persp3d.group || o === this.strokesGroup || o === this.terrenoGroup || (o as THREE.Light).isLight === true
         || (!!op.cajas && o === this.boxesGroup);
     }
     const fondo = this.scene.background, niebla = this.scene.fog;
@@ -1011,7 +1025,7 @@ export class WebGLDesign3D {
     const antes = new Map<THREE.Object3D, boolean>();
     for (const o of this.scene.children) {
       antes.set(o, o.visible);
-      o.visible = o === this.strokesGroup || (o as THREE.Light).isLight === true || (!!op.lineas && o === this.persp3d.group)
+      o.visible = o === this.strokesGroup || o === this.terrenoGroup || (o as THREE.Light).isLight === true || (!!op.lineas && o === this.persp3d.group)
         || (!!op.cajas && o === this.boxesGroup);
     }
     const fondo = this.scene.background, niebla = this.scene.fog;
@@ -1482,6 +1496,8 @@ export class WebGLDesign3D {
     if (toolChanged && this.tool !== 'pencil-free') this.hideFreeDrawPreview();
     if (toolChanged && this.tool !== 'calle') this.calleCancelar();
     if (toolChanged && this.tool !== 'pieza') this.quitarFantasma();
+    if (toolChanged && this.tool !== 'terreno') this.quitarAnillo();
+    if (toolChanged && this.tool !== 'rio' && this.tool !== 'lago') this.aguaCancelar();
     this.applyLayerStyles(); // visibilidad/opacidad de capas
   }
 
@@ -1868,9 +1884,12 @@ export class WebGLDesign3D {
    *  toca casi de canto (más allá de 300 m). */
   /** El último intento de apoyo cayó en el piso demasiado lejos o de canto. */
   private pisoLejos = false;
-  private pisoBajoElCursor(): { point: THREE.Vector3; normal: THREE.Vector3; plane: THREE.Plane; kind: 'surface' } | null {
+  private pisoBajoElCursor(): { point: THREE.Vector3; normal: THREE.Vector3; plane: THREE.Plane; kind: 'surface'; terreno?: boolean } | null {
     const ray = this.raycaster.ray;
     this.pisoLejos = false;
+    // con relieve, el piso es el TERRENO (montañas, valles, cauces)
+    const enTerreno = this.terrenoBajoRayo();
+    if (enTerreno) return enTerreno;
     if (ray.direction.y > -1e-4 || ray.origin.y <= 1e-4) return null;
     const plano = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const p = new THREE.Vector3();
@@ -1972,6 +1991,12 @@ export class WebGLDesign3D {
           : this.current.baseNormal?.clone() ?? new THREE.Vector3(0, 0, 1);
         return { point: h.point.clone(), normal, target: this.current.drawTarget, plane: this.current.drawPlane?.clone() };
       }
+    }
+    if (this.current.sobreTerreno) {
+      // sobre el relieve: el punto del terreno bajo el cursor (si se sale del
+      // terreno, el plano del primer punto, como siempre)
+      const t = this.terrenoBajoRayo();
+      if (t) return { point: t.point, normal: t.normal, plane: t.plane, terreno: true };
     }
     if (this.current.drawPlane) {
       const p = new THREE.Vector3();
@@ -2152,6 +2177,12 @@ export class WebGLDesign3D {
       this.beginLasso(e); // click corto = borrar bajo cursor; arrastre = lazo
     } else if (this.tool === 'calle') {
       this.calleClic(e);
+    } else if (this.tool === 'terreno') {
+      this.activePointerId = e.pointerId;
+      this.terrenoEmpezar(e);
+      if (!this.terrenoGesto) this.activePointerId = null;
+    } else if (this.tool === 'rio' || this.tool === 'lago') {
+      this.aguaClic(e);
     } else if (this.tool === 'pieza') {
       this.activePointerId = e.pointerId;
       this.sembrarEmpezar(e);
@@ -2179,6 +2210,9 @@ export class WebGLDesign3D {
     if (this.cajaGesto) this.cajaMover(e);
     else if (this.calleGesto) this.calleVista();
     else if (this.sembrado) this.sembrarMover();
+    else if (this.terrenoGesto) this.terrenoMover();
+    else if (this.aguaGesto) this.aguaVista();
+    else if (this.tool === 'terreno' && this.mode === 'idle') this.anilloTerreno();
     else if (this.tool === 'pieza' && this.mode === 'idle') this.fantasmaPieza();
     else if (this.mode === 'draw') { if (this.shape) this.moveShape(e); else this.moveDraw(e); }
     else if (this.mode === 'move') this.moveDrag(e);
@@ -2205,6 +2239,7 @@ export class WebGLDesign3D {
     if (this.activePointerId !== null && e.pointerId !== this.activePointerId) return;
     if (this.cajaGesto?.fase === 'base') this.cajaSoltarBase();
     else if (this.sembrado) this.sembrarTerminar();
+    else if (this.terrenoGesto) this.terrenoTerminar();
     else if (this.mode === 'draw') { if (this.shape) this.endShape(e); else this.endDraw(e); }
     else if (this.mode === 'move') { this.endMove(); }
     else if (this.mode === 'lasso') { this.endLasso(e); }
@@ -2268,6 +2303,7 @@ export class WebGLDesign3D {
     x: 'box', // caja: base en el piso, después la altura
     r: 'calle', // pavimentador: calles con clics sobre el piso
     n: 'pieza', // piezas de la biblioteca: clic coloca, arrastrar siembra
+    t: 'terreno', // relieve: levantar, hundir, suavizar, aplanar
 
   };
 
@@ -2281,6 +2317,8 @@ export class WebGLDesign3D {
     if(typing || e.defaultPrevented)return;
     if(e.key==='Home'){e.preventDefault();this.frameContent();return;}
     if (this.calleGesto && e.key === 'Enter') { e.preventDefault(); this.calleTerminar(); return; }
+    if (this.aguaGesto && e.key === 'Enter') { e.preventDefault(); this.aguaTerminar(); return; }
+    if (this.aguaGesto && e.key === 'Backspace') { e.preventDefault(); this.aguaGesto.pts.pop(); if (!this.aguaGesto.pts.length) this.aguaCancelar(); else this.aguaVista(); return; }
     if (this.calleGesto && e.key === 'Backspace') {
       e.preventDefault();
       this.calleGesto.pts.pop();
@@ -2841,6 +2879,7 @@ export class WebGLDesign3D {
       // profundidad a mitad de camino (líneas que "no respetan" la guía).
       drawPlane: hit.plane?.clone()
         ?? new THREE.Plane().setFromNormalAndCoplanarPoint(hit.normal.clone(), hit.point.clone()),
+      sobreTerreno: !!(hit as HitInfo).terreno,
       surfaceId: (() => {
         const act = this.activeSurfaceObj();
         return act && act.type !== 'plane' && hit.target === act.mesh ? act.id : undefined;
@@ -3577,6 +3616,260 @@ export class WebGLDesign3D {
   }
   /** Apretar sobre el piso (o la tapa de otra caja): empieza la base. */
 
+  // ══ EL TERRENO (T), LOS RÍOS Y LOS LAGOS ════════════════════════════════════
+  // Ver terreno3d.ts. Pinceles de relieve con el mouse; ríos y lagos con clics
+  // (como las calles). Cada gesto es un paso de Ctrl+Z que guarda sólo el
+  // rectángulo de la grilla que tocó, más la lista de aguas.
+  private terreno = new Terreno();
+  private aguas: Agua[] = [];
+  /** el relieve y el agua: un grupo propio (no es dibujo: no se borra con la goma) */
+  private terrenoGroup = (() => { const g = new THREE.Group(); g.name = 'terreno'; return g; })();
+  private terrenoMalla: THREE.Mesh | null = null;
+  private pincelTerreno: PincelTerreno = { ...PINCEL_INICIAL };
+  private terrenoGesto: { antes: Float32Array; tocado: [number, number, number, number] | null; nivel: number; ultimo: THREE.Vector3; invertir: boolean } | null = null;
+  private anillo: THREE.Line | null = null;
+  private aguaGesto: { tipo: 'rio' | 'lago'; pts: THREE.Vector2[]; linea: THREE.Line } | null = null;
+  private aguaUltimoClic = { t: 0, x: 0, y: 0 };
+  private anchoRio = 6;
+
+  getPincelTerreno(): PincelTerreno { return { ...this.pincelTerreno }; }
+  setPincelTerreno(c: Partial<PincelTerreno>): void {
+    this.pincelTerreno = { ...this.pincelTerreno, ...c,
+      radio: Math.max(1, Math.min(60, Number(c.radio ?? this.pincelTerreno.radio))), fuerza: Math.max(0.05, Math.min(1, Number(c.fuerza ?? this.pincelTerreno.fuerza))) };
+    window.dispatchEvent(new Event('low3d:terreno'));
+  }
+  getAnchoRio(): number { return this.anchoRio; }
+  setAnchoRio(v: number): void { if (Number.isFinite(v)) this.anchoRio = Math.max(1, Math.min(40, v)); }
+  /** El relieve y el agua, para pruebas y paneles. */
+  terrenoInfo(): { plano: boolean; aguas: { tipo: string; puntos: number; nivel: number[] }[] } {
+    return { plano: this.terreno.plano(), aguas: this.aguas.map((a) => ({ tipo: a.tipo, puntos: a.pts.length, nivel: a.nivel.map((n) => Math.round(n * 100) / 100) })) };
+  }
+  alturaTerreno(x: number, z: number): number { return this.terreno.alturaEn(x, z); }
+
+  /** El punto del terreno bajo el cursor (sólo si hay relieve). */
+  private terrenoBajoRayo(): { point: THREE.Vector3; normal: THREE.Vector3; plane: THREE.Plane; kind: 'surface'; terreno: true } | null {
+    if (this.terreno.plano()) return null;
+    const r = this.raycaster.ray;
+    const p = this.terreno.rayo(r.origin.toArray() as [number, number, number], r.direction.toArray() as [number, number, number]);
+    if (!p) return null;
+    const point = new THREE.Vector3(...p), normal = new THREE.Vector3(...this.terreno.normalEn(p[0], p[2]));
+    return { point, normal, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(normal, point), kind: 'surface', terreno: true };
+  }
+  /** El punto del suelo (terreno o piso) bajo el cursor, para los pinceles. */
+  private sueloBajoCursor(): THREE.Vector3 | null {
+    this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    const t = this.terrenoBajoRayo();
+    if (t) return t.point;
+    const ray = this.raycaster.ray;
+    if (ray.direction.y > -1e-4 || ray.origin.y <= 1e-4) return null;
+    const p = new THREE.Vector3();
+    if (!ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p)) return null;
+    return Math.abs(p.x) <= LADO_TERRENO / 2 && Math.abs(p.z) <= LADO_TERRENO / 2 ? p : null;
+  }
+
+  /** Los colores del paisaje (del kit): pasto, tierra, roca, nieve y agua. */
+  private paletaTerreno(): { pasto: number[]; tierra: number[]; roca: number[]; nieve: number[] } {
+    const c = (h: string) => { const k = new THREE.Color(h); return [k.r, k.g, k.b]; };
+    const e = this.estiloCalles;
+    return { pasto: c(e.pasto || '#7fa860'), tierra: c(e.tierra || '#9c8466'), roca: c(e.roca || '#8b8a86'), nieve: c(e.nieve || '#f4f6f8') };
+  }
+  /** Rearma la malla del relieve y el agua (entera: con sombreado plano no hay normales que recalcular). */
+  private rearmarTerreno(): void {
+    for (const o of [...this.terrenoGroup.children]) {
+      this.terrenoGroup.remove(o);
+      (o as THREE.Mesh).geometry?.dispose();
+      ((o as THREE.Mesh).material as THREE.Material)?.dispose();
+    }
+    this.terrenoMalla = null;
+    if (!this.terreno.plano()) {
+      const g = this.terreno.geometria(this.paletaTerreno());
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(g.pos, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(g.col, 3));
+      geo.setIndex(new THREE.BufferAttribute(g.idx, 1));
+      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0,
+        polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+      m.frustumCulled = false;
+      m.raycast = () => undefined;                 // el terreno se toca con su propio rayo (terreno3d.rayo)
+      m.userData.terreno = true;
+      this.terrenoGroup.add(m);
+      this.terrenoMalla = m;
+    }
+    for (const a of this.aguas) { const w = this.mallaAgua(a); if (w) this.terrenoGroup.add(w); }
+  }
+  /** La superficie de agua: una cinta a lo largo del río o el espejo del lago. */
+  private mallaAgua(a: Agua): THREE.Mesh | null {
+    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(this.estiloCalles.agua || '#4f8fc0'), roughness: 0.25, metalness: 0.05,
+      transparent: true, opacity: 0.85, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    let geo: THREE.BufferGeometry;
+    if (a.tipo === 'lago') {
+      if (a.pts.length < 3) return null;
+      geo = new THREE.ShapeGeometry(new THREE.Shape(a.pts.map(([x, z]) => new THREE.Vector2(x, -z))));
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(0, a.nivel[0] ?? 0, 0);
+    } else {
+      const pts = a.pts.map(([x, z]) => new THREE.Vector2(x, z));
+      // la cinta: los dos bordes del eje corridos (los mismos de las calles)
+      const bordeI = correr(pts, a.ancho * 0.45), bordeD = correr(pts, -a.ancho * 0.45);
+      if (bordeI.length < 2 || bordeD.length < 2) return null;
+      const pos: number[] = [], idx: number[] = [];
+      for (let i = 0; i < pts.length; i++) {
+        const y = a.nivel[i] ?? a.nivel[a.nivel.length - 1] ?? 0;
+        pos.push(bordeI[i].x, y, bordeI[i].y, bordeD[i].x, y, bordeD[i].y);
+        if (i) { const k = i * 2; idx.push(k - 2, k - 1, k, k - 1, k + 1, k); }
+      }
+      geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(idx);
+    }
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat);
+    m.raycast = () => undefined;
+    m.userData.agua = a.tipo;
+    return m;
+  }
+
+  /** El anillo del pincel de terreno bajo el cursor. */
+  private anilloTerreno(): void {
+    const p = this.sueloBajoCursor();
+    if (!p) { this.quitarAnillo(); return; }
+    const r = this.pincelTerreno.radio, pts: THREE.Vector3[] = [];
+    for (let k = 0; k <= 48; k++) {
+      const a = (k / 48) * Math.PI * 2, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
+      pts.push(new THREE.Vector3(x, this.terreno.alturaEn(x, z) + 0.08, z));
+    }
+    if (!this.anillo) {
+      this.anillo = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xe0218a, depthTest: false, transparent: true }));
+      this.anillo.renderOrder = 10;
+      this.scene.add(this.anillo);
+    }
+    this.anillo.geometry.dispose();
+    this.anillo.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+  }
+  private quitarAnillo(): void {
+    if (!this.anillo) return;
+    this.scene.remove(this.anillo); this.anillo.geometry.dispose(); (this.anillo.material as THREE.Material).dispose();
+    this.anillo = null;
+  }
+
+  private terrenoEmpezar(e: PointerEvent): void {
+    const p = this.sueloBajoCursor();
+    if (!p) {
+      this.avisar(this.view === 'persp' || this.view === 'top' ? 'El terreno se modela sobre el piso (dentro de los 240 × 240 m del centro)'
+        : 'El terreno se modela en Perspectiva o desde Arriba');
+      return;
+    }
+    // Shift: al revés (levantar ⇄ hundir), como en los programas de paisaje
+    this.terrenoGesto = { antes: this.terreno.h.slice(), tocado: null, nivel: this.terreno.alturaEn(p.x, p.z), ultimo: p.clone(), invertir: e.shiftKey };
+    this.terrenoToque(p, 0.35);
+  }
+  private terrenoToque(p: THREE.Vector3, dt: number): void {
+    const g = this.terrenoGesto; if (!g) return;
+    const inv = g.invertir;
+    const modo = inv ? (this.pincelTerreno.modo === 'levantar' ? 'hundir' : this.pincelTerreno.modo === 'hundir' ? 'levantar' : this.pincelTerreno.modo) : this.pincelTerreno.modo;
+    const r = this.terreno.pincelar(p.x, p.z, { ...this.pincelTerreno, modo }, dt, g.nivel);
+    if (!r) return;
+    g.tocado = g.tocado ? [Math.min(g.tocado[0], r[0]), Math.min(g.tocado[1], r[1]), Math.max(g.tocado[2], r[2]), Math.max(g.tocado[3], r[3])] : r;
+    this.rearmarTerreno();
+  }
+  private terrenoMover(): void {
+    const g = this.terrenoGesto; if (!g) return;
+    const p = this.sueloBajoCursor();
+    if (!p) return;
+    const paso = Math.max(0.5, this.pincelTerreno.radio * 0.25);
+    const d = Math.hypot(p.x - g.ultimo.x, p.z - g.ultimo.z);
+    if (d < paso) return;
+    g.ultimo.copy(p);
+    this.terrenoToque(p, 0.25);
+    this.anilloTerreno();
+  }
+  private terrenoTerminar(): void {
+    const g = this.terrenoGesto; this.terrenoGesto = null;
+    if (!g || !g.tocado) return;
+    const [i0, j0, i1, j1] = g.tocado;
+    const despues = this.terreno.copiar(i0, j0, i1, j1);
+    const actual = this.terreno.h; this.terreno.h = g.antes;
+    const antes = this.terreno.copiar(i0, j0, i1, j1);
+    this.terreno.h = actual;
+    this.comandoTerreno(antes, despues, this.aguas, this.aguas);
+  }
+  /** Un paso de Ctrl+Z del paisaje: el rectángulo del relieve y la lista de aguas. */
+  private comandoTerreno(antes: Parche, despues: Parche, aguasAntes: Agua[], aguasDespues: Agua[]): void {
+    this.pushCmd({
+      undo: () => { this.terreno.pegar(antes); this.aguas = aguasAntes; this.rearmarTerreno(); },
+      redo: () => { this.terreno.pegar(despues); this.aguas = aguasDespues; this.rearmarTerreno(); },
+    });
+  }
+
+  /* ── ríos y lagos: clic a clic, como las calles ── */
+  private aguaClic(e: PointerEvent): void {
+    const ahora = performance.now(), u = this.aguaUltimoClic;
+    const doble = ahora - u.t < 400 && Math.hypot(e.clientX - u.x, e.clientY - u.y) < 6;
+    this.aguaUltimoClic = { t: doble ? 0 : ahora, x: e.clientX, y: e.clientY };
+    if (this.aguaGesto && doble) { this.aguaTerminar(); return; }
+    const p = this.sueloBajoCursor();
+    if (!p) { this.avisar('Los ríos y los lagos se marcan sobre el suelo (dentro de los 240 × 240 m del centro)'); return; }
+    const tipo = this.tool === 'lago' ? 'lago' : 'rio';
+    if (!this.aguaGesto || this.aguaGesto.tipo !== tipo) {
+      this.aguaCancelar();
+      const linea = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x2f7fd0, depthTest: false, transparent: true }));
+      linea.renderOrder = 10;
+      this.scene.add(linea);
+      this.aguaGesto = { tipo, pts: [], linea };
+      this.avisar(tipo === 'rio' ? 'Marcá el recorrido del río, de la naciente a la desembocadura · doble clic o Enter termina'
+        : 'Marcá el contorno del lago con clics · doble clic o Enter lo cierra');
+    }
+    const g = this.aguaGesto;
+    const q = new THREE.Vector2(p.x, p.z);
+    if (g.pts.length && q.distanceTo(g.pts[g.pts.length - 1]) < 0.5) return;
+    g.pts.push(q);
+    this.aguaVista();
+  }
+  private aguaVista(): void {
+    const g = this.aguaGesto; if (!g) return;
+    const pts = g.pts.slice();
+    const c = this.sueloBajoCursor();
+    if (c) pts.push(new THREE.Vector2(c.x, c.z));
+    if (g.tipo === 'lago' && pts.length > 2) pts.push(pts[0]);
+    g.linea.geometry.dispose();
+    g.linea.geometry = new THREE.BufferGeometry().setFromPoints(pts.map((q) => new THREE.Vector3(q.x, this.terreno.alturaEn(q.x, q.y) + 0.1, q.y)));
+  }
+  private aguaCancelar(): void {
+    const g = this.aguaGesto; if (!g) return;
+    this.aguaGesto = null;
+    this.scene.remove(g.linea); g.linea.geometry.dispose(); (g.linea.material as THREE.Material).dispose();
+  }
+  private aguaTerminar(): void {
+    const g = this.aguaGesto; if (!g) return;
+    const pts = g.pts.filter((q, i) => i === 0 || q.distanceTo(g.pts[i - 1]) > 0.5);
+    const tipo = g.tipo;
+    this.aguaCancelar();
+    if (pts.length < (tipo === 'lago' ? 3 : 2)) { this.avisar(tipo === 'lago' ? 'Un lago necesita al menos tres puntos de contorno' : 'Un río necesita al menos dos puntos'); return; }
+    const antesH = this.terreno.h.slice(), aguasAntes = this.aguas;
+    // un río se densifica (un punto cada ~2 m): el cauce y el agua siguen el terreno
+    const eje: [number, number][] = [];
+    if (tipo === 'rio') {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1], n = Math.max(1, Math.ceil(a.distanceTo(b) / 2));
+        for (let k = 0; k < n; k++) eje.push([a.x + (b.x - a.x) * k / n, a.y + (b.y - a.y) * k / n]);
+      }
+      eje.push([pts[pts.length - 1].x, pts[pts.length - 1].y]);
+    } else for (const q of pts) eje.push([q.x, q.y]);
+    const nivel = tipo === 'rio' ? this.terreno.cavarRio(eje, this.anchoRio, Math.max(0.8, this.anchoRio * 0.25)) : [this.terreno.cavarLago(eje, 3)];
+    const agua: Agua = { tipo, pts: eje, ancho: this.anchoRio, nivel };
+    this.aguas = [...this.aguas, agua];
+    // el rectángulo que cambió
+    const xs = eje.map((q) => q[0]), zs = eje.map((q) => q[1]), m = this.anchoRio / 2 + 4;
+    const [i0, j0] = Terreno.aGrilla(Math.min(...xs) - m, Math.min(...zs) - m), [i1, j1] = Terreno.aGrilla(Math.max(...xs) + m, Math.max(...zs) + m);
+    const despues = this.terreno.copiar(Math.floor(i0), Math.floor(j0), Math.ceil(i1), Math.ceil(j1));
+    const actual = this.terreno.h; this.terreno.h = antesH;
+    const antes = this.terreno.copiar(Math.floor(i0), Math.floor(j0), Math.ceil(i1), Math.ceil(j1));
+    this.terreno.h = actual;
+    this.rearmarTerreno();
+    this.comandoTerreno(antes, despues, aguasAntes, this.aguas);
+    this.avisar((tipo === 'rio' ? 'Río listo' : 'Lago listo') + ' · Ctrl+Z lo saca');
+  }
+
   // ══ PIEZAS DE LA BIBLIOTECA (N) ═════════════════════════════════════════════
   // Ver biblioteca3d.ts. Clic sobre el piso (o la tapa de una caja) coloca la
   // pieza elegida; arrastrar SIEMBRA copias separadas (árboles, rocas). Cada
@@ -3741,11 +4034,14 @@ export class WebGLDesign3D {
   getEstiloCalles(): EstiloKit { return { ...this.estiloCalles }; }
   setEstiloCalles(e: Partial<EstiloKit>): void {
     const hex = (v: unknown, d: string) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : d);
-    const n = { calzada: hex(e.calzada, this.estiloCalles.calzada), vereda: hex(e.vereda, this.estiloCalles.vereda),
-      pintura: hex(e.pintura, this.estiloCalles.pintura), tinta: hex(e.tinta, this.estiloCalles.tinta) };
+    const b = ESTILO_BASE as Required<EstiloKit>, a = this.estiloCalles as Required<EstiloKit>;
+    const n: EstiloKit = { calzada: hex(e.calzada, a.calzada), vereda: hex(e.vereda, a.vereda), pintura: hex(e.pintura, a.pintura), tinta: hex(e.tinta, a.tinta),
+      pasto: hex(e.pasto, a.pasto || b.pasto), tierra: hex(e.tierra, a.tierra || b.tierra), roca: hex(e.roca, a.roca || b.roca),
+      nieve: hex(e.nieve, a.nieve || b.nieve), agua: hex(e.agua, a.agua || b.agua) };
     if (JSON.stringify(n) === JSON.stringify(this.estiloCalles)) return;
     this.estiloCalles = n;
     if (this.strokes.some((r) => r.calle)) this.regenerarCalles();
+    this.rearmarTerreno();
   }
 
   getCalleTipo(): TipoCalle { return this.calleTipo; }
@@ -4911,6 +5207,7 @@ export class WebGLDesign3D {
   escapeConsume(): boolean {
     if (this.cajaGesto) { this.cajaCancelar(); return true; }
     if (this.calleGesto) { this.calleCancelar(); return true; }
+    if (this.aguaGesto) { this.aguaCancelar(); return true; }
     if (this.joy?.arrastrando) { this.joyEndDrag(true); return true; }
     if (this.mode === 'draw' && this.current) { this.commitStroke(); return true; }
     if (this.selected.size || this.selectedGuide || this.selectedSurface || this.editingStroke) {
@@ -5902,6 +6199,7 @@ export class WebGLDesign3D {
     lowStore.setActiveSurface(null);
     this.setPerspectiva({ ...AJUSTES_INICIALES }, { mover: false });   // un proyecto nuevo arranca con la perspectiva de fábrica
     this.toma = tomaValida(TOMA_INICIAL); this.avisarToma();
+    this.terreno.deTexto(''); this.aguas = []; this.rearmarTerreno();
     this.setView('persp');
     // y con la vista de inicio: si no, heredaba la cámara del proyecto anterior
     // (la del autoguardado) y, mirando al cielo, no había piso donde dibujar
@@ -6173,6 +6471,8 @@ export class WebGLDesign3D {
         } : null;
       }).filter(Boolean) as Low3DProject['guides'],
       groupNames: Object.fromEntries(this.groupNames),
+      terreno: this.terreno.aTexto() || undefined,
+      aguas: this.aguas.length ? this.aguas.map((a) => ({ ...a, pts: a.pts.map((q) => [...q] as [number, number]), nivel: [...a.nivel] })) : undefined,
     };
   }
 
@@ -6227,6 +6527,10 @@ export class WebGLDesign3D {
     this.setPerspectiva(ajustesValidos(doc.settings?.perspectiva), { mover: false });
     this.toma = tomaValida(doc.settings?.toma); this.avisarToma();
     if (doc.settings?.estiloCalles) this.setEstiloCalles(doc.settings.estiloCalles);
+    this.terreno.deTexto(typeof doc.terreno === 'string' ? doc.terreno : '');
+    this.aguas = (Array.isArray(doc.aguas) ? doc.aguas : []).filter((a) => a && (a.tipo === 'rio' || a.tipo === 'lago') && Array.isArray(a.pts) && a.pts.length >= 2)
+      .map((a) => ({ tipo: a.tipo, pts: a.pts.map((q) => [Number(q[0]), Number(q[1])] as [number, number]), ancho: Number(a.ancho) || 6, nivel: (a.nivel || []).map(Number) }));
+    this.rearmarTerreno();
     // IDS QUE NO SE REPITEN: los trazos y grupos vuelven con su id guardado
     // («stroke-12», «grp-3»…), pero el contador arrancaba de nuevo. Como el
     // estudio restaura el autoguardado al abrirse, el primer trazo nuevo volvía

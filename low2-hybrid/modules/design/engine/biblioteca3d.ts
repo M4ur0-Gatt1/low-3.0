@@ -41,7 +41,9 @@ export interface Pieza {
   tam: [number, number, number];
   variacion: Variacion;
 }
-export interface EstiloKit { calzada: string; vereda: string; pintura: string; tinta: string }
+export interface EstiloKit { calzada: string; vereda: string; pintura: string; tinta: string;
+  /** el paisaje: pasto, tierra (cauces), roca (laderas), nieve (cumbres) y agua */
+  pasto?: string; tierra?: string; roca?: string; nieve?: string; agua?: string }
 export interface Kit {
   id: string;
   nombre: string;
@@ -53,7 +55,8 @@ export interface Kit {
 }
 
 const CLAVE = 'low3d:kits';
-export const ESTILO_BASE: EstiloKit = { calzada: '#9a9fa6', vereda: '#ddd6c8', pintura: '#f6f3ea', tinta: '#1d1d1f' };
+export const ESTILO_BASE: EstiloKit = { calzada: '#9a9fa6', vereda: '#ddd6c8', pintura: '#f6f3ea', tinta: '#1d1d1f',
+  pasto: '#7fa860', tierra: '#9c8466', roca: '#8b8a86', nieve: '#f4f6f8', agua: '#4f8fc0' };
 
 type V3 = [number, number, number];
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -167,7 +170,7 @@ export function kitsDeFabrica(): Kit[] {
     { id: 'fabrica-plano', nombre: 'Color plano', fabrica: true, descripcion: 'Volúmenes de colores lisos con aristas: ciudad y paisaje listos para el fondo',
       estilo: { ...ESTILO_BASE }, piezas: piezasDeFabrica('plano') },
     { id: 'fabrica-linea', nombre: 'Boceto en línea', fabrica: true, descripcion: 'Las mismas formas como líneas, para layouts a lápiz que después se pasan en limpio',
-      estilo: { calzada: '#f4f2ee', vereda: '#fbfaf7', pintura: '#1d1d1f', tinta: '#1d1d1f' }, piezas: piezasDeFabrica('linea') },
+      estilo: { calzada: '#f4f2ee', vereda: '#fbfaf7', pintura: '#1d1d1f', tinta: '#1d1d1f', pasto: '#f3f1ec', tierra: '#e2ddd3', roca: '#cfcac0', nieve: '#ffffff', agua: '#cfe0ea' }, piezas: piezasDeFabrica('linea') },
   ];
 }
 
@@ -197,7 +200,8 @@ export function kitValido(x: unknown): Kit | null {
   const e = (o.estilo || {}) as Partial<EstiloKit>;
   return {
     id: texto(o.id, 'kit-' + Math.random().toString(36).slice(2, 8), 80), nombre: texto(o.nombre, 'Mi kit'), descripcion: texto(o.descripcion, '', 200),
-    estilo: { calzada: color(e.calzada, ESTILO_BASE.calzada), vereda: color(e.vereda, ESTILO_BASE.vereda), pintura: color(e.pintura, ESTILO_BASE.pintura), tinta: color(e.tinta, ESTILO_BASE.tinta) },
+    estilo: { calzada: color(e.calzada, ESTILO_BASE.calzada), vereda: color(e.vereda, ESTILO_BASE.vereda), pintura: color(e.pintura, ESTILO_BASE.pintura), tinta: color(e.tinta, ESTILO_BASE.tinta),
+      pasto: color(e.pasto, ESTILO_BASE.pasto!), tierra: color(e.tierra, ESTILO_BASE.tierra!), roca: color(e.roca, ESTILO_BASE.roca!), nieve: color(e.nieve, ESTILO_BASE.nieve!), agua: color(e.agua, ESTILO_BASE.agua!) },
     piezas: (Array.isArray(o.piezas) ? o.piezas : []).map(piezaValida).filter((p): p is Pieza => !!p),
   };
 }
