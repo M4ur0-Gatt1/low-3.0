@@ -16,6 +16,7 @@ const paths: Record<string,string> = {
  pencil:'M4 17 16 5l3 3L7 20H4v-3ZM14 7l3 3', guide:'M3 17 11 5l10 4-8 12L3 17ZM8 11l10 4',
  move:'M12 3v18M3 12h18M9 6l3-3 3 3M6 9l-3 3 3 3M18 9l3 3-3 3M9 18l3 3 3-3',
  eraser:'m4 14 9-10 7 7-8 9H9l-5-6ZM9 9l7 7M12 20h9', rect:'M4 5h16v14H4z', box:'M12 3 20 7.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12v9M12 12 4 7.5',
+ calle:'M8 3 4 21M16 3l4 18M12 4v3m0 4v3m0 4v3',
  liquify:'M4 7c5-8 7 12 12 4s8 5 1 8M5 16c1-3 5-3 6 0', more:'M5 12h1m5 0h1m5 0h1',
  layers:'m3 8 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5M3 18l9 5 9-5',
  focus:'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 8h8v8H8z',
@@ -25,6 +26,11 @@ const paths: Record<string,string> = {
  help:'M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 4m0 3v1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
 };
 export const StudioIcon=({name}:{name:string})=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]||paths.more}/></svg>;
+/* CONSTRUIR: las herramientas de armar el escenario (caja, calles y las que
+   vengan: edificios, árboles, terreno, agua) son UN botón de la barra con su
+   lista, como los grupos de Toon Boom. Cada una sumada suelta saturaba la
+   vista inicial (check_3d_studio_ui la limita a propósito). */
+const GRUPO_CONSTRUIR:ToolType[]=['box','calle'];
 const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
  {id:'pencil',name:'Dibujar',key:'P',icon:'pencil',hint:'Arrastrá para dibujar · Shift mantiene la línea recta'},
  {id:'guide',name:'Guía',key:'G',icon:'guide',hint:'Dibujá una guía para orientar el próximo trazo en el espacio'},
@@ -32,6 +38,7 @@ const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
  {id:'eraser',name:'Borrar',key:'E',icon:'eraser',hint:'Tocá un trazo para quitarlo · Ctrl+Z lo recupera'},
  {id:'rect',name:'Figuras',key:'',icon:'rect',hint:'Arrastrá sobre la guía · Shift conserva las proporciones'},
  {id:'box',name:'Caja',key:'X',icon:'box',hint:'Arrastrá la base sobre el piso · mové para la altura y clic · Esc cancela'},
+ {id:'calle',name:'Calles',key:'R',icon:'calle',hint:'Marcá el recorrido con clics sobre el piso · doble clic o Enter termina · Esc cancela · Shift: tramos a 15°'},
  {id:'liquify',name:'Deformar',key:'L',icon:'liquify',hint:'Empujá el trazo · el tamaño del pincel define la zona de influencia'},
 ];
 const viewNames:Record<ViewName,string>={persp:'Perspectiva',front:'Frente',back:'Atrás',left:'Izquierda',right:'Derecha',top:'Arriba',bottom:'Abajo'};
@@ -57,6 +64,15 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
  // apenas se empieza a trabajar en la mesa, la guía se va sola (no tapa el dibujo)
  useEffect(()=>{if(!guia)return;const ir=(e:PointerEvent)=>{if((e.target as HTMLElement)?.closest?.('.studio-guia-ok'))return;cerrarGuia();};window.addEventListener('pointerdown',ir,true);return()=>window.removeEventListener('pointerdown',ir,true);},[guia]);
  // RECTAS A LOS EJES (imán de fuga): se ve y se apaga desde la barra del pincel
+ // EL PAVIMENTADOR: el ancho de la calle (pasaje, calle, avenida)
+ const [calle,setCalle]=useState<'pasaje'|'calle'|'avenida'>('calle');
+ useEffect(()=>{const sync=()=>{const e=engine.current;if(e)setCalle(e.getCalleTipo());};sync();const t=window.setTimeout(sync,0);
+   window.addEventListener('low3d:calle',sync);return()=>{clearTimeout(t);window.removeEventListener('low3d:calle',sync);};},[engine]);
+  // el grupo Construir: el botón muestra la herramienta en uso (o la última usada)
+  const [construir,setConstruir]=useState<ToolType>('box');
+  const [menuConstruir,setMenuConstruir]=useState<{x:number;y:number}|null>(null);
+  useEffect(()=>{if(GRUPO_CONSTRUIR.includes(state.currentTool))setConstruir(state.currentTool);},[state.currentTool]);
+  const abrirConstruir=(b:HTMLElement)=>{const r=b.getBoundingClientRect();setMenuConstruir({x:r.right+8,y:Math.max(8,r.top-6)});};
  const [fuga,setFuga]=useState(true);
  useEffect(()=>{const sync=()=>{const e=engine.current;if(e)setFuga(e.getImanFuga());};sync();const t=window.setTimeout(sync,0);
    window.addEventListener('low3d:fuga',sync);return()=>{clearTimeout(t);window.removeEventListener('low3d:fuga',sync);};},[engine]);
@@ -103,10 +119,17 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      {[['Nuevo proyecto',onNew,''],['Abrir…',onOpen,''],['Guardar',()=>onSave(false),'Ctrl S'],['Guardar como…',()=>onSave(true),'Ctrl ⇧ S'],['Exportar STL…',onExport,'']].map(([label,fn,key])=><button role="menuitem" key={label as string} onClick={()=>{setMenu(false);(fn as ()=>void)();}}>{label as string}<kbd>{key as string}</kbd></button>)}
    </div></>}
    <nav className="studio-tool-rail studio-surface" aria-label="Herramientas 3D">
-     {tools.map(t=><button key={t.id} data-tool={t.id} title={`${t.name}${t.key?' ('+t.key+')':''}`} aria-label={t.name} aria-pressed={state.currentTool===t.id||(t.id==='rect'&&['circle','poly'].includes(state.currentTool))} onClick={()=>{state.setCurrentTool(t.id);if(t.id==='rect')setPanel('tools');}}><StudioIcon name={t.icon}/><span>{t.name}</span></button>)}
+     {tools.filter(t=>!GRUPO_CONSTRUIR.includes(t.id)||t.id===construir).map(t=><button key={t.id} data-tool={t.id} className={GRUPO_CONSTRUIR.includes(t.id)?'studio-grupo':undefined}
+       onContextMenu={GRUPO_CONSTRUIR.includes(t.id)?(e)=>{e.preventDefault();abrirConstruir(e.currentTarget);}:undefined} title={`${t.name}${t.key?' ('+t.key+')':''}`} aria-label={t.name} aria-pressed={state.currentTool===t.id||(t.id==='rect'&&['circle','poly'].includes(state.currentTool))} onClick={(e)=>{if((e.target as HTMLElement).closest('.studio-grupo-caret')){abrirConstruir(e.currentTarget);return;}state.setCurrentTool(t.id);if(t.id==='rect')setPanel('tools');}}><StudioIcon name={t.icon}/><span>{t.name}</span>{GRUPO_CONSTRUIR.includes(t.id)&&<i className="studio-grupo-caret" aria-label="Más herramientas para construir" title="Más para construir: caja, calles…">▸</i>}</button>)}
      <span className="studio-rail-divider"/>
      <button title="Todas las herramientas" aria-label="Todas las herramientas" aria-pressed={panel==='tools'} onClick={()=>toggle('tools')}><StudioIcon name="more"/><span>Más</span></button>
    </nav>
+   {menuConstruir&&<><button className="studio-dismiss" aria-label="Cerrar la lista" onClick={()=>setMenuConstruir(null)}/>
+     <div className="studio-grupo-menu studio-surface" role="menu" aria-label="Construir" style={{left:menuConstruir.x,top:menuConstruir.y}}>
+       <h3>Construir</h3>
+       {tools.filter(t=>GRUPO_CONSTRUIR.includes(t.id)).map(t=><button key={t.id} role="menuitem" data-tool={t.id} aria-pressed={state.currentTool===t.id}
+         onClick={()=>{state.setCurrentTool(t.id);setConstruir(t.id);setMenuConstruir(null);}}><StudioIcon name={t.icon}/><span>{t.name}</span><kbd>{t.key}</kbd></button>)}
+     </div></>}
    <div className={'studio-context'+(aviso?' is-aviso':'')} aria-live="polite"><strong>{active?.name||({'pencil-free':'Dibujo libre',select:'Editar puntos',scissors:'Tijera',fill:'Relleno',circle:'Círculo',poly:'Polígono'} as Record<string,string>)[state.currentTool]}</strong><span>{aviso||active?.hint||'Elegí las opciones de la herramienta en el inspector'}</span></div>
    {state.currentTool==='move'&&<div className="studio-transform-strip studio-surface" aria-label="Transformación de selección">
      {(['translate','rotate','scale'] as const).map((mode,i)=><button key={mode} aria-pressed={state.gizmoMode===mode&&!joystick} onClick={()=>{engine.current?.setJoystick(false);setJoystick(false);state.setGizmoMode(mode);}}>{['Mover','Rotar','Escalar'][i]}</button>)}
@@ -129,6 +152,7 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <button title="Ajustes de pincel" onClick={()=>toggle('brush')}>{Math.round(state.brushSettings.opacity*100)}%<span> opacidad</span></button>
      <button className="studio-fuga" aria-pressed={fuga} title={fuga?'Rectas a los ejes: una línea casi recta, al soltarla, va exacta por la arista o el eje de su superficie y fuga sola. Shift o apagarlo: queda como la dibujaste':'Rectas a los ejes apagado: las líneas quedan como las dibujaste'}
        onClick={()=>{const e=engine.current;if(e){e.setImanFuga(!fuga);setFuga(!fuga);}}}>Rectas a los ejes</button>
+     {state.currentTool==='calle'&&<span className="studio-calle-tipo" role="group" aria-label="Ancho de la calle">{(['pasaje','calle','avenida'] as const).map((t,i)=><button key={t} data-calle={t} aria-pressed={calle===t} title={['Pasaje: 4 m de calzada','Calle: 7,5 m de calzada','Avenida: 14 m de calzada, doble línea'][i]} onClick={()=>{engine.current?.setCalleTipo(t);setCalle(t);}}>{['Pasaje','Calle','Avenida'][i]}</button>)}</span>}
    </div>
    <div className="studio-view-strip studio-surface">
      <select aria-label="Vista de cámara" value={view} onChange={e=>{engine.current?.setView(e.target.value as ViewName);setView(e.target.value as ViewName);}}>{Object.entries(viewNames).map(([v,label])=><option value={v} key={v}>{label}</option>)}</select>
@@ -148,7 +172,7 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <button className="studio-guia-ok" onClick={cerrarGuia}>Entendido</button>
    </section>}
    {vacia&&!guia&&<div className="studio-vacia studio-surface" role="status">No se ve nada de lo dibujado<button onClick={()=>{engine.current?.frameContent();}}>Encuadrar lo dibujado</button></div>}
-   {help&&<section className="studio-help studio-surface" aria-label="Ayuda de navegación"><div className="studio-inspector-title"><h2>Dibujar en el espacio</h2><button aria-label="Cerrar ayuda" onClick={()=>setHelp(false)}>×</button></div><p><button className="studio-guia-link" onClick={()=>{setHelp(false);setGuia(true);}}>Cómo armar un fondo en 4 pasos</button></p><p>Creá una guía, dibujá sobre ella y orbitá para continuar desde otro ángulo.</p><dl>{[['P / G','Dibujar / crear guía'],['V / A','Mover / editar puntos'],['E / C','Borrar / cortar'],['F','Dibujo libre; rueda ajusta profundidad'],['J / T / K','Joystick / 2D–3D / precisión'],['Shift / Alt','Línea recta / eje fijo'],['Ctrl G / Ctrl ⇧ G','Agrupar / desagrupar'],['Ctrl E','Convertir selección en volumen'],['Ctrl C / Ctrl V','Copiar / pegar'],['Inicio','Encuadrar selección o escena'],['Tab / Esc','Concentración / cancelar']].map(([k,v])=><React.Fragment key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></React.Fragment>)}</dl></section>}
+   {help&&<section className="studio-help studio-surface" aria-label="Ayuda de navegación"><div className="studio-inspector-title"><h2>Dibujar en el espacio</h2><button aria-label="Cerrar ayuda" onClick={()=>setHelp(false)}>×</button></div><p><button className="studio-guia-link" onClick={()=>{setHelp(false);setGuia(true);}}>Cómo armar un fondo en 4 pasos</button></p><p>Creá una guía, dibujá sobre ella y orbitá para continuar desde otro ángulo.</p><dl>{[['P / G','Dibujar / crear guía'],['V / A','Mover / editar puntos'],['E / C','Borrar / cortar'],['F','Dibujo libre; rueda ajusta profundidad'],['J / T / K','Joystick / 2D–3D / precisión'],['Shift / Alt','Línea recta / eje fijo'],['X / R','Caja / calles'],['Ctrl G / Ctrl ⇧ G','Agrupar / desagrupar'],['Ctrl E','Convertir selección en volumen'],['Ctrl C / Ctrl V','Copiar / pegar'],['Inicio','Encuadrar selección o escena'],['Tab / Esc','Concentración / cancelar']].map(([k,v])=><React.Fragment key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></React.Fragment>)}</dl></section>}
    {focus&&<button className="studio-focus-exit studio-surface" onClick={()=>setFocus(false)}>Mostrar interfaz <kbd>Tab</kbd></button>}
  </div>;
 }

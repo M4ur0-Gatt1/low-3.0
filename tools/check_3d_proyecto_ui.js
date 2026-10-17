@@ -96,6 +96,17 @@ async function main() {
     const deshecho = await estado();
     if (deshecho.ids.join() !== vuelto.ids.join()) mal("Ctrl+Z no sacó sólo el trazo nuevo", { vuelto: vuelto.ids, deshecho: deshecho.ids });
 
+    // «Nuevo proyecto» arranca con la vista de inicio: antes heredaba la cámara del
+    // proyecto anterior (guardada en el autoguardado) y, si había quedado mirando
+    // al cielo, en el proyecto nuevo no había piso donde dibujar
+    await ev(`(()=>{ const e = __low3d; e.camera.position.set(0, 5, 9); e.controls.target.set(0, 9, -20); e.camera.lookAt(e.controls.target); e.controls.update(); e.newProject(); return true; })()`);
+    await w(200);
+    const inicio = await ev(`({ pos: __low3d.camera.position.toArray().map(v => Math.round(v * 100) / 100), mira: __low3d.controls.target.toArray().map(v => Math.round(v * 100) / 100), n: __low3d.strokes.length })`);
+    if (inicio.pos.join() !== "0,1.2,6" || inicio.mira.join() !== "0,0.6,0") mal("«Nuevo proyecto» se quedó con la cámara del proyecto anterior", inicio);
+    await herramienta("pencil");
+    await arrastrar(await aPantalla([-1, 0, 2]), await aPantalla([1, 0, 2]));
+    if ((await estado()).ids.length !== 1) mal("en un proyecto nuevo no se puede dibujar sobre el piso", await estado());
+
     const graves = errores.filter((e) => !/ResizeObserver/.test(String(e)));
     if (graves.length) mal("hubo excepciones", graves.slice(0, 3));
     console.log("E2E proyecto 3D al reabrir OK", JSON.stringify({ ids: despues.ids, yMax: +alto.toFixed(3) }));

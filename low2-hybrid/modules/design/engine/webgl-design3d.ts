@@ -18,6 +18,7 @@
  */
 
 import * as THREE from 'three';
+import { piezasDeCalle, pegarARed, estirarPuntas, franja, MEDIDAS, type CalleRed, type TipoCalle } from './calles';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { Joystick3D, type JoyMode } from './joystick3d';
@@ -90,6 +91,10 @@ interface StrokeRecord {
    *  (v3.29.3): arrancar en la punta de una línea del piso despegaba la nueva
    *  hasta 1,07 m. Viaja con el proyecto y sigue al objeto si se lo mueve. */
   apoyo?: [number, number, number, number];
+  /** Una CALLE del pavimentador: `points` es su eje (los vértices marcados) y
+   *  la malla (calzada, veredas, cordones, pintura) se arma con la red entera,
+   *  porque los cruces dependen de las otras calles. Ver calles.ts. */
+  calle?: TipoCalle;
 }
 
 interface Command {
@@ -136,6 +141,8 @@ export interface Low3DProject {
     apoyo?: number[];
     caja?: boolean;
     hueco?: boolean;
+    /** una calle del pavimentador: se rearma con la red al abrir */
+    calle?: TipoCalle;
     /** true = la figura lleva cara sólida ADEMÁS del contorno (una sola pieza). */
     filled?: boolean;
   }>;
@@ -173,6 +180,16 @@ export class WebGLDesign3D {
   private boxesGroup!: THREE.Group;
   /** El gesto de la herramienta Caja: primero la base (arrastre), después la
    *  altura (mover el mouse) y un clic la confirma. Esc la cancela. */
+  /** EL PAVIMENTADOR (R): los vértices ya marcados (x, z) y a qué calle se
+   *  pegaron las puntas. */
+  private calleGesto: { pts: THREE.Vector2[]; ejeIni?: CalleRed; ejeFin?: CalleRed; puntaIni?: string; puntaFin?: string;
+    linea: THREE.Line; banda: THREE.Mesh | null } | null = null;
+  /** El último clic del pavimentador (para reconocer el doble clic: en un
+   *  pointerdown `detail` vale SIEMPRE 0 en Chrome/WebView2). */
+  private calleUltimoClic = { t: 0, x: 0, y: 0 };
+  private calleTipo: TipoCalle = (() => {
+    try { const t = window.localStorage.getItem('low3d:calle-tipo'); return t === 'pasaje' || t === 'avenida' ? t : 'calle'; } catch { return 'calle'; }
+  })();
   private cajaGesto: { fase: 'base' | 'altura'; obj: THREE.Group; origen: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3;
     arriba: THREE.Vector3; q: THREE.Quaternion; plano: THREE.Plane; du: number; dv: number; alto: number } | null = null;
   private strokesGroup!: THREE.Group;
@@ -1456,6 +1473,7 @@ export class WebGLDesign3D {
     // dibujo libre: el scroll controla la profundidad, no el zoom de cámara.
     if (this.controls) this.controls.enableZoom = this.tool !== 'pencil-free';
     if (toolChanged && this.tool !== 'pencil-free') this.hideFreeDrawPreview();
+    if (toolChanged && this.tool !== 'calle') this.calleCancelar();
     this.applyLayerStyles(); // visibilidad/opacidad de capas
   }
 
@@ -2015,7 +2033,7 @@ export class WebGLDesign3D {
     let best: { rec: StrokeRecord; index: number } | null = null;
     let bestDist = 22; // px
     for (const rec of this.strokes) {
-      if (rec.kind !== 'stroke' || rec.points.length < 3) continue;
+      if (rec.kind !== 'stroke' || rec.calle || rec.points.length < 3) continue;
       if (this.isLayerLocked(rec.layerId)) continue; // no se corta un trazo bloqueado
       rec.object.updateMatrixWorld(true);
       for (let i = 0; i < rec.points.length; i++) {
@@ -2124,6 +2142,8 @@ export class WebGLDesign3D {
       this.onSelectPointerDown(e);
     } else if (this.tool === 'eraser') {
       this.beginLasso(e); // click corto = borrar bajo cursor; arrastre = lazo
+    } else if (this.tool === 'calle') {
+      this.calleClic(e);
     } else if (this.tool === 'box') {
       if (this.cajaGesto?.fase === 'altura') this.cajaConfirmar();
       else this.cajaEmpezar(e);
@@ -2145,6 +2165,7 @@ export class WebGLDesign3D {
     this.updateCursor(e);
     this.setPointerFromEvent(e);
     if (this.cajaGesto) this.cajaMover(e);
+    else if (this.calleGesto) this.calleVista();
     else if (this.mode === 'draw') { if (this.shape) this.moveShape(e); else this.moveDraw(e); }
     else if (this.mode === 'move') this.moveDrag(e);
     else if (this.mode === 'lasso') this.moveLasso(e);
@@ -2230,6 +2251,7 @@ export class WebGLDesign3D {
     p: 'pencil', g: 'guide', v: 'move', a: 'select', e: 'eraser', l: 'liquify', c: 'scissors', f: 'pencil-free',
     b: 'fill', // balde: rellenar la forma cerrada
     x: 'box', // caja: base en el piso, después la altura
+    r: 'calle', // pavimentador: calles con clics sobre el piso
 
   };
 
@@ -2242,6 +2264,13 @@ export class WebGLDesign3D {
     // Los campos conservan Supr, Backspace, copiar/pegar y su propio Undo.
     if(typing || e.defaultPrevented)return;
     if(e.key==='Home'){e.preventDefault();this.frameContent();return;}
+    if (this.calleGesto && e.key === 'Enter') { e.preventDefault(); this.calleTerminar(); return; }
+    if (this.calleGesto && e.key === 'Backspace') {
+      e.preventDefault();
+      this.calleGesto.pts.pop();
+      if (!this.calleGesto.pts.length) this.calleCancelar(); else this.calleVista();
+      return;
+    }
     // Barra espaciadora = MANO: mientras se mantiene, el botón izquierdo panea
     // (mover la vista vertical/horizontal, sobre todo en vistas ortogonales).
     if (e.code === 'Space' && !typing) {
@@ -3531,6 +3560,184 @@ export class WebGLDesign3D {
     return g;
   }
   /** Apretar sobre el piso (o la tapa de otra caja): empieza la base. */
+
+  // ══ EL PAVIMENTADOR (R) ════════════════════════════════════════════════════
+  // Mauro: «un pavimentador que dibuje calles de ciudades con una lógica similar
+  // [a la caja]». Clic a clic sobre el piso se marca el recorrido; doble clic o
+  // Enter la termina, Backspace quita el último punto, Esc la cancela. La calle
+  // sale entera (calzada, cordones, veredas, línea del medio y, en los cruces,
+  // sendas peatonales). Un clic cerca de otra calle se pega: a su punta (la
+  // sigue) o a su eje (una T). Shift: tramos a 15°.
+  private static readonly COLOR_CALZADA = '#9a9fa6';
+  private static readonly COLOR_VEREDA = '#ddd6c8';
+  private static readonly COLOR_PINTURA = '#f6f3ea';
+
+  getCalleTipo(): TipoCalle { return this.calleTipo; }
+  setCalleTipo(t: TipoCalle): void {
+    if (!MEDIDAS[t]) return;
+    this.calleTipo = t;
+    try { window.localStorage.setItem('low3d:calle-tipo', t); } catch { /* sin almacenamiento */ }
+    window.dispatchEvent(new Event('low3d:calle'));
+    if (this.calleGesto) this.calleVista();
+  }
+
+  /** La red de calles en el mundo (x, z). */
+  private redDeCalles(): CalleRed[] {
+    return this.strokes.filter((r) => r.calle).map((r) => {
+      r.object.updateMatrixWorld(true);
+      return { id: r.id, tipo: r.calle!, pts: r.points.map((p) => { const w = p.clone().applyMatrix4(r.object.matrixWorld); return new THREE.Vector2(w.x, w.z); }) };
+    });
+  }
+
+  /** Rearma TODAS las calles: un cruce nuevo corta cordones y pone sendas en
+   *  las dos. */
+  private regenerarCalles(): void {
+    const red = this.redDeCalles();
+    for (const rec of this.strokes) if (rec.calle) this.armarCalle(rec, red);
+    this.applyLayerStyles();
+  }
+
+  private armarCalle(rec: StrokeRecord, red: CalleRed[]): void {
+    while (rec.object.children.length) {
+      const h = rec.object.children[0] as THREE.Mesh;
+      rec.object.remove(h);
+      h.geometry?.dispose();
+      (h.material as THREE.Material)?.dispose();
+    }
+    const yo = red.find((c) => c.id === rec.id);
+    if (!yo) return;
+    const pz = piezasDeCalle(yo, red);
+    const inv = rec.object.matrixWorld.clone().invert();
+    const local = (q: THREE.Vector2, y: number) => new THREE.Vector3(q.x, y, q.y).applyMatrix4(inv);
+    // de abajo hacia arriba: vereda, calzada, pintura (donde se cruzan, manda la calzada)
+    const relleno = (poly: THREE.Vector2[], y: number, color: string) => {
+      const m = this.buildFillMesh(poly.map((q) => local(q, y)), { ...rec.brush, color, opacity: 1 });
+      if (m) { m.userData.esRelleno = true; rec.object.add(m); }
+    };
+    relleno(pz.vereda, 0.006, WebGLDesign3D.COLOR_VEREDA);
+    relleno(pz.calzada, 0.012, WebGLDesign3D.COLOR_CALZADA);
+    for (const p of pz.pintura) relleno(p, 0.018, WebGLDesign3D.COLOR_PINTURA);
+    // la tinta (cordones y bordes de vereda) con el color del pincel, a mano
+    const tinta = { ...rec.brush, size: 12, opacity: 1, pressureSensitivity: 0 };
+    for (const l of pz.tinta) {
+      const t = this.buildTube(l.map((q) => local(q, 0.03)), l.map(() => 1), tinta);
+      if (t) rec.object.add(t);
+    }
+  }
+
+  private calleClic(e: PointerEvent): void {
+    const g = this.calleGesto;
+    // el segundo clic de un doble clic termina la calle (el primero ya marcó el punto)
+    const ahora = performance.now(), u = this.calleUltimoClic;
+    const doble = ahora - u.t < 400 && Math.hypot(e.clientX - u.x, e.clientY - u.y) < 6;
+    this.calleUltimoClic = { t: doble ? 0 : ahora, x: e.clientX, y: e.clientY };
+    if (g && doble) { this.calleTerminar(); return; }
+    this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    const piso = this.pisoBajoElCursor();
+    if (!piso) {
+      this.avisar(this.pisoLejos ? 'Ahí el piso queda muy lejos: acercá la cámara o mirá más desde arriba'
+        : 'Las calles se marcan sobre el piso: miralo en Perspectiva o desde Arriba');
+      return;
+    }
+    const peg = this.calleDondeCae(new THREE.Vector2(piso.point.x, piso.point.z), e.shiftKey);
+    if (!g) {
+      const linea = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xe0218a, depthTest: false, transparent: true }));
+      linea.renderOrder = 10;
+      this.scene.add(linea);
+      this.calleGesto = { pts: [peg.p], ejeIni: peg.eje, puntaIni: peg.punta, linea, banda: null };
+      this.avisar('Seguí marcando el recorrido con clics · doble clic o Enter termina · Esc cancela');
+      this.calleVista();
+      return;
+    }
+    if (peg.p.distanceTo(g.pts[g.pts.length - 1]) < 0.3) return;
+    g.pts.push(peg.p);
+    g.ejeFin = peg.eje;
+    g.puntaFin = peg.punta;
+    this.calleVista();
+  }
+
+  /** Dónde cae un punto del recorrido: pegado a otra calle (punta o eje) o, con
+   *  Shift, en un ángulo redondo de 15° desde el punto anterior. */
+  private calleDondeCae(p: THREE.Vector2, shift: boolean): { p: THREE.Vector2; eje?: CalleRed; punta?: string } {
+    const g = this.calleGesto;
+    if (shift && g?.pts.length) {
+      const a = g.pts[g.pts.length - 1], d = p.clone().sub(a);
+      const paso = Math.PI / 12, ang = Math.round(Math.atan2(d.y, d.x) / paso) * paso, L = d.length();
+      return { p: new THREE.Vector2(a.x + Math.cos(ang) * L, a.y + Math.sin(ang) * L) };
+    }
+    const red = this.redDeCalles();
+    for (const o of red) for (const q of [o.pts[0], o.pts[o.pts.length - 1]]) if (q.distanceTo(p) < 1.2) return { p: q.clone(), punta: o.id };
+    const r = pegarARed(p, red);
+    return { p: r.p, eje: r.eje };
+  }
+
+  /** La vista previa: el eje marcado hasta el cursor y la calzada translúcida. */
+  private calleVista(): void {
+    const g = this.calleGesto; if (!g) return;
+    const pts = g.pts.slice();
+    this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    const piso = this.pisoBajoElCursor();
+    if (piso) pts.push(this.calleDondeCae(new THREE.Vector2(piso.point.x, piso.point.z), false).p);
+    g.linea.geometry.dispose();
+    g.linea.geometry = new THREE.BufferGeometry().setFromPoints(pts.map((q) => new THREE.Vector3(q.x, 0.05, q.y)));
+    if (g.banda) { this.scene.remove(g.banda); g.banda.geometry.dispose(); (g.banda.material as THREE.Material).dispose(); g.banda = null; }
+    const limpio = pts.filter((q, i) => i === 0 || q.distanceTo(pts[i - 1]) > 0.05);
+    if (limpio.length > 1) {
+      const m = MEDIDAS[this.calleTipo].calzada / 2;
+      const banda = this.buildFillMesh(franja(limpio, m, -m).map((q) => new THREE.Vector3(q.x, 0.02, q.y)),
+        { ...this.brush, color: WebGLDesign3D.COLOR_CALZADA, opacity: 0.45 });
+      if (banda) { banda.renderOrder = 9; this.scene.add(banda); g.banda = banda; }
+    }
+  }
+
+  private calleCancelar(): void {
+    const g = this.calleGesto; if (!g) return;
+    this.calleGesto = null;
+    this.scene.remove(g.linea); g.linea.geometry.dispose(); (g.linea.material as THREE.Material).dispose();
+    if (g.banda) { this.scene.remove(g.banda); g.banda.geometry.dispose(); (g.banda.material as THREE.Material).dispose(); }
+  }
+
+  /** Termina la calle marcada: un paso de deshacer. Si arrancó o terminó en la
+   *  punta de otra calle del mismo ancho, la CONTINÚA (son una sola). */
+  private calleTerminar(): void {
+    const g = this.calleGesto; if (!g) return;
+    const marcados = g.pts.filter((q, i) => i === 0 || q.distanceTo(g.pts[i - 1]) > 0.3);
+    this.calleCancelar();
+    if (marcados.length < 2) { this.avisar('Una calle necesita al menos dos puntos'); return; }
+    let pts = estirarPuntas(marcados, g.ejeIni, g.ejeFin);
+    const tipo = this.calleTipo;
+    // continuar una calle del mismo tipo
+    const red = this.redDeCalles();
+    let seguida: StrokeRecord | undefined;
+    for (const [id, alPrincipio] of [[g.puntaIni, true], [g.puntaFin, false]] as const) {
+      if (!id || seguida) continue;
+      const rec = this.strokes.find((r) => r.id === id && r.calle === tipo);
+      const o = red.find((c) => c.id === id);
+      if (!rec || !o) continue;
+      const nuevo = alPrincipio ? pts : pts.slice().reverse();      // arranca en la punta
+      const fin = o.pts[o.pts.length - 1].distanceTo(nuevo[0]) < 0.01;
+      const base = fin ? o.pts : o.pts.slice().reverse();          // termina en la punta
+      pts = [...base, ...nuevo.slice(1)];
+      seguida = rec;
+    }
+    const group = new THREE.Group();
+    const rec: StrokeRecord = {
+      id: `calle-${this.seq++}`, object: group, points: pts.map((q) => new THREE.Vector3(q.x, 0, q.y)),
+      pressures: pts.map(() => 1), kind: 'stroke', calle: tipo, layerId: seguida?.layerId ?? this.activeLayerId(),
+      baseOpacity: 1, brush: { ...this.brush }, apoyo: [0, 1, 0, 0],
+    };
+    group.userData.strokeId = rec.id;
+    if (seguida) this.removeStrokeRecord(seguida);
+    this.addStrokeRecord(rec);
+    const vieja = seguida;
+    this.pushCmd({
+      undo: () => { this.removeStrokeRecord(rec); if (vieja) this.addStrokeRecord(vieja); },
+      redo: () => { if (vieja) this.removeStrokeRecord(vieja); this.addStrokeRecord(rec); },
+    });
+    this.avisar((vieja ? 'Calle continuada' : ({ pasaje: 'Pasaje listo', calle: 'Calle lista', avenida: 'Avenida lista' } as const)[tipo]) +
+      ' · marcá otra con clics o Ctrl+Z la saca');
+  }
+
   private cajaEmpezar(e: PointerEvent): void {
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
     const hit = this.resolveHit() ?? (this.view !== 'persp' ? null : null);
@@ -3800,6 +4007,8 @@ export class WebGLDesign3D {
    *  'select'). Descarta la malla vieja y crea una nueva con los mismos
    *  materiales/presión — más simple y robusto que mutar geometría en vivo. */
   private rebuildStrokeMesh(rec: StrokeRecord): void {
+    // una calle se rearma con la red (sus cruces dependen de las otras)
+    if (rec.calle) { this.regenerarCalles(); return; }
     while (rec.object.children.length) {
       const child = rec.object.children[0] as THREE.Mesh;
       rec.object.remove(child);
@@ -3841,6 +4050,7 @@ export class WebGLDesign3D {
   private addStrokeRecord(rec: StrokeRecord): void {
     this.grupoDe(rec).add(rec.object);
     if (!this.strokes.includes(rec)) this.strokes.push(rec);
+    if (rec.calle) this.regenerarCalles();
     this.applyLayerStyles();
     this.publishObjects();
   }
@@ -3853,6 +4063,7 @@ export class WebGLDesign3D {
     this.grupoDe(rec).remove(rec.object);
     this.strokes = this.strokes.filter((s) => s !== rec);
     this.selected.delete(rec);
+    if (rec.calle) this.regenerarCalles();
     this.publishObjects();
     if (this.editingStroke === rec) this.clearPointEdit();
     if (this.gizmo?.object === rec.object) this.gizmo.detach();
@@ -4324,7 +4535,7 @@ export class WebGLDesign3D {
     // orden: lo que está bajo el cursor, la forma que lo CONTIENE, o la línea
     // más cercana. El caso del medio es el que faltaba (clic dentro de una figura).
     const seed = this.pickStroke() ?? this.pickEnclosingStroke() ?? this.pickNearestStroke();
-    if (!seed || seed.fill || seed.solid || seed.kind === 'box') return false;
+    if (!seed || seed.fill || seed.solid || seed.calle || seed.kind === 'box') return false;
     // Un trazo que YA se cierra sobre sí mismo (una figura, o un círculo hecho
     // con Ctrl) se rellena directo: findClosedLoop busca ciclos ENTRE trazos
     // distintos y nunca encontraba este caso — el balde no hacía nada sobre un
@@ -4523,6 +4734,7 @@ export class WebGLDesign3D {
    *  pregunta primero y solo cierra si acá no había nada que hacer. */
   escapeConsume(): boolean {
     if (this.cajaGesto) { this.cajaCancelar(); return true; }
+    if (this.calleGesto) { this.calleCancelar(); return true; }
     if (this.joy?.arrastrando) { this.joyEndDrag(true); return true; }
     if (this.mode === 'draw' && this.current) { this.commitStroke(); return true; }
     if (this.selected.size || this.selectedGuide || this.selectedSurface || this.editingStroke) {
@@ -4845,7 +5057,7 @@ export class WebGLDesign3D {
           id: rec.id,
           // "Rectángulo relleno" vs "Rectángulo": en la lista los dos se veían
           // idénticos y no había forma de saber cuál llevaba cara sólida
-          name: rec.kind === 'box' ? 'Caja' : rec.solid ? 'Volumen' : rec.fill ? 'Relleno'
+          name: rec.kind === 'box' ? 'Caja' : rec.calle ? ({ pasaje: 'Pasaje', calle: 'Calle', avenida: 'Avenida' } as const)[rec.calle] : rec.solid ? 'Volumen' : rec.fill ? 'Relleno'
             : rec.shape ? nombreFigura[rec.shape] + (rec.filled ? ' relleno' : '') : 'Línea',
           kind: rec.solid ? 'solid' : rec.fill ? 'fill' : 'stroke', count: 1, selected: sel,
         });
@@ -5515,6 +5727,12 @@ export class WebGLDesign3D {
     this.setPerspectiva({ ...AJUSTES_INICIALES }, { mover: false });   // un proyecto nuevo arranca con la perspectiva de fábrica
     this.toma = tomaValida(TOMA_INICIAL); this.avisarToma();
     this.setView('persp');
+    // y con la vista de inicio: si no, heredaba la cámara del proyecto anterior
+    // (la del autoguardado) y, mirando al cielo, no había piso donde dibujar
+    this.perspCamera.position.set(0, 1.2, 6);
+    this.controls.target.set(0, 0.6, 0);
+    this.perspCamera.lookAt(this.controls.target);
+    this.controls.update();
   }
 
   // ---------------------------------------------------------------- exportar STL
@@ -5681,6 +5899,7 @@ export class WebGLDesign3D {
         brush: { ...rec.brush }, fill: rec.fill || undefined, filled: rec.filled || undefined,
         groupId: rec.groupId || undefined, solid: rec.solid || undefined,
         shape: rec.shape || undefined, apoyo: rec.apoyo || undefined, caja: rec.kind === 'box' || undefined, hueco: (rec.kind === 'box' && rec.object.userData.hueco) || undefined,
+        calle: rec.calle || undefined,
       })),
       // las guías también son parte del proyecto: sin ellas, al reabrir se
       // perdía el andamiaje sobre el que estabas dibujando.
@@ -5724,6 +5943,19 @@ export class WebGLDesign3D {
       }
       if (!Array.isArray(item.points) || item.points.length < 2) continue;
       const points = item.points.map((p) => new THREE.Vector3(Number(p[0]), Number(p[1]), Number(p[2])));
+      if (item.calle && MEDIDAS[item.calle]) {
+        const g = new THREE.Group();
+        g.position.fromArray(item.position || [0, 0, 0]);
+        g.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
+        g.scale.fromArray(item.scale || [1, 1, 1]);
+        const rec: StrokeRecord = { id: item.id || `calle-${this.seq++}`, object: g, points, pressures: points.map(() => 1), kind: 'stroke',
+          calle: item.calle, layerId: item.layerId || this.activeLayerId(), baseOpacity: 1,
+          brush: item.brush ? { ...item.brush } : { ...this.brush }, apoyo: [0, 1, 0, 0] };
+        g.userData.strokeId = rec.id;
+        rec.groupId = item.groupId || undefined;
+        this.addStrokeRecord(rec);
+        continue;
+      }
       const pressures = points.map((_, i) => Number(item.pressures?.[i] ?? 1));
       // proyectos viejos (sin `brush` por trazo) caen al pincel por defecto,
       // conservando la opacidad guardada — así siguen abriendo sin romper.
