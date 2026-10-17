@@ -19,6 +19,7 @@
 
 import * as THREE from 'three';
 import { piezasDeCalle, pegarARed, estirarPuntas, franja, MEDIDAS, type CalleRed, type TipoCalle } from './calles';
+import { ESTILO_BASE, type EstiloKit, type Pieza, type Categoria } from './biblioteca3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { Joystick3D, type JoyMode } from './joystick3d';
@@ -126,7 +127,9 @@ export interface Low3DProject {
     /** la perspectiva para layouts (esquema, puntos, horizonte, lente…) */
     perspectiva?: Partial<Perspectiva3DAjustes>;
     /** la toma: claves de cámara por cuadro para sacar los fondos del 2D */
-    toma?: Toma3D };
+    toma?: Toma3D;
+    /** los colores de las calles (los del kit elegido en la biblioteca) */
+    estiloCalles?: EstiloKit };
   layers: ReturnType<typeof lowStore.getState>['layers'];
   activeLayerId: string | null;
   strokes: Array<{
@@ -153,6 +156,10 @@ export interface Low3DProject {
    *  el eje de extrusión, que es lo único que hace falta para reconstruirlas. */
   guides?: Array<{ points: number[][]; normal: number[]; position: number[]; quaternion: number[]; scale: number[] }>;
 }
+
+/** Un objeto del estudio como DATOS (lo que guarda el .low3d y lo que guarda
+ *  una pieza de biblioteca). */
+export type ItemProyecto = Low3DProject['strokes'][number];
 
 const MIN_SAMPLE_DIST = 0.012;
 // salto máximo (mundo) entre puntos consecutivos de un trazo a mano alzada. Un
@@ -1474,6 +1481,7 @@ export class WebGLDesign3D {
     if (this.controls) this.controls.enableZoom = this.tool !== 'pencil-free';
     if (toolChanged && this.tool !== 'pencil-free') this.hideFreeDrawPreview();
     if (toolChanged && this.tool !== 'calle') this.calleCancelar();
+    if (toolChanged && this.tool !== 'pieza') this.quitarFantasma();
     this.applyLayerStyles(); // visibilidad/opacidad de capas
   }
 
@@ -2144,6 +2152,10 @@ export class WebGLDesign3D {
       this.beginLasso(e); // click corto = borrar bajo cursor; arrastre = lazo
     } else if (this.tool === 'calle') {
       this.calleClic(e);
+    } else if (this.tool === 'pieza') {
+      this.activePointerId = e.pointerId;
+      this.sembrarEmpezar(e);
+      if (!this.sembrado) this.activePointerId = null;
     } else if (this.tool === 'box') {
       if (this.cajaGesto?.fase === 'altura') this.cajaConfirmar();
       else this.cajaEmpezar(e);
@@ -2166,6 +2178,8 @@ export class WebGLDesign3D {
     this.setPointerFromEvent(e);
     if (this.cajaGesto) this.cajaMover(e);
     else if (this.calleGesto) this.calleVista();
+    else if (this.sembrado) this.sembrarMover();
+    else if (this.tool === 'pieza' && this.mode === 'idle') this.fantasmaPieza();
     else if (this.mode === 'draw') { if (this.shape) this.moveShape(e); else this.moveDraw(e); }
     else if (this.mode === 'move') this.moveDrag(e);
     else if (this.mode === 'lasso') this.moveLasso(e);
@@ -2190,6 +2204,7 @@ export class WebGLDesign3D {
   private onPointerUp = (e: PointerEvent): void => {
     if (this.activePointerId !== null && e.pointerId !== this.activePointerId) return;
     if (this.cajaGesto?.fase === 'base') this.cajaSoltarBase();
+    else if (this.sembrado) this.sembrarTerminar();
     else if (this.mode === 'draw') { if (this.shape) this.endShape(e); else this.endDraw(e); }
     else if (this.mode === 'move') { this.endMove(); }
     else if (this.mode === 'lasso') { this.endLasso(e); }
@@ -2252,6 +2267,7 @@ export class WebGLDesign3D {
     b: 'fill', // balde: rellenar la forma cerrada
     x: 'box', // caja: base en el piso, después la altura
     r: 'calle', // pavimentador: calles con clics sobre el piso
+    n: 'pieza', // piezas de la biblioteca: clic coloca, arrastrar siembra
 
   };
 
@@ -3561,6 +3577,158 @@ export class WebGLDesign3D {
   }
   /** Apretar sobre el piso (o la tapa de otra caja): empieza la base. */
 
+  // ══ PIEZAS DE LA BIBLIOTECA (N) ═════════════════════════════════════════════
+  // Ver biblioteca3d.ts. Clic sobre el piso (o la tapa de una caja) coloca la
+  // pieza elegida; arrastrar SIEMBRA copias separadas (árboles, rocas). Cada
+  // copia varía un poco de tamaño y de giro según la pieza; Shift: sin variar.
+  // Todo lo sembrado en un gesto es UN paso de Ctrl+Z.
+  private piezaActiva: Pieza | null = null;
+  /** cuánto se separan las copias al sembrar, en tamaños de la pieza */
+  private separacionSiembra = 1.2;
+  private sembrado: { recs: StrokeRecord[]; ultimo: THREE.Vector3; sinVariar: boolean } | null = null;
+  private fantasma: THREE.Box3Helper | null = null;
+
+  getPiezaActiva(): Pieza | null { return this.piezaActiva; }
+  setPiezaActiva(p: Pieza | null): void { this.piezaActiva = p; this.quitarFantasma(); window.dispatchEvent(new Event('low3d:pieza')); }
+  getSeparacionSiembra(): number { return this.separacionSiembra; }
+  setSeparacionSiembra(v: number): void { if (Number.isFinite(v)) this.separacionSiembra = Math.max(0.3, Math.min(6, v)); }
+
+  /** Dónde se apoya una pieza bajo el cursor: el piso o la tapa de una caja. */
+  private apoyoDePieza(): THREE.Vector3 | null {
+    this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    const hit = this.resolveHit();
+    if (!hit) return null;
+    const q = new THREE.Quaternion();
+    let arriba = new THREE.Vector3(0, 1, 0);
+    if (hit.kind === 'box' && hit.target) { hit.target.getWorldQuaternion(q); arriba = new THREE.Vector3(0, 1, 0).applyQuaternion(q); }
+    return hit.normal.dot(arriba) > 0.7 ? hit.point.clone() : null;
+  }
+
+  /** Coloca una copia de la pieza con la base en `en`. Devuelve sus objetos
+   *  (ya en la escena; el historial lo arma quien llama). */
+  colocarPieza(p: Pieza, en: THREE.Vector3, op: { escala?: number; giro?: number; sinVariar?: boolean } = {}): StrokeRecord[] {
+    const v = p.variacion;
+    const escala = op.escala ?? (op.sinVariar ? 1 : v.escalaMin + Math.random() * (v.escalaMax - v.escalaMin));
+    const giro = op.giro ?? (op.sinVariar || v.giro === 'no' ? 0 : v.giro === 'libre' ? Math.random() * Math.PI * 2 : 0);
+    const M = new THREE.Matrix4().compose(en, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), giro), new THREE.Vector3(escala, escala, escala));
+    const gid = `grp-${this.seq++}`;
+    this.groupNames.set(gid, p.nombre);
+    const recs: StrokeRecord[] = [];
+    for (const it of p.items) {
+      const m = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(it.position || [0, 0, 0]),
+        new THREE.Quaternion().fromArray(it.quaternion || [0, 0, 0, 1]), new THREE.Vector3().fromArray(it.scale || [1, 1, 1])).premultiply(M);
+      const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), sc = new THREE.Vector3();
+      m.decompose(pos, quat, sc);
+      const rec = this.registroDeItem({ ...it, id: '', groupId: gid, layerId: this.activeLayerId(),
+        position: pos.toArray(), quaternion: quat.toArray(), scale: sc.toArray() });
+      if (!rec) continue;
+      this.addStrokeRecord(rec);
+      recs.push(rec);
+    }
+    return recs;
+  }
+
+  private sembrarEmpezar(e: PointerEvent): void {
+    const p = this.piezaActiva;
+    if (!p) { this.avisar('Elegí una pieza en la biblioteca (panel de la derecha) para colocarla'); return; }
+    const en = this.apoyoDePieza();
+    if (!en) {
+      this.avisar(this.view === 'persp' || this.view === 'top' ? 'Las piezas se apoyan en el piso o sobre la tapa de una caja'
+        : 'Las piezas se colocan en Perspectiva o desde Arriba: en esta vista no se ve el piso');
+      return;
+    }
+    this.quitarFantasma();
+    this.sembrado = { recs: this.colocarPieza(p, en, { sinVariar: e.shiftKey }), ultimo: en, sinVariar: e.shiftKey };
+  }
+  private sembrarMover(): void {
+    const s = this.sembrado, p = this.piezaActiva;
+    if (!s || !p) return;
+    const en = this.apoyoDePieza();
+    if (!en) return;
+    const paso = Math.max(0.3, Math.max(p.tam[0], p.tam[2]) * this.separacionSiembra);
+    if (en.distanceTo(s.ultimo) < paso) return;
+    s.recs.push(...this.colocarPieza(p, en, { sinVariar: s.sinVariar }));
+    s.ultimo = en;
+  }
+  private sembrarTerminar(): void {
+    const s = this.sembrado; this.sembrado = null;
+    if (!s || !s.recs.length) return;
+    const recs = s.recs;
+    this.pushCmd({ undo: () => recs.forEach((r) => this.removeStrokeRecord(r)), redo: () => recs.forEach((r) => this.addStrokeRecord(r)) });
+    const n = new Set(recs.map((r) => r.groupId)).size;
+    this.avisar((n === 1 ? (this.piezaActiva?.nombre || 'Pieza') + ' colocada' : n + ' copias sembradas') + ' · Ctrl+Z las saca');
+  }
+  /** La caja de la pieza bajo el cursor, para ver dónde va a caer. */
+  private fantasmaPieza(): void {
+    const p = this.piezaActiva, en = p ? this.apoyoDePieza() : null;
+    if (!p || !en) { this.quitarFantasma(); return; }
+    const caja = new THREE.Box3(new THREE.Vector3(en.x - p.tam[0] / 2, en.y, en.z - p.tam[2] / 2), new THREE.Vector3(en.x + p.tam[0] / 2, en.y + p.tam[1], en.z + p.tam[2] / 2));
+    if (!this.fantasma) {
+      this.fantasma = new THREE.Box3Helper(caja, new THREE.Color(0xe0218a));
+      (this.fantasma.material as THREE.LineBasicMaterial).depthTest = false;
+      this.fantasma.renderOrder = 10;
+      this.scene.add(this.fantasma);
+    } else this.fantasma.box.copy(caja);
+  }
+  private quitarFantasma(): void {
+    if (!this.fantasma) return;
+    this.scene.remove(this.fantasma); this.fantasma.geometry.dispose(); (this.fantasma.material as THREE.Material).dispose();
+    this.fantasma = null;
+  }
+
+  /** LO ELEGIDO COMO PIEZA: sus objetos como datos, con la base (el centro de
+   *  abajo de todo) en el origen. Las calles no: son red, no objeto. */
+  piezaDesdeSeleccion(nombre: string, categoria: Categoria): Pieza | null {
+    this.detachRig();
+    const recs = [...this.selected].filter((r) => r.kind !== 'guide' && !r.calle);
+    if (!recs.length) return null;
+    const box = new THREE.Box3();
+    for (const r of recs) { r.object.updateMatrixWorld(true); box.expandByObject(r.object); }
+    if (box.isEmpty()) return null;
+    const c = box.getCenter(new THREE.Vector3()), tam = box.getSize(new THREE.Vector3());
+    const base = new THREE.Vector3(c.x, box.min.y, c.z);
+    const items = recs.map((r) => {
+      const it = this.itemDe(r);
+      const pos = new THREE.Vector3().fromArray(it.position).sub(base);
+      return { ...it, id: '', groupId: undefined, layerId: '', position: pos.toArray() };
+    });
+    const r3 = (v: number) => Math.round(v * 1000) / 1000;
+    return { id: 'propia-' + Date.now().toString(36), nombre: (nombre || 'Pieza').slice(0, 60), categoria, items,
+      tam: [r3(tam.x), r3(tam.y), r3(tam.z)], variacion: { escalaMin: 1, escalaMax: 1, giro: 'recto' } };
+  }
+
+  /** Una miniatura de la pieza (PNG), para la grilla de la biblioteca. */
+  miniaturaPieza(p: Pieza, lado = 96): string {
+    const escena = new THREE.Scene();
+    escena.add(new THREE.HemisphereLight(0xffffff, 0x9099aa, 1.1));
+    const sol = new THREE.DirectionalLight(0xffffff, 1.2); sol.position.set(4, 8, 6); escena.add(sol);
+    const objs: THREE.Object3D[] = [];
+    for (const it of p.items) {
+      const rec = this.registroDeItem({ ...it, id: 'mini' });
+      if (rec) { escena.add(rec.object); objs.push(rec.object); }
+    }
+    const box = new THREE.Box3();
+    objs.forEach((o) => box.expandByObject(o));
+    if (box.isEmpty()) return '';
+    const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2 || 1;
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.01, r * 20);
+    cam.position.copy(c).add(new THREE.Vector3(1, 0.75, 1.2).normalize().multiplyScalar(r / Math.sin(THREE.MathUtils.degToRad(15)) * 1.05));
+    cam.lookAt(c);
+    const rend = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    let png = '';
+    try {
+      rend.setPixelRatio(1); rend.setSize(lado, lado, false); rend.setClearColor(0x000000, 0);
+      rend.outputColorSpace = this.renderer.outputColorSpace;
+      rend.render(escena, cam);
+      png = rend.domElement.toDataURL('image/png');
+    } finally {
+      rend.dispose(); rend.forceContextLoss();
+      escena.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+        if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose(); });
+    }
+    return png;
+  }
+
   // ══ EL PAVIMENTADOR (R) ════════════════════════════════════════════════════
   // Mauro: «un pavimentador que dibuje calles de ciudades con una lógica similar
   // [a la caja]». Clic a clic sobre el piso se marca el recorrido; doble clic o
@@ -3568,9 +3736,17 @@ export class WebGLDesign3D {
   // sale entera (calzada, cordones, veredas, línea del medio y, en los cruces,
   // sendas peatonales). Un clic cerca de otra calle se pega: a su punta (la
   // sigue) o a su eje (una T). Shift: tramos a 15°.
-  private static readonly COLOR_CALZADA = '#9a9fa6';
-  private static readonly COLOR_VEREDA = '#ddd6c8';
-  private static readonly COLOR_PINTURA = '#f6f3ea';
+  /** Los colores de las calles: los del kit de la biblioteca (biblioteca3d.ts). */
+  private estiloCalles: EstiloKit = { ...ESTILO_BASE };
+  getEstiloCalles(): EstiloKit { return { ...this.estiloCalles }; }
+  setEstiloCalles(e: Partial<EstiloKit>): void {
+    const hex = (v: unknown, d: string) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : d);
+    const n = { calzada: hex(e.calzada, this.estiloCalles.calzada), vereda: hex(e.vereda, this.estiloCalles.vereda),
+      pintura: hex(e.pintura, this.estiloCalles.pintura), tinta: hex(e.tinta, this.estiloCalles.tinta) };
+    if (JSON.stringify(n) === JSON.stringify(this.estiloCalles)) return;
+    this.estiloCalles = n;
+    if (this.strokes.some((r) => r.calle)) this.regenerarCalles();
+  }
 
   getCalleTipo(): TipoCalle { return this.calleTipo; }
   setCalleTipo(t: TipoCalle): void {
@@ -3614,11 +3790,11 @@ export class WebGLDesign3D {
       const m = this.buildFillMesh(poly.map((q) => local(q, y)), { ...rec.brush, color, opacity: 1 });
       if (m) { m.userData.esRelleno = true; rec.object.add(m); }
     };
-    relleno(pz.vereda, 0.006, WebGLDesign3D.COLOR_VEREDA);
-    relleno(pz.calzada, 0.012, WebGLDesign3D.COLOR_CALZADA);
-    for (const p of pz.pintura) relleno(p, 0.018, WebGLDesign3D.COLOR_PINTURA);
+    relleno(pz.vereda, 0.006, this.estiloCalles.vereda);
+    relleno(pz.calzada, 0.012, this.estiloCalles.calzada);
+    for (const p of pz.pintura) relleno(p, 0.018, this.estiloCalles.pintura);
     // la tinta (cordones y bordes de vereda) con el color del pincel, a mano
-    const tinta = { ...rec.brush, size: 12, opacity: 1, pressureSensitivity: 0 };
+    const tinta = { ...rec.brush, color: this.estiloCalles.tinta, size: 12, opacity: 1, pressureSensitivity: 0 };
     for (const l of pz.tinta) {
       const t = this.buildTube(l.map((q) => local(q, 0.03)), l.map(() => 1), tinta);
       if (t) rec.object.add(t);
@@ -3685,7 +3861,7 @@ export class WebGLDesign3D {
     if (limpio.length > 1) {
       const m = MEDIDAS[this.calleTipo].calzada / 2;
       const banda = this.buildFillMesh(franja(limpio, m, -m).map((q) => new THREE.Vector3(q.x, 0.02, q.y)),
-        { ...this.brush, color: WebGLDesign3D.COLOR_CALZADA, opacity: 0.45 });
+        { ...this.brush, color: this.estiloCalles.calzada, opacity: 0.45 });
       if (banda) { banda.renderOrder = 9; this.scene.add(banda); g.banda = banda; }
     }
   }
@@ -5876,6 +6052,99 @@ export class WebGLDesign3D {
 
   /** Serializa puntos de control en lugar de la malla derivada, para conservar
    *  la capacidad de editar los trazos al volver a abrir el proyecto. */
+  /** Un objeto como DATOS: lo que se guarda en el .low3d y en una pieza. */
+  itemDe(rec: StrokeRecord): ItemProyecto {
+    return {
+      id: rec.id, layerId: rec.layerId,
+      points: rec.points.map((p) => p.toArray()), pressures: [...rec.pressures],
+      baseOpacity: rec.baseOpacity, position: rec.object.position.toArray(),
+      quaternion: rec.object.quaternion.toArray(), scale: rec.object.scale.toArray(),
+      brush: { ...rec.brush }, fill: rec.fill || undefined, filled: rec.filled || undefined,
+      groupId: rec.groupId || undefined, solid: rec.solid || undefined,
+      shape: rec.shape || undefined, apoyo: rec.apoyo || undefined, caja: rec.kind === 'box' || undefined, hueco: (rec.kind === 'box' && rec.object.userData.hueco) || undefined,
+      calle: rec.calle || undefined,
+    };
+  }
+
+  /** De DATOS a un objeto listo para sumar a la escena (no lo suma). null si
+   *  los datos no alcanzan. Lo usan abrir un proyecto y colocar una pieza. */
+  private registroDeItem(item: ItemProyecto): StrokeRecord | null {
+    if (item.caja) {
+      const obj = this.construirCaja(!!item.hueco);
+      obj.position.fromArray(item.position || [0, 0, 0]);
+      obj.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
+      obj.scale.fromArray(item.scale || [1, 1, 1]);
+      const rec: StrokeRecord = { id: item.id || `box-${this.seq++}`, object: obj, points: WebGLDesign3D.esquinasCaja(), pressures: [],
+        kind: 'box', layerId: item.layerId || this.activeLayerId(), baseOpacity: 1, brush: item.brush ? { ...item.brush } : { ...this.brush } };
+      obj.userData.strokeId = rec.id;
+      rec.groupId = item.groupId || undefined;
+      return rec;
+    }
+    if (!Array.isArray(item.points) || item.points.length < 2) return null;
+    const points = item.points.map((p) => new THREE.Vector3(Number(p[0]), Number(p[1]), Number(p[2])));
+    if (item.calle && MEDIDAS[item.calle]) {
+      const g = new THREE.Group();
+      g.position.fromArray(item.position || [0, 0, 0]);
+      g.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
+      g.scale.fromArray(item.scale || [1, 1, 1]);
+      const rec: StrokeRecord = { id: item.id || `calle-${this.seq++}`, object: g, points, pressures: points.map(() => 1), kind: 'stroke',
+        calle: item.calle, layerId: item.layerId || this.activeLayerId(), baseOpacity: 1,
+        brush: item.brush ? { ...item.brush } : { ...this.brush }, apoyo: [0, 1, 0, 0] };
+      g.userData.strokeId = rec.id;
+      rec.groupId = item.groupId || undefined;
+      return rec;
+    }
+    const pressures = points.map((_, i) => Number(item.pressures?.[i] ?? 1));
+    // proyectos viejos (sin `brush` por trazo) caen al pincel por defecto,
+    // conservando la opacidad guardada — así siguen abriendo sin romper.
+    const brush: BrushSettings = item.brush
+      ? { ...item.brush }
+      : { ...this.brush, opacity: Number(item.baseOpacity ?? 1) };
+    const group = new THREE.Group();
+    if (item.solid) {
+      // volumen: se regenera con la misma lógica que al crearlo (los puntos
+      // guardados son la nube de origen), no como tubo ni como cara plana.
+      const body = this.buildSolidMesh(points, brush);
+      if (body) group.add(body);
+    } else if (item.fill) {
+      // relleno: se reconstruye como cara sólida, no como tubo (si no, una
+      // forma pintada volvía como un contorno grueso y deformado).
+      // Los puntos guardados son LOCALES al objeto, igual que los de un trazo:
+      // restarles la posición del grupo (como se hacía antes) corría el relleno
+      // justo esa distancia en cuanto la forma se había movido o agrupado, y
+      // quedaba separado de su propio contorno.
+      const face = this.buildFillMesh(points, brush);
+      if (face) group.add(face);
+    } else {
+      const tube = this.buildTube(points, pressures, brush, !!item.shape);
+      if (tube) group.add(tube);
+      // una FIGURA con contorno y cara (`filled`) volvía sólo con el contorno:
+      // la cara se rearma igual que al crearla (endShape)
+      if (item.filled) {
+        const cara = this.buildFillMesh(points, brush);
+        if (cara) { cara.userData.esRelleno = true; group.add(cara); }
+      }
+    }
+    group.position.fromArray(item.position || [0, 0, 0]);
+    group.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
+    group.scale.fromArray(item.scale || [1, 1, 1]);
+    const rec: StrokeRecord = {
+      id: item.id || `stroke-${this.seq++}`, object: group, points, pressures,
+      kind: 'stroke', layerId: item.layerId || this.activeLayerId(),
+      baseOpacity: Number(item.baseOpacity ?? brush.opacity), brush,
+    };
+    group.userData.strokeId = rec.id;
+    rec.fill = item.fill || undefined;
+    rec.filled = item.filled || undefined;
+    rec.solid = item.solid || undefined;
+    rec.shape = item.shape || undefined;
+    rec.groupId = item.groupId || undefined;
+    if (Array.isArray(item.apoyo) && item.apoyo.length === 4 && item.apoyo.every((v: unknown) => Number.isFinite(Number(v))))
+      rec.apoyo = item.apoyo.map(Number) as [number, number, number, number];
+    return rec;
+  
+  }
+
   exportProject(): Low3DProject {
     // Con varias piezas elegidas, sus objetos cuelgan del RIG temporal y su
     // `position` es relativa a ese rig, no al mundo: guardar así hacía que el
@@ -5889,18 +6158,10 @@ export class WebGLDesign3D {
       settings: { brush: { ...this.brush }, mirror: { ...this.mirror }, theme: this.theme,
         perspectiva: { ...this.perspAjustes },
         toma: this.getToma(),
+        estiloCalles: { ...this.estiloCalles },
         activeSurface: state.activeSurface ? { type: state.activeSurface.type, params: { ...state.activeSurface.params } } : null },
       layers: state.layers.map((l) => ({ ...l })), activeLayerId: state.activeLayerId,
-      strokes: this.strokes.map((rec) => ({
-        id: rec.id, layerId: rec.layerId,
-        points: rec.points.map((p) => p.toArray()), pressures: [...rec.pressures],
-        baseOpacity: rec.baseOpacity, position: rec.object.position.toArray(),
-        quaternion: rec.object.quaternion.toArray(), scale: rec.object.scale.toArray(),
-        brush: { ...rec.brush }, fill: rec.fill || undefined, filled: rec.filled || undefined,
-        groupId: rec.groupId || undefined, solid: rec.solid || undefined,
-        shape: rec.shape || undefined, apoyo: rec.apoyo || undefined, caja: rec.kind === 'box' || undefined, hueco: (rec.kind === 'box' && rec.object.userData.hueco) || undefined,
-        calle: rec.calle || undefined,
-      })),
+      strokes: this.strokes.map((rec) => this.itemDe(rec)),
       // las guías también son parte del proyecto: sin ellas, al reabrir se
       // perdía el andamiaje sobre el que estabas dibujando.
       guides: this.guides.map((g) => {
@@ -5929,81 +6190,8 @@ export class WebGLDesign3D {
       if (typeof v === 'string') this.groupNames.set(k, v);
     }
     for (const item of doc.strokes) {
-      if (item.caja) {
-        const obj = this.construirCaja(!!item.hueco);
-        obj.position.fromArray(item.position || [0, 0, 0]);
-        obj.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
-        obj.scale.fromArray(item.scale || [1, 1, 1]);
-        const rec: StrokeRecord = { id: item.id || `box-${this.seq++}`, object: obj, points: WebGLDesign3D.esquinasCaja(), pressures: [],
-          kind: 'box', layerId: item.layerId || this.activeLayerId(), baseOpacity: 1, brush: item.brush ? { ...item.brush } : { ...this.brush } };
-        obj.userData.strokeId = rec.id;
-        rec.groupId = item.groupId || undefined;
-        this.addStrokeRecord(rec);
-        continue;
-      }
-      if (!Array.isArray(item.points) || item.points.length < 2) continue;
-      const points = item.points.map((p) => new THREE.Vector3(Number(p[0]), Number(p[1]), Number(p[2])));
-      if (item.calle && MEDIDAS[item.calle]) {
-        const g = new THREE.Group();
-        g.position.fromArray(item.position || [0, 0, 0]);
-        g.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
-        g.scale.fromArray(item.scale || [1, 1, 1]);
-        const rec: StrokeRecord = { id: item.id || `calle-${this.seq++}`, object: g, points, pressures: points.map(() => 1), kind: 'stroke',
-          calle: item.calle, layerId: item.layerId || this.activeLayerId(), baseOpacity: 1,
-          brush: item.brush ? { ...item.brush } : { ...this.brush }, apoyo: [0, 1, 0, 0] };
-        g.userData.strokeId = rec.id;
-        rec.groupId = item.groupId || undefined;
-        this.addStrokeRecord(rec);
-        continue;
-      }
-      const pressures = points.map((_, i) => Number(item.pressures?.[i] ?? 1));
-      // proyectos viejos (sin `brush` por trazo) caen al pincel por defecto,
-      // conservando la opacidad guardada — así siguen abriendo sin romper.
-      const brush: BrushSettings = item.brush
-        ? { ...item.brush }
-        : { ...this.brush, opacity: Number(item.baseOpacity ?? 1) };
-      const group = new THREE.Group();
-      if (item.solid) {
-        // volumen: se regenera con la misma lógica que al crearlo (los puntos
-        // guardados son la nube de origen), no como tubo ni como cara plana.
-        const body = this.buildSolidMesh(points, brush);
-        if (body) group.add(body);
-      } else if (item.fill) {
-        // relleno: se reconstruye como cara sólida, no como tubo (si no, una
-        // forma pintada volvía como un contorno grueso y deformado).
-        // Los puntos guardados son LOCALES al objeto, igual que los de un trazo:
-        // restarles la posición del grupo (como se hacía antes) corría el relleno
-        // justo esa distancia en cuanto la forma se había movido o agrupado, y
-        // quedaba separado de su propio contorno.
-        const face = this.buildFillMesh(points, brush);
-        if (face) group.add(face);
-      } else {
-        const tube = this.buildTube(points, pressures, brush, !!item.shape);
-        if (tube) group.add(tube);
-        // una FIGURA con contorno y cara (`filled`) volvía sólo con el contorno:
-        // la cara se rearma igual que al crearla (endShape)
-        if (item.filled) {
-          const cara = this.buildFillMesh(points, brush);
-          if (cara) { cara.userData.esRelleno = true; group.add(cara); }
-        }
-      }
-      group.position.fromArray(item.position || [0, 0, 0]);
-      group.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
-      group.scale.fromArray(item.scale || [1, 1, 1]);
-      const rec: StrokeRecord = {
-        id: item.id || `stroke-${this.seq++}`, object: group, points, pressures,
-        kind: 'stroke', layerId: item.layerId || this.activeLayerId(),
-        baseOpacity: Number(item.baseOpacity ?? brush.opacity), brush,
-      };
-      group.userData.strokeId = rec.id;
-      rec.fill = item.fill || undefined;
-      rec.filled = item.filled || undefined;
-      rec.solid = item.solid || undefined;
-      rec.shape = item.shape || undefined;
-      rec.groupId = item.groupId || undefined;
-      if (Array.isArray(item.apoyo) && item.apoyo.length === 4 && item.apoyo.every((v: unknown) => Number.isFinite(Number(v))))
-        rec.apoyo = item.apoyo.map(Number) as [number, number, number, number];
-      this.addStrokeRecord(rec);
+      const rec = this.registroDeItem(item);
+      if (rec) this.addStrokeRecord(rec);
     }
     // guías: se reconstruyen desde su trazo de origen + eje de extrusión
     for (const g of doc.guides || []) {
@@ -6038,6 +6226,7 @@ export class WebGLDesign3D {
     // la perspectiva vuelve como estaba, SIN mover la cámara que se acaba de restaurar
     this.setPerspectiva(ajustesValidos(doc.settings?.perspectiva), { mover: false });
     this.toma = tomaValida(doc.settings?.toma); this.avisarToma();
+    if (doc.settings?.estiloCalles) this.setEstiloCalles(doc.settings.estiloCalles);
     // IDS QUE NO SE REPITEN: los trazos y grupos vuelven con su id guardado
     // («stroke-12», «grp-3»…), pero el contador arrancaba de nuevo. Como el
     // estudio restaura el autoguardado al abrirse, el primer trazo nuevo volvía

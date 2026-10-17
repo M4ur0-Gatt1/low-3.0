@@ -101,6 +101,15 @@
       recibir(m, f);
     } else if (m.type === "low:send-toma") {
       recibirToma(m, f);
+    } else if (m.type === "low:guardar-kit" && typeof m.json === "string") {
+      // los kits de la biblioteca 3D (.lowkit): dentro del estudio las descargas no andan
+      Promise.resolve(typeof api !== "undefined" && api.save_file("", m.json, String(m.name || "kit.lowkit")))
+        .then((r) => responder(f, { type: "low:kit-guardado", ok: !!(r && r.path && !r.error), path: r && r.path, error: r && r.error }))
+        .catch((e) => responder(f, { type: "low:kit-guardado", error: String(e && e.message || e) }));
+    } else if (m.type === "low:abrir-kit") {
+      Promise.resolve(typeof api !== "undefined" && api.open_dialog())
+        .then((r) => { if (r && (r.content || r.error)) responder(f, { type: "low:kit-abierto", content: r.content, error: r.error }); })
+        .catch((e) => responder(f, { type: "low:kit-abierto", error: String(e && e.message || e) }));
     }
   });
 

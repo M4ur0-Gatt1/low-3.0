@@ -2871,7 +2871,8 @@ class Api:
     # asocia al ícono y al doble clic. Un .low guardado como «caminata v2» (sin
     # extensión) o «caminata.final» deja de ser una escena de LOW para el sistema.
     _TIPOS_PROPIOS = {".low": "Escena de LOW (*.low)",
-                      ".low3d": "Proyecto 3D de LOW (*.low3d)"}
+                      ".low3d": "Proyecto 3D de LOW (*.low3d)",
+                      ".lowkit": "Kit de piezas de LOW 3D (*.lowkit)"}
 
     @classmethod
     def _con_extension(cls, elegido, sugerido):

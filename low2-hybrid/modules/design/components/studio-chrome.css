@@ -140,6 +140,20 @@
 .toma3d-check { flex-direction:row!important;align-items:center;grid-column:1 / -1; }
 .toma3d-mandar { width:100%;padding:8px; }
 .toma3d-mandar:disabled { opacity:.6;cursor:progress; }
+.biblio3d-cats { display:flex;flex-wrap:wrap;gap:4px; }
+.biblio3d-cats button { border:1px solid var(--studio-line);border-radius:999px;padding:3px 9px;background:var(--studio-input);color:var(--studio-fg);font-size:11.5px;cursor:pointer; }
+.biblio3d-cats button[aria-selected=true] { border-color:var(--studio-accent);color:var(--studio-accent); }
+.biblio3d-grilla { display:grid;grid-template-columns:repeat(3,1fr);gap:6px; }
+.biblio3d-grilla button { display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 3px;border:1px solid var(--studio-line);border-radius:9px;background:var(--studio-input);color:var(--studio-fg);cursor:pointer;font-size:11px;line-height:1.2; }
+.biblio3d-grilla button.on { border-color:var(--studio-accent);box-shadow:0 0 0 1px var(--studio-accent); }
+.biblio3d-grilla img, .biblio3d-cargando { width:64px;height:64px;display:block; }
+.biblio3d-cargando { border-radius:6px;background:var(--studio-line);opacity:.4; }
+.biblio3d-guardar { width:100%; }
+.biblio3d-colores { display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px; }
+.biblio3d-colores label { display:flex;align-items:center;gap:6px; }
+.biblio3d-colores input { width:28px;height:22px;padding:0;border:0;background:none; }
+.biblio3d-acciones { display:grid;grid-template-columns:1fr 1fr;gap:6px; }
+.biblio3d-borrar { color:#d0452b; }
 .persp3d-repetir-ya { background:var(--studio-accent)!important;color:#fff!important;border:0;font-weight:700; }
 
 /* guía «Armar un fondo» (primera vez) y aviso de vista vacía */

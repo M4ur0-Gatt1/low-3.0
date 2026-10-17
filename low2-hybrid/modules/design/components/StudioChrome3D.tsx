@@ -9,14 +9,16 @@ import { ObjectList3D } from './ObjectList3D';
 import { PerspectivaPanel3D } from './PerspectivaPanel3D';
 import { RepetirPanel3D } from './RepetirPanel3D';
 import { TomaPanel3D } from './TomaPanel3D';
+import { BibliotecaPanel3D } from './BibliotecaPanel3D';
 import './studio-chrome.css';
 
-type Panel = 'brush' | 'scene' | 'tools' | 'guides' | 'persp' | 'toma' | null;
+type Panel = 'brush' | 'scene' | 'tools' | 'guides' | 'persp' | 'toma' | 'biblioteca' | null;
 const paths: Record<string,string> = {
  pencil:'M4 17 16 5l3 3L7 20H4v-3ZM14 7l3 3', guide:'M3 17 11 5l10 4-8 12L3 17ZM8 11l10 4',
  move:'M12 3v18M3 12h18M9 6l3-3 3 3M6 9l-3 3 3 3M18 9l3 3-3 3M9 18l3 3 3-3',
  eraser:'m4 14 9-10 7 7-8 9H9l-5-6ZM9 9l7 7M12 20h9', rect:'M4 5h16v14H4z', box:'M12 3 20 7.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12v9M12 12 4 7.5',
  calle:'M8 3 4 21M16 3l4 18M12 4v3m0 4v3m0 4v3',
+ pieza:'M12 3c3 2 5 5 5 8a5 5 0 0 1-10 0c0-3 2-6 5-8ZM12 16v5M8 21h8',
  liquify:'M4 7c5-8 7 12 12 4s8 5 1 8M5 16c1-3 5-3 6 0', more:'M5 12h1m5 0h1m5 0h1',
  layers:'m3 8 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5M3 18l9 5 9-5',
  focus:'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 8h8v8H8z',
@@ -30,7 +32,7 @@ export const StudioIcon=({name}:{name:string})=><svg width="20" height="20" view
    vengan: edificios, árboles, terreno, agua) son UN botón de la barra con su
    lista, como los grupos de Toon Boom. Cada una sumada suelta saturaba la
    vista inicial (check_3d_studio_ui la limita a propósito). */
-const GRUPO_CONSTRUIR:ToolType[]=['box','calle'];
+const GRUPO_CONSTRUIR:ToolType[]=['box','calle','pieza'];
 const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
  {id:'pencil',name:'Dibujar',key:'P',icon:'pencil',hint:'Arrastrá para dibujar · Shift mantiene la línea recta'},
  {id:'guide',name:'Guía',key:'G',icon:'guide',hint:'Dibujá una guía para orientar el próximo trazo en el espacio'},
@@ -39,6 +41,7 @@ const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
  {id:'rect',name:'Figuras',key:'',icon:'rect',hint:'Arrastrá sobre la guía · Shift conserva las proporciones'},
  {id:'box',name:'Caja',key:'X',icon:'box',hint:'Arrastrá la base sobre el piso · mové para la altura y clic · Esc cancela'},
  {id:'calle',name:'Calles',key:'R',icon:'calle',hint:'Marcá el recorrido con clics sobre el piso · doble clic o Enter termina · Esc cancela · Shift: tramos a 15°'},
+ {id:'pieza',name:'Piezas',key:'N',icon:'pieza',hint:'Elegí una pieza en la biblioteca · clic coloca · arrastrá para sembrar · Shift: sin variar'},
  {id:'liquify',name:'Deformar',key:'L',icon:'liquify',hint:'Empujá el trazo · el tamaño del pincel define la zona de influencia'},
 ];
 const viewNames:Record<ViewName,string>={persp:'Perspectiva',front:'Frente',back:'Atrás',left:'Izquierda',right:'Derecha',top:'Arriba',bottom:'Abajo'};
@@ -71,7 +74,9 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
   // el grupo Construir: el botón muestra la herramienta en uso (o la última usada)
   const [construir,setConstruir]=useState<ToolType>('box');
   const [menuConstruir,setMenuConstruir]=useState<{x:number;y:number}|null>(null);
-  useEffect(()=>{if(GRUPO_CONSTRUIR.includes(state.currentTool))setConstruir(state.currentTool);},[state.currentTool]);
+  useEffect(()=>{if(GRUPO_CONSTRUIR.includes(state.currentTool))setConstruir(state.currentTool);
+    // Piezas sin su biblioteca no sirve: elegir la herramienta la abre
+    if(state.currentTool==='pieza')setPanel('biblioteca');},[state.currentTool]);
   const abrirConstruir=(b:HTMLElement)=>{const r=b.getBoundingClientRect();setMenuConstruir({x:r.right+8,y:Math.max(8,r.top-6)});};
  const [fuga,setFuga]=useState(true);
  useEffect(()=>{const sync=()=>{const e=engine.current;if(e)setFuga(e.getImanFuga());};sync();const t=window.setTimeout(sync,0);
@@ -136,11 +141,12 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      <button aria-pressed={joystick} onClick={()=>{engine.current?.setJoystick(!joystick);setJoystick(!joystick);}}>Joystick</button>
    </div>}
    {panel&&<aside className="studio-inspector studio-surface" aria-label="Inspector 3D">
-     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Cámara del layout',toma:'Toma: fondos para el 2D'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
+     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Cámara del layout',toma:'Toma: fondos para el 2D',biblioteca:'Biblioteca de piezas'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
      <div className="studio-inspector-content">
        {panel==='tools'&&<Toolbar3D engine={engine}/>}
        {panel==='persp'&&<PerspectivaPanel3D engine={engine}/>}
        {panel==='toma'&&<TomaPanel3D engine={engine}/>}
+       {panel==='biblioteca'&&<BibliotecaPanel3D engine={engine}/>}
        {panel==='brush'&&<PropertiesPanel3D section="brush"/>}
        {panel==='guides'&&<><div className="studio-guide-tools"><p>Una superficie orienta los trazos en el espacio.</p><div className="studio-option-grid">{(['plane','cylinder','sphere','torus','loft'] as const).map((type,i)=><button key={type} aria-pressed={state.activeSurface?.type===type} onClick={()=>state.setActiveSurface(state.activeSurface?.type===type?null:{type,params:{}})}>{['Plano','Cilindro','Esfera','Toro','Loft'][i]}</button>)}</div><label>Visibilidad de guías <output>{guideOpacity}%</output><input aria-label="Visibilidad de guías" type="range" min="0" max="100" value={guideOpacity} onChange={e=>onGuideOpacity(Number(e.target.value))}/></label><button className="studio-text-button" onClick={()=>engine.current?.deleteGuide()}>Quitar última guía</button></div><PropertiesPanel3D section="surface"/></>}
        {panel==='scene'&&<><div className="studio-scene-section"><h3>Objetos</h3><ObjectList3D engine={engine}/><div className="studio-selection-actions"><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.groupSelection()}>Agrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.ungroupSelection()}>Desagrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.solidifySelection()}>Crear volumen</button></div><RepetirPanel3D engine={engine}/></div><div className="studio-scene-section"><h3>Capas</h3><LayerManager3D engine={engine}/></div></>}

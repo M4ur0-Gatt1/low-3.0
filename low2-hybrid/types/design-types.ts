@@ -23,7 +23,9 @@ export type ToolType = 'pencil' | 'guide' | 'move' | 'select' | 'eraser' | 'liqu
   // convertir en volumen y editar igual que una línea a mano
   | 'rect' | 'circle' | 'poly' | 'box'
   // el pavimentador: calles con clics sobre el piso
-  | 'calle';
+  | 'calle'
+  // piezas de la biblioteca: clic coloca, arrastrar siembra
+  | 'pieza';
 
 /** Modo del gizmo de transformación de la herramienta 'move' (con un solo
  *  trazo seleccionado): mover libremente por ejes, redimensionar, o rotar. */
