@@ -37,7 +37,7 @@ export const StudioIcon=({name}:{name:string})=><svg width="20" height="20" view
    vista inicial (check_3d_studio_ui la limita a propósito). */
 const GRUPO_CONSTRUIR:ToolType[]=['box','calle','pieza','terreno','rio','lago'];
 const tools:{id:ToolType;name:string;key:string;icon:string;hint:string}[]=[
- {id:'pencil',name:'Dibujar',key:'P',icon:'pencil',hint:'Arrastrá para dibujar · Shift mantiene la línea recta'},
+ {id:'pencil',name:'Dibujar',key:'P',icon:'pencil',hint:'Arrastrá sobre el piso, una guía, una caja o un elemento · Shift mantiene la línea recta'},
  {id:'guide',name:'Guía',key:'G',icon:'guide',hint:'Dibujá una guía para orientar el próximo trazo en el espacio'},
  {id:'move',name:'Mover',key:'V',icon:'move',hint:'Seleccioná una pieza · arrastrá el control para transformarla'},
  {id:'eraser',name:'Borrar',key:'E',icon:'eraser',hint:'Tocá un trazo para quitarlo · Ctrl+Z lo recupera'},

@@ -33,7 +33,8 @@ async function main(){
    await click('.studio-guia-ok');
    await assert('!document.querySelector(".studio-guia") && localStorage.getItem("low3d:guia-fondos")==="1"','«Entendido» no cerró la guía o no se recuerda');
    await assert('!document.querySelector(".studio-inspector") && document.querySelectorAll("button").length<=26','La vista inicial vuelve a saturarse de paneles');
-   await evaluate('__low3d.newProject();__low3d.setView("front")');
+   // v3.34: se dibuja sobre algo que se vea (Feather); desde Arriba, el piso
+   await evaluate('__low3d.newProject();__low3d.setView("top")');
    await click('[data-tool="pencil"]');await stroke(350,330,180,55);
    await assert('__low3d.exportProject().strokes.length===1','Dibujar en el lienzo no genera geometría');
    await assert(`!document.querySelector('[aria-label="Deshacer (Ctrl+Z)"]').disabled`,'Deshacer no refleja el historial');
@@ -60,8 +61,8 @@ async function main(){
    await key('Escape','Escape');await assert('!document.querySelector(".studio-chrome.is-focused")','Esc no recupera la interfaz');
    await click('[aria-label="Todas las herramientas"]');
    await assert('document.querySelectorAll(".studio-inspector").length===1','Hay inspectores duplicados');
-   await click('[aria-label="Dibujo libre — sin guía; rueda ajusta profundidad (F)"]');
-   await assert('__lowStore.getState().currentTool==="pencil-free"','La paleta perdió dibujo libre');
+   // v3.34: sin dibujo en el aire (la lógica de Feather: siempre sobre algo que se vea)
+   await assert('!document.querySelector(\'[aria-label^="Dibujo libre"]\')','La paleta todavía ofrece dibujar en el aire');
    await click('[aria-label="Cerrar inspector"]');
    await click('[data-panel="scene"]');
    await assert(`!!document.querySelector('.studio-scene-section') && !!document.querySelector('button[title="Nueva capa"]')`,'Escena perdió objetos o capas');

@@ -128,7 +128,6 @@ export const Toolbar3D: React.FC<Toolbar3DProps> = ({ engine }) => {
 
   const draw: { id: ToolType; icon: React.FC; label: string }[] = [
     { id: 'pencil', icon: Icons.Pencil, label: 'Lápiz (P)' },
-    { id: 'pencil-free', icon: Icons.Pencil, label: 'Dibujo libre — sin guía; rueda ajusta profundidad (F)' },
     { id: 'guide', icon: Icons.Guide, label: 'Línea guía — define un plano de dibujo (G)' },
     { id: 'eraser', icon: Icons.Eraser, label: 'Borrar (E)' },
     { id: 'scissors', icon: Icons.Scissors, label: 'Tijera — corta el trazo donde clickees encima (C)' },

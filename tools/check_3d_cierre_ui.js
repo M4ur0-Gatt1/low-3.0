@@ -91,16 +91,25 @@ async function main() {
     if (!guia || Math.abs(guia.y - 1) > 0.05) mal("no se armó la guía horizontal en y = 1", guia);
     await ev(`(()=>{ const g = __low3d.guides.at(-1); g.mesh.position.y += 1.5; g.mesh.updateMatrixWorld(true); return true; })()`);   // como la deja el gizmo
     await ev(`__low3d.setView("persp"); true`); await w(300);
-    await camara([0, 7, 10], [0, 2.5, 0]); await w(200);
+    // la guía nace donde está el centro de órbita (z = -100 tras el paso 2):
+    // se la mira de arriba, donde está
+    const gp = await ev(`__low3d.guides.at(-1).mesh.position.toArray()`);
+    await camara([gp[0], 7, gp[2] + 10], [gp[0], 2.5, gp[2]]); await w(200);
     await herramienta("pencil");
-    await gesto(await recta([3, 2.5, 3], [5, 2.5, 1]));   // lejos de la malla de la guía: sólo su plano infinito sirve
+    // sobre la malla de la guía (1,5 m de ancho, 6 de fondo), en su lugar nuevo
+    await gesto(await recta([gp[0] - 0.5, 2.5, gp[2] + 0.8], [gp[0] + 0.5, 2.5, gp[2] - 0.6]));
     t = await ultimo();
     if (!t || Math.abs(t.y[0] - 2.5) > 0.02 || Math.abs(t.y[1] - 2.5) > 0.02) mal("la guía movida no sirve de apoyo en su lugar nuevo (y = 2,5)", t);
+    // lejos de la malla, su plano infinito NO es apoyo (v3.34, la lógica de
+    // Feather: se dibuja sobre lo que se ve); cae en el piso que está debajo
+    await gesto(await recta([gp[0] + 3, 2.5, gp[2] + 3], [gp[0] + 5, 2.5, gp[2] + 1]));
+    t = await ultimo();
+    if (t && Math.abs(t.y[0] - 2.5) < 0.05) mal("lejos de la guía, el trazo cayó en su plano infinito (en la nada)", t);
     // y al reabrir el proyecto
     await ev(`(()=>{ const p = __low3d.exportProject(); __low3d.newProject(); __low3d.importProject(JSON.parse(JSON.stringify(p))); return true; })()`);
-    await camara([0, 7, 10], [0, 2.5, 0]); await w(200);
+    await camara([gp[0], 7, gp[2] + 10], [gp[0], 2.5, gp[2]]); await w(200);
     await herramienta("pencil");
-    await gesto(await recta([3, 2.5, 4], [5, 2.5, 2]));
+    await gesto(await recta([gp[0] + 0.5, 2.5, gp[2] + 1], [gp[0] - 0.5, 2.5, gp[2] - 0.4]));
     t = await ultimo();
     if (!t || Math.abs(t.y[0] - 2.5) > 0.02) mal("al reabrir, la guía movida volvió a apoyar en su lugar viejo", t);
 

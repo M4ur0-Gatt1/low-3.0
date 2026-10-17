@@ -118,7 +118,22 @@ interface HitInfo {
   kind?: 'guide' | 'surface' | 'stroke' | 'fallback' | 'free' | 'box';
   /** el punto es del TERRENO (relieve): un trazo que arranca acá lo sigue */
   terreno?: boolean;
+  /** la cara de caja tocada (la malla): acota el trazo a esa cara */
+  cara?: THREE.Object3D;
+  /** el cuerpo de un ELEMENTO (volúmenes y rellenos de su grupo): el trazo
+   *  lo recorre como a una guía */
+  cuerpos?: THREE.Object3D[];
+  /** el punto salió de la malla de apoyo bloqueada, no de su plano infinito */
+  enMalla?: boolean;
 }
+
+/** Hasta dónde llega el apoyo de un trazo (la lógica de Feather: se dibuja
+ *  SOBRE lo que se ve, nunca fuera de sus bordes). */
+type LimiteApoyo =
+  | { tipo: 'piso' }
+  | { tipo: 'malla' }
+  | { tipo: 'cara'; obj: THREE.Object3D }
+  | { tipo: 'trazo'; caja: THREE.Box3 };
 
 export interface Low3DProject {
   format: 'low3d';
@@ -297,6 +312,10 @@ export class WebGLDesign3D {
     noSupport?: boolean;
     /** Los dos ejes de la superficie de apoyo (cara de caja, piso…). */
     ejes?: [THREE.Vector3, THREE.Vector3];
+    /** Hasta dónde llega el apoyo: fuera de él la punta no deja puntos. */
+    limite?: LimiteApoyo;
+    /** El cuerpo del elemento donde arrancó (todas sus piezas macizas). */
+    cuerpos?: THREE.Object3D[];
   } | null = null;
   private downScreen = new THREE.Vector2();
   /** RECTAS A LOS EJES (v3.29.3), como el «Draw Shape» de Feather: al SOLTAR,
@@ -397,6 +416,7 @@ export class WebGLDesign3D {
   private canvas!: HTMLCanvasElement;
   private container!: HTMLElement;
   private cursorEl!: HTMLDivElement;
+  private colorCursor = '#333';
   private ro?: ResizeObserver;
   private raf = 0;
   private unsub?: () => void;
@@ -713,7 +733,8 @@ export class WebGLDesign3D {
     // el anillo del pincel, con doble borde: uno oscuro y un halo claro por
     // fuera. Así se ve tanto sobre el fondo como sobre un trazo negro, que es
     // donde más se perdía.
-    this.cursorEl.style.borderColor = dark ? '#e6ebf5' : '#23272f';
+    this.colorCursor = dark ? '#e6ebf5' : '#23272f';
+    this.cursorEl.style.borderColor = this.colorCursor;
     this.cursorEl.style.boxShadow = dark
       ? '0 0 0 1px rgba(0,0,0,.55)'
       : '0 0 0 1px rgba(255,255,255,.85)';
@@ -1612,7 +1633,8 @@ export class WebGLDesign3D {
 
   private updateCursor(e: PointerEvent): void {
     const [x, y] = this.screenOf(e);
-    const size = Math.max(6, this.brush.size);
+    // sin apoyo, el anillo se ve aunque el pincel sea fino (ver marcarApoyo)
+    const size = Math.max(this.cursorEl.dataset.apoyo === 'no' ? 22 : 6, this.brush.size);
     this.cursorEl.style.display = 'block';
     this.cursorEl.style.width = `${size}px`;
     this.cursorEl.style.height = `${size}px`;
@@ -1751,9 +1773,23 @@ export class WebGLDesign3D {
     if (this.activeGuide) { const pl = al(this.activeGuide.mesh); if (pl) (this.activeGuide as { plane?: THREE.Plane }).plane = pl; }
   }
 
+  /** DIBUJAR exige apoyo real (v3.34, la lógica de Feather). Mauro: «no debe
+   *  dibujar en la nada porque no sabe dónde está, se enloquece: debe dibujar
+   *  sobre el piso o sobre alguna guía o sobre algún objeto o elemento».
+   *  En Feather el trazo vive sobre la guía (o la imagen, o el modelo en modo
+   *  dibujar) y no se puede dibujar fuera de sus bordes. Para el lápiz y las
+   *  figuras el apoyo es lo que se VE bajo el cursor: el piso o el terreno, el
+   *  agua, una guía o un plano de Guías, una caja, un elemento, un trazo. Nada
+   *  de planos infinitos ni del plano de la vista. Crear una guía (se dibuja de
+   *  frente a la cámara, como en Feather) y mover lo ya hecho no cambian. */
+  private apoyoEstricto(): boolean {
+    return this.tool === 'pencil' || this.tool === 'rect' || this.tool === 'circle' || this.tool === 'poly';
+  }
+
   private resolveHit(): HitInfo | null {
     this.refrescarGuias();
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    const estricto = this.apoyoEstricto();
     // PRIORIDAD: la guía ACTIVA gana sobre cualquier otra superficie. Con varias
     // guías, el rayo agarraba la que quedaba más cerca en profundidad (aunque no
     // fuera la que estás usando). Si el cursor está sobre la malla de la guía
@@ -1770,7 +1806,8 @@ export class WebGLDesign3D {
       // La guía activa conserva prioridad también fuera de su malla visible.
       // Antes se probaban otras superficies primero y Z podía cambiar a mitad
       // del trazo, produciendo rectas largas como las de la captura.
-      if (this.activeGuide.plane && !this.planeIsEdgeOn(this.activeGuide.plane)) {
+      // (Para DIBUJAR no: fuera de la guía no hay guía. Ver apoyoEstricto.)
+      if (!estricto && this.activeGuide.plane && !this.planeIsEdgeOn(this.activeGuide.plane)) {
         const gp = new THREE.Vector3();
         if (this.raycaster.ray.intersectPlane(this.activeGuide.plane, gp)) {
           return { point: gp, normal: this.activeGuide.plane.normal.clone(), target: this.activeGuide.mesh, plane: this.activeGuide.plane.clone(), kind: 'guide' };
@@ -1798,8 +1835,9 @@ export class WebGLDesign3D {
           return { point: h.point.clone(), normal, target: act.mesh, kind: 'surface' };
         }
         // Fuera del cuadrado visible: para un PLANO se sigue usando su plano
-        // infinito (misma profundidad).
-        if (act.type === 'plane') {
+        // infinito (misma profundidad). Para DIBUJAR no (apoyoEstricto): el
+        // trazo arranca sobre la superficie o en otro apoyo que se vea.
+        if (estricto) { /* sigue con los demás apoyos */ } else if (act.type === 'plane') {
           const pl = this.surfacePlane(act.mesh);
           if (!this.planeIsEdgeOn(pl)) {
             const p = new THREE.Vector3();
@@ -1844,6 +1882,10 @@ export class WebGLDesign3D {
     // con los lados a distinta Z en vez de coplanar).
     if (this.tool !== 'guide' && this.view === 'persp') {
       this.strokesGroup.traverse((o) => { if ((o as THREE.Mesh).isMesh) targets.push(o); });
+    } else if (estricto) {
+      // en ortogonal, los CUERPOS de los elementos (volúmenes) sí son apoyo:
+      // son superficies, no tubos de tinta
+      for (const r of this.strokes) if (r.solid && r.object.visible) r.object.traverse((o) => { if ((o as THREE.Mesh).isMesh) targets.push(o); });
     }
     // las CAJAS son apoyo en todas las vistas (en ortogonal, sólo las caras de
     // frente a la vista: la vista sigue mandando el plano)
@@ -1865,6 +1907,17 @@ export class WebGLDesign3D {
         const target = obj ?? h.object;
         const recTocado = this.strokes.find((s) => s.object === target || s.object === target.parent);
         const isStroke = !!recTocado;
+        // el CUERPO de un elemento (volumen o relleno) es una superficie, como
+        // una guía: el trazo lo recorre (con todas las piezas macizas de su
+        // grupo: de la pared se pasa al techo) y no sale de él
+        if (recTocado && (recTocado.solid || recTocado.fill)) {
+          const del = recTocado.groupId
+            ? this.strokes.filter((s) => s.groupId === recTocado.groupId && (s.solid || s.fill) && s.object.visible)
+            : [recTocado];
+          const n = normal.clone();
+          if (n.dot(this.raycaster.ray.direction) > 0) n.negate();
+          return { point: h.point.clone(), normal: n, target: recTocado.object, kind: 'surface', cuerpos: del.map((s) => s.object) };
+        }
         const isGuide = !!this.guides.find((g) => g.mesh === target || g.mesh === h.object);
         // arrancar encima de un trazo: su PLANO DE APOYO, no la normal del tubo
         const plano = recTocado ? this.planoDeApoyo(recTocado) : null;
@@ -1881,7 +1934,7 @@ export class WebGLDesign3D {
     // no en el centro del dibujo (como esperaba el usuario en vista de lado).
     // NO al crear una guía nueva (tool 'guide'): esa se dibuja sobre el plano
     // de la cámara, no sobre la guía anterior.
-    if (this.tool !== 'guide' && this.activeGuide?.plane && !this.planeIsEdgeOn(this.activeGuide.plane)) {
+    if (!estricto && this.tool !== 'guide' && this.activeGuide?.plane && !this.planeIsEdgeOn(this.activeGuide.plane)) {
       const gp = new THREE.Vector3();
       if (this.raycaster.ray.intersectPlane(this.activeGuide.plane, gp)) {
         return { point: gp.clone(), normal: this.activeGuide.plane.normal.clone(), target: this.activeGuide.mesh, plane: this.activeGuide.plane.clone(), kind: 'guide' };
@@ -1902,6 +1955,9 @@ export class WebGLDesign3D {
     if (this.tool !== 'guide' && this.view === 'persp') {
       return this.pisoBajoElCursor();
     }
+    // DIBUJAR en ortogonal: desde Arriba el piso se ve y es apoyo; de frente o
+    // de costado se ve de canto. El plano de la vista no es nada que se vea.
+    if (estricto) return this.view === 'top' ? this.pisoBajoElCursor() : null;
     const camDir = new THREE.Vector3();
     (this.camera as THREE.Camera).getWorldDirection(camDir);
     // Desde ARRIBA o desde ABAJO el plano de la vista es el PISO (y = 0): pasaba
@@ -1936,7 +1992,7 @@ export class WebGLDesign3D {
     const base = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)].filter((_, i) => i !== ax)
       .map((e) => e.applyQuaternion(q).normalize()) as [THREE.Vector3, THREE.Vector3];
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, h.point);
-    return { point: h.point.clone(), normal: n, target: grupo, plane, ejes: base, kind: 'box' };
+    return { point: h.point.clone(), normal: n, target: grupo, plane, ejes: base, kind: 'box', cara: mesh };
   }
 
   /** Un plano del mundo para guardar en un trazo NUEVO (su grupo nace en el
@@ -2039,6 +2095,41 @@ export class WebGLDesign3D {
    *  esfera aunque cada punto intermedio hubiera estado bien (medido: los
    *  puntos iban de radio 1.40 a 2.62 sobre una esfera de radio 1.4). */
   private lockedHit(): HitInfo | null {
+    return this.dentroDelApoyo(this.lockedHitSinLimite());
+  }
+
+  /** Hasta dónde llega el apoyo con que arrancó el trazo (ver apoyoEstricto):
+   *  si la punta sale de lo que se ve, ese punto no existe (como levantar el
+   *  lápiz) en vez de seguir de largo por un plano infinito invisible. */
+  private limiteDelApoyo(hit: HitInfo): LimiteApoyo | undefined {
+    if (hit.terreno || (hit.kind === 'surface' && !hit.target)) return { tipo: 'piso' };
+    if (hit.kind === 'box' && hit.cara) return { tipo: 'cara', obj: hit.cara };
+    if (hit.kind === 'stroke' && hit.target) {
+      // apoyado en el plano de un trazo: hasta un poco más allá de ese trazo
+      const caja = new THREE.Box3().setFromObject(hit.target);
+      const lado = caja.getSize(new THREE.Vector3()).length();
+      return { tipo: 'trazo', caja: caja.expandByScalar(Math.max(0.5, lado * 0.25)) };
+    }
+    if (hit.target) return { tipo: 'malla' };
+    return undefined;
+  }
+  /** Un pelo afuera de un cuerpo macizo: sobre la piel exacta, el tubo de la
+   *  línea queda a medias adentro del volumen. */
+  private despegar(p: THREE.Vector3, n: THREE.Vector3): THREE.Vector3 {
+    return p.clone().addScaledVector(n, 0.012);
+  }
+  private dentroDelApoyo(hit: HitInfo | null): HitInfo | null {
+    const lim = this.current?.limite;
+    if (!lim || !hit) return hit;
+    switch (lim.tipo) {
+      case 'piso': return this.pisoBajoElCursor();
+      case 'malla': return hit.enMalla ? hit : null;
+      case 'cara': return this.raycaster.intersectObject(lim.obj, false).length ? hit : null;
+      case 'trazo': return lim.caja.containsPoint(hit.point) ? hit : null;
+    }
+  }
+
+  private lockedHitSinLimite(): HitInfo | null {
     const hit = this.intersectLockedDrawContext();
     const act = this.activeSurfaceObj();
     if (!act || act.type === 'plane' || this.current?.drawTarget !== act.mesh) return hit;
@@ -2053,27 +2144,29 @@ export class WebGLDesign3D {
         normal: liso ? liso.normal : (h.face
           ? h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize()
           : (hit?.normal.clone() ?? new THREE.Vector3(0, 0, 1))),
-        target: act.mesh,
+        target: act.mesh, enMalla: true,
       };
     }
-    // pasado el borde de la silueta, DESLIZA por la superficie
+    // pasado el borde de la silueta, DESLIZA por la superficie (sigue sobre ella)
     const proy = this.projectOnSurface(act);
-    return proy ? { point: proy.point, normal: proy.normal, target: act.mesh } : hit;
+    return proy ? { point: proy.point, normal: proy.normal, target: act.mesh, enMalla: true } : hit;
   }
 
   private intersectLockedDrawContext(): HitInfo | null {
     if (!this.current?.drawTarget && !this.current?.drawPlane) return null;
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
     if (this.current.drawTarget) {
+      // un elemento se recorre entero: de la pared se pasa al techo
       const hits = this.raycaster
-        .intersectObject(this.current.drawTarget, true)
+        .intersectObjects(this.current.cuerpos ?? [this.current.drawTarget], true)
         .filter((h) => (h.object as THREE.Mesh).isMesh);
       if (hits.length) {
         const h = hits[0];
         const normal = h.face
           ? h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize()
           : this.current.baseNormal?.clone() ?? new THREE.Vector3(0, 0, 1);
-        return { point: h.point.clone(), normal, target: this.current.drawTarget, plane: this.current.drawPlane?.clone() };
+        if (this.current.cuerpos && normal.dot(this.raycaster.ray.direction) > 0) normal.negate();
+        return { point: this.current.cuerpos ? this.despegar(h.point, normal) : h.point.clone(), normal, target: this.current.drawTarget, plane: this.current.drawPlane?.clone(), enMalla: true };
       }
     }
     if (this.current.sobreTerreno) {
@@ -2313,7 +2406,31 @@ export class WebGLDesign3D {
       this.joy.hover(this.joy.pick(this.raycaster));
     }
     if (this.tool === 'pencil-free') this.updateFreeDrawPreview();
+    if (this.mode === 'idle') this.marcarApoyo();
   };
+
+  /** ANTES de apretar, el cursor dice si ahí hay dónde apoyar el trazo: anillo
+   *  entero sobre el piso, una guía, una caja o un elemento; punteado y rojo
+   *  en la nada (el cielo, el costado de un plano). Se calcula a lo sumo cada
+   *  40 ms con la última posición: el rayo recorre todos los trazos. */
+  private apoyoTimer = 0;
+  private marcarApoyo(): void {
+    if (this.apoyoTimer) return;
+    this.apoyoTimer = window.setTimeout(() => {
+      this.apoyoTimer = 0;
+      if (this.disposed || this.mode !== 'idle') return;
+      const st = this.cursorEl.style;
+      const hay = !this.apoyoEstricto() || !!this.resolveHit();
+      this.cursorEl.dataset.apoyo = this.apoyoEstricto() ? (hay ? 'si' : 'no') : '';
+      st.borderStyle = hay ? 'solid' : 'dashed';
+      st.borderColor = hay ? this.colorCursor : '#ff4d4d';
+      st.mixBlendMode = hay ? 'difference' : 'normal';
+      // la barra de «prohibido» cruzando el anillo
+      st.background = hay ? '' : 'linear-gradient(45deg, transparent 46%, #ff4d4d 46%, #ff4d4d 54%, transparent 54%)';
+      if (!hay) { st.width = st.height = `${Math.max(22, this.brush.size)}px`; }
+      this.canvas.style.cursor = hay ? '' : 'not-allowed';
+    }, 40);
+  }
 
   private onPointerLeave = (): void => {
     if (this.mode === 'idle') this.cursorEl.style.display = 'none';
@@ -2382,7 +2499,7 @@ export class WebGLDesign3D {
   }
 
   private static readonly TOOL_KEYS: Record<string, ToolType> = {
-    p: 'pencil', g: 'guide', v: 'move', a: 'select', e: 'eraser', l: 'liquify', c: 'scissors', f: 'pencil-free',
+    p: 'pencil', g: 'guide', v: 'move', a: 'select', e: 'eraser', l: 'liquify', c: 'scissors',
     b: 'fill', // balde: rellenar la forma cerrada
     x: 'box', // caja: base en el piso, después la altura
     r: 'calle', // pavimentador: calles con clics sobre el piso
@@ -2867,7 +2984,7 @@ export class WebGLDesign3D {
       const locked = this.isLayerLocked(this.activeLayerId());
       this.canvas.title = locked ? 'La capa activa está bloqueada' : 'La capa activa está oculta';
       this.cursorEl.style.borderColor = '#ff4d4d';
-      setTimeout(() => { this.canvas.title = ''; this.cursorEl.style.borderColor = '#333'; }, 1400);
+      setTimeout(() => { this.canvas.title = ''; this.cursorEl.style.borderColor = this.colorCursor; }, 1400);
       return;
     }
     // dibujo libre: el punto sale del rayo de cámara + profundidad de
@@ -2910,6 +3027,11 @@ export class WebGLDesign3D {
     const enPlano = !!(snap && surf?.plane && Math.abs(surf.plane.distanceToPoint(snap)) < 1e-3);
     let hit = snap ? { point: snap, normal: surf?.normal ?? new THREE.Vector3(0, 0, 1),
       plane: enPlano ? surf?.plane : undefined, ejes: enPlano ? surf?.ejes : undefined, kind: enPlano ? surf?.kind : undefined } : surf;
+    // DIBUJAR exige apoyo bajo el cursor (apoyoEstricto): un vértice cercano
+    // en pantalla no alcanza si debajo no hay nada que se vea
+    const estricto = this.apoyoEstricto();
+    if (estricto && !surf) hit = null;
+    if (hit && surf?.cuerpos && !snap) hit = { ...hit, point: this.despegar(hit.point, hit.normal) };
     if (!hit) {
       this.canvas.title = this.activeGuideIsEdgeOn()
         // Caso normal, no un error: una guía de PARED está parada sobre la línea
@@ -2919,10 +3041,10 @@ export class WebGLDesign3D {
         ? 'La guía está de canto desde esta vista: orbitá (arrastrá) para verla de frente y dibujar sobre ella'
         : this.pisoLejos
           ? 'El piso está demasiado lejos o de canto acá: acercate u orbitá para verlo más de arriba'
-          : 'Acá no hay dónde apoyar el trazo: dibujá sobre el piso, una guía o una caja (o pasá a una vista de frente o de costado)';
+          : 'Acá no hay dónde apoyar el trazo: dibujá sobre el piso, el terreno, una guía, una caja o un elemento (o creá una guía con G)';
       this.avisar(this.canvas.title);
       this.cursorEl.style.borderColor = '#ff4d4d';
-      setTimeout(() => { this.canvas.title = ''; this.cursorEl.style.borderColor = '#333'; }, 1400);
+      setTimeout(() => { this.canvas.title = ''; this.cursorEl.style.borderColor = this.colorCursor; }, 1400);
       return;
     }
     this.capturePointer(e);
@@ -2954,7 +3076,9 @@ export class WebGLDesign3D {
       // No se "engancha" a un trazo ya dibujado: si el gesto arranca encima de
       // una línea existente, seguir su tubo torcía todo el trazo. Solo se
       // sigue la malla de una guía/superficie real (curvas incluidas).
-      drawTarget: this.tool === 'pencil' && hit.kind !== 'stroke' && hit.kind !== 'box' ? hit.target : undefined,
+      drawTarget: this.tool === 'pencil' && surf && surf.kind !== 'stroke' && surf.kind !== 'box' ? surf.target : undefined,
+      cuerpos: this.tool === 'pencil' ? surf?.cuerpos : undefined,
+      limite: estricto && kind === 'stroke' && surf ? this.limiteDelApoyo(surf) : undefined,
       ejes: hit.ejes ? [hit.ejes[0].clone(), hit.ejes[1].clone()] : undefined,
       // PLANO BLOQUEADO para todo el trazo. Si el soporte no traía plano
       // propio (una superficie plano/pared), se arma uno infinito con la
@@ -4644,16 +4768,13 @@ export class WebGLDesign3D {
     // cámara, pasando por el centro de órbita). Antes acá se cortaba con
     // "elegí una vista o una superficie" y no se podía dibujar una forma sin
     // fabricar antes una guía.
-    let hit = this.resolveHit();
+    // v3.34: ya no. Como el trazo (ver apoyoEstricto), la figura se apoya en
+    // algo que se vea: el plano de la vista no se ve, y la figura quedaba
+    // flotando a una profundidad que nadie eligió.
+    const hit = this.resolveHit();
     if (!hit) {
-      const camDir = new THREE.Vector3();
-      (this.camera as THREE.Camera).getWorldDirection(camDir);
-      const pl = new THREE.Plane().setFromNormalAndCoplanarPoint(
-        camDir.clone().negate(), this.controls.target);
-      const p = new THREE.Vector3();
-      this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
-      if (!this.raycaster.ray.intersectPlane(pl, p)) return;
-      hit = { point: p, normal: pl.normal.clone(), plane: pl.clone(), kind: 'fallback' };
+      this.avisar('Acá no hay dónde apoyar la figura: arrastrá sobre el piso, una guía, una caja o un elemento');
+      return;
     }
     const n = hit.normal.clone().normalize();
     const u = new THREE.Vector3(1, 0, 0);
@@ -5350,7 +5471,7 @@ export class WebGLDesign3D {
     if (!loop) {
       this.canvas.title = 'La forma no está cerrada: uní las puntas de los trazos para poder rellenarla';
       this.cursorEl.style.borderColor = '#ff4d4d';
-      setTimeout(() => { this.canvas.title = ''; this.cursorEl.style.borderColor = '#333'; }, 1600);
+      setTimeout(() => { this.canvas.title = ''; this.cursorEl.style.borderColor = this.colorCursor; }, 1600);
       return false;
     }
     return this.makeFill(this.loopOutline(loop));

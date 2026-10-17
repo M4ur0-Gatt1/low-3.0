@@ -127,7 +127,16 @@ async function main() {
     const d = await donde();
     if (!d) mal("elegir la superficie no dejó ninguna malla activa", { tipo, el });
     await ev(`document.querySelector('[data-tool="pencil"]').click()`); await w(250);
-    await trazo(d.cx - 260, d.cy, d.cx + 260, d.cy, 20);
+    // v3.34 (la lógica de Feather): el trazo ARRANCA sobre la superficie, no
+    // en la nada al costado. Se busca el primer píxel de la recta donde el
+    // cursor ya la toca; de ahí sigue de largo y desliza por la silueta.
+    const x0 = await ev(`(() => { const e = __low3d, r = e.canvas.getBoundingClientRect();
+      for (let x = ${d.cx - 260}; x < ${d.cx}; x += 2) {
+        e.pointer.x = (x - r.left) / r.width * 2 - 1; e.pointer.y = -((${d.cy} - r.top) / r.height) * 2 + 1;
+        if (e.resolveHit()) return x + 4; }
+      return null; })()`);
+    if (x0 == null) mal("la superficie no recibe el cursor en ningún punto de la recta", { tipo, d });
+    await trazo(x0, d.cy, d.cx + 260, d.cy, 20);
     const m = await medir();
     if (m.sinTrazo) mal("dibujar sobre la superficie no dejó ningún trazo", { tipo, d });
     resultados[tipo] = m;

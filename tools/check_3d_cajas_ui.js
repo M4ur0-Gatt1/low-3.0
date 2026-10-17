@@ -95,11 +95,14 @@ async function main() {
     await arrastrar(await aPantalla([-0.5, 0.5, 1]), await aPantalla([0.5, 1.5, 1]));
     enCara(await ultimo(), "z", 1, "en perspectiva, el trazo sobre la cara no quedó en la cara (z = 1)");
 
-    // ── 3. cruzar la arista: sigue en el plano de la cara, no dobla la esquina
+    // ── 3. cruzar la arista: no dobla la esquina, y tampoco sigue de largo en
+    //    el aire por el plano de la cara (v3.34, la lógica de Feather: se
+    //    dibuja sobre lo que se ve). Llega hasta la arista y ahí termina.
     await arrastrar(await aPantalla([0.2, 1, 1]), await aPantalla([1.6, 1, 1]), 20);
     let t = await ultimo();
     enCara(t, "z", 1, "el trazo que cruza la arista dobló hacia la cara de al lado");
-    if (!(t.x[1] > 1.3)) mal("el trazo no siguió más allá de la arista", t);
+    if (t.x[1] > 1.02) mal("el trazo siguió de largo en el aire más allá de la arista", t);
+    if (!(t.x[1] > 0.85)) mal("el trazo no llegó hasta la arista", t);
 
     // ── 2b. desde Frente: la cara de adelante manda la profundidad
     await ev(`__low3d.setView("front"); true`); await w(300);

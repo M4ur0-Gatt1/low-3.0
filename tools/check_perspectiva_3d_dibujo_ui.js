@@ -95,6 +95,12 @@ async function main() {
   await ev(`(()=>{ document.querySelector('[data-panel="persp"]').click(); return true; })()`); await w(300);
   await vista("front"); await w(400);
   if ((await ev(`__low3d.currentView()`)) !== "front") mal("no se pudo pasar a la vista Frente", {});
+  // v3.34 (la lógica de Feather): de Frente sin nada que se vea no se dibuja
+  // (el piso está de canto); hace falta una referencia, acá un plano de Guías
+  await trazo(300, 400, 150, 30);
+  t = await ultimo();
+  if (t.n !== 3) mal("en Frente, sin guía ni nada debajo, se dibujó en la nada", t);
+  await ev(`(()=>{ __lowStore.setActiveSurface({ type: "plane", params: { width: 60, height: 60 } }); return true; })()`); await w(400);
   await trazo(300, 400, 150, 30);
   await w(300);
   const enVista = await ev(`__low3d.currentView()`);
