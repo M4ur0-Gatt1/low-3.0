@@ -192,13 +192,21 @@
       if (sbImport) {
         /* La puesta con monigotes 3D posables se hace en Storyboarder (Shot
            Generator) y se trae acá: no se rehace, se importa su archivo. */
-        const importar = boton("Importar Storyboarder", "Traer los paneles de un proyecto .storyboarder", async () => {
+        const importar = boton("Importar Storyboarder", "Traer los paneles de un proyecto .storyboarder · Storyboarder (de Wonder Unit, gratis) es el aliado recomendado de LOW para la puesta: dibujar el storyboard y posar monigotes 3D en el Shot Generator", async () => {
           importar.disabled = true;
           try { await sbImport.importInto(this); }
           catch (error) { if (this.status) this.status(error.message); }
           finally { importar.disabled = false; }
         });
         importar.dataset.sb = "import-storyboarder";
+        // EL ALIADO RECOMENDADO (pedido de Mauro): LOW es el estudio completo y
+        // Storyboarder el único programa que se recomienda al lado, para la puesta
+        const web = boton("¿Storyboarder?", "Storyboarder es gratis: dibujás el storyboard, posás monigotes 3D en el Shot Generator y acá lo importás · abre su página", async () => {
+          const r = typeof api !== "undefined" && api.abrir_web ? await api.abrir_web("https://wonderunit.com/storyboarder/") : null;
+          if (r && r.error && this.status) this.status(r.error);
+        });
+        web.dataset.sb = "storyboarder-web";
+        web.classList.add("sb2-aliado");
       }
       boton("+ Antes", "Insertar un panel antes del elegido", () => {
         const at = boards.findIndex((b) => b.id === this.selectedId);
@@ -242,7 +250,8 @@
         vacio.className = "sb2-empty";
         vacio.textContent = "1. «+ Panel» agrega un plano: escribí su acción. 2. «Capturar dibujo» toma el cuadro actual. " +
           "3. Ajustá la duración y mirá el ritmo con ▶ Animática. 4. «Crear animatic» abre otra escena para animar y exportar. " +
-          "¿Armaste la puesta en Storyboarder? «Importar Storyboarder» trae sus paneles.";
+          "¿Armaste la puesta en Storyboarder? «Importar Storyboarder» trae sus paneles. " +
+          "Storyboarder (gratis, de Wonder Unit) es el aliado recomendado de LOW para el storyboard y la puesta con monigotes 3D.";
         raiz.appendChild(vacio);
         this.host.appendChild(raiz);
         return;

@@ -1294,6 +1294,25 @@ class Api:
         except OSError as e:
             return {"error": str(e)}
 
+    # Páginas que LOW puede abrir en el navegador: sólo https y sólo estas
+    # (la de los programas aliados). Una dirección que venga de un documento o
+    # de la IA no abre nada.
+    _WEB_PERMITIDA = {"wonderunit.com", "www.wonderunit.com"}
+
+    def abrir_web(s, url):
+        """Abre en el navegador la página de un programa aliado (Storyboarder)."""
+        try:
+            u = urllib.parse.urlparse(str(url or ""))
+        except ValueError:
+            return {"error": "dirección inválida"}
+        if u.scheme != "https" or (u.hostname or "").lower() not in s._WEB_PERMITIDA:
+            return {"error": "LOW sólo abre las páginas de sus programas aliados"}
+        try:
+            webbrowser.open(u.geturl())
+            return {"ok": True}
+        except Exception as e:
+            return {"error": str(e)}
+
     def open_external(s, path):
         """Abre un archivo con su aplicación del sistema (Word para .docx, el
         visor de PDF, etc.)."""

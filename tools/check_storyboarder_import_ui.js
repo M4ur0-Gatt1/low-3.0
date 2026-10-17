@@ -44,6 +44,13 @@ async function main() {
     await ev(`(async()=>{localStorage.clear();await openDesign('mock.svg');await dzDocInit();closeL3d();await dzSbMount();})()`);
     await wait(500);
     assert.equal(await ev("!!document.querySelector('[data-sb=import-storyboarder]')"), true, "falta el botón Importar Storyboarder");
+    // EL ALIADO RECOMENDADO (v3.31): un botón abre la página de Storyboarder, y el
+    // botón de importar lo recomienda en su ayuda
+    assert.equal(await ev("!!document.querySelector('[data-sb=storyboarder-web]')"), true, "falta el botón que recomienda Storyboarder");
+    assert.match(await ev("document.querySelector('[data-sb=import-storyboarder]').title"), /aliado recomendado/, "la ayuda de Importar no recomienda Storyboarder");
+    await ev(`(()=>{ window.__web = []; api.abrir_web = async (u) => { window.__web.push(u); return { ok: true }; }; return true; })()`);
+    await click("[data-sb=storyboarder-web]"); await wait(250);
+    assert.deepEqual(await ev("window.__web"), ["https://wonderunit.com/storyboarder/"], "el botón no abre la página de Storyboarder");
 
     // capas sintéticas: calco ROJO opaco en todo el cuadro, dibujo AZUL en la mitad izquierda
     await ev(`(()=>{
