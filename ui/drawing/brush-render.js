@@ -55,7 +55,18 @@ function dzBrushMotor(brush) {
  *  entintada se re-dibuja cuando se la deforma, y si en ese momento se leyera
  *  el pincel actual, deformar cambiaría el trazo por el que uno tenga elegido
  *  en ese momento. El trazo pertenece a la forma, no al estado de la barra. */
+/** El trazo con su MODO DE FUSIÓN (multiplicar para sombras, trama para
+ *  luces): se aplica al elemento final, sea cinta, grupo con textura o mapa de
+ *  bits, y viaja con el dibujo (atributo style, lo respeta la exportación). */
 function dzBrushRenderElement(points, color, opciones) {
+  const el = dzBrushRenderElementBase(points, color, opciones);
+  const fijo = opciones && opciones.brushId ? (window.LOW?.drawing?.brushes?.get?.(opciones.brushId) || null) : null;
+  const preset = opciones?.brush || fijo || (typeof dzCurrentBrush === "function" ? dzCurrentBrush() : null);
+  const modo = preset && ["multiply", "screen", "overlay", "soft-light"].includes(preset.blend) ? preset.blend : null;
+  if (el && modo) { el.style.mixBlendMode = modo; el.setAttribute("data-low-blend", modo); }
+  return el;
+}
+function dzBrushRenderElementBase(points, color, opciones) {
   const fijo = opciones && opciones.brushId
     ? (window.LOW?.drawing?.brushes?.get?.(opciones.brushId) || null) : null;
   const preset = opciones?.brush || fijo || dzCurrentBrush(), engine = window.LOW?.drawing?.brushEngine;

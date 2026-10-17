@@ -10,6 +10,8 @@
    *  siempre; las otras son para los pinceles de EFECTOS (destellos, pasto,
    *  confeti, hojas, rayado). */
   const SHAPES = ["ellipse", "star", "blade", "leaf", "square", "line", "dot"];
+  /** Modos de fusión de un trazo (sombra multiplica, luz aclara). */
+  const BLENDS = ["multiply", "screen", "overlay", "soft-light"];
 
   function normalizeBrush(input = {}) {
     const engine = input.engine === "raster" ? "raster" : "vector";
@@ -47,6 +49,10 @@
       hueJitter: clamp(input.hueJitter ?? 0, 0, 1),
       glow: clamp(input.glow ?? 0, 0, 1),
       eraser: !!input.eraser,
+      // PLANOS (v3.32): el trazo se cierra y se LLENA (relleno a mano, sin
+      // línea), y el modo de fusión para sombras y luces de color
+      relleno: !!input.relleno,
+      blend: BLENDS.includes(input.blend) ? input.blend : null,
       seed: (Number(input.seed) || 1) >>> 0
     });
   }
@@ -192,6 +198,22 @@
   function buildVectorOutline(points, inputBrush) {
     const brush = normalizeBrush({ ...inputBrush, engine: "vector" });
     if (points.length < 2) return null;
+    // RELLENO A MANO: lo dibujado es el CONTORNO de una mancha plana (como el
+    // relleno a lazo de Procreate o el pincel de color de Toon Boom): se cierra
+    // solo y se llena, sin línea. Hacen falta tres puntos que no estén en fila.
+    if (brush.relleno) {
+      // el lazo se ABRE antes de simplificar: con la primera y la última muestra
+      // en el mismo lugar, la simplificación mide contra un segmento de largo
+      // cero y el contorno se desarmaba (salía vacío y caía al pincel de cinta)
+      const crudo = resample(points, Math.max(.35, brush.size * .04));
+      while (crudo.length > 3 && Math.hypot(crudo[crudo.length - 1].x - crudo[0].x, crudo[crudo.length - 1].y - crudo[0].y) < Math.max(1, brush.size)) crudo.pop();
+      const borde = simplificar(crudo, Math.max(.15, brush.size * .02));
+      if (borde.length < 3) return null;
+      let area = 0;
+      for (let i = 0, j = borde.length - 1; i < borde.length; j = i++) area += (borde[j].x + borde[i].x) * (borde[j].y - borde[i].y);
+      if (Math.abs(area) / 2 < .5) return null;
+      return { path: contornoCurvo(borde), samples: borde, left: borde, right: [], relleno: true };
+    }
     // la cinta se muestrea a una resolución fija: el ESPACIADO es de los sellos
     // (raster) y en la cinta no cambiaba la forma (se declara inerte en el Estudio)
     const samples = disperse(resample(points, Math.max(.35, brush.size * .04)), brush);

@@ -172,6 +172,10 @@ async function main() {
     // ── 6. el Estudio de pinceles ───────────────────────────────────────────
     await clicEn(await centro(`[...document.querySelectorAll("button")].find(e => /^Pinceles/.test(e.textContent.trim()) && e.getBoundingClientRect().width > 0)`), "Pinceles…");
     await clicEn(await centro(`document.querySelector('[data-filter="efecto"]')`), "Efectos");
+    // las miniaturas se dibujan al aparecer en pantalla: se recorre la lista (con
+    // más de una decena de efectos, los últimos quedaban abajo sin scrollear)
+    await ev(`(async()=>{ for (const b of document.querySelectorAll(".bst-brush")) { b.scrollIntoView({ block: "nearest" }); await new Promise(r => setTimeout(r, 120)); } return true; })()`);
+    await wait(500);
     const estudio = await ev(`({ lista: [...document.querySelectorAll(".bst-brush b")].map(b => b.textContent), mini: document.querySelectorAll(".bst-tip.con-trazo").length })`);
     assert.ok(estudio.lista.includes("Neón") && estudio.lista.includes("Destellos") && !estudio.lista.includes("Tinta limpia"), "el filtro Efectos no filtra: " + JSON.stringify(estudio.lista));
     assert.equal(estudio.mini, estudio.lista.length, "no todos los pinceles tienen su miniatura real");

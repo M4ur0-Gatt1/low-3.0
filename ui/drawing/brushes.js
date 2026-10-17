@@ -6,7 +6,7 @@
      los trazos guardados y los favoritos los nombran por id. Las texturas y los
      efectos los pinta ui/drawing/pincel-efectos.js; las formas de sello, las
      variaciones y los remates, el motor (brush-engine-pro.js). */
-  const CATEGORIAS = [["lapiz", "Lápices"], ["tinta", "Tintas"], ["pintura", "Pintura"], ["textura", "Texturas"], ["efecto", "Efectos"], ["borrador", "Borradores"]];
+  const CATEGORIAS = [["lapiz", "Lápices"], ["tinta", "Tintas"], ["plano", "Planos"], ["pintura", "Pintura"], ["textura", "Texturas"], ["efecto", "Efectos"], ["borrador", "Borradores"]];
   const defaults = [
     // ── LÁPICES ──
     ["animation-pencil", "Lápiz de animación", { cat: "lapiz", engine: "vector", size: 3, opacity: .72, pressureSize: .55, smoothing: .28 }],
@@ -24,6 +24,14 @@
     ["dry-ink", "Tinta seca", { cat: "tinta", size: 12, opacity: .95, pressureSize: .7, smoothing: .35, texture: "dry", textureStrength: .65, taperEnd: .3 }],
     ["sumi", "Sumi-e", { cat: "tinta", size: 26, opacity: .78, pressureSize: .9, pressureOpacity: .35, tiltSize: .45, roundness: .36, angle: -18, taperEnd: .4 }],
     ["calligraphy", "Caligrafía", { cat: "tinta", size: 18, opacity: 1, pressureSize: .45, tiltSize: .5, roundness: .22, angle: -35, smoothing: .38 }],
+    // ── PLANOS (v3.32): ancho parejo, sin presión ni textura; color de cel ──
+    ["flat-ink", "Tinta plana", { cat: "plano", engine: "vector", size: 5, opacity: 1, pressureSize: 0, velocitySize: 0, tiltSize: 0, smoothing: .5 }],
+    ["cel-line", "Línea cel", { cat: "plano", engine: "vector", size: 3, opacity: 1, pressureSize: .15, smoothing: .55 }],
+    ["flat-marker", "Marcador plano", { cat: "plano", engine: "vector", size: 14, opacity: .9, pressureSize: 0, roundness: .3, angle: -30, angleFollowsStroke: false, smoothing: .4 }],
+    ["flat-brush", "Pincel plano duro", { cat: "plano", engine: "vector", size: 28, opacity: 1, pressureSize: 0, smoothing: .45 }],
+    ["flat-fill", "Relleno a mano", { cat: "plano", engine: "vector", size: 4, opacity: 1, relleno: true, smoothing: .5 }],
+    ["flat-shadow", "Sombra plana", { cat: "plano", engine: "vector", size: 4, opacity: .45, relleno: true, blend: "multiply", color: "#5a4f7a", smoothing: .5 }],
+    ["flat-light", "Luz plana", { cat: "plano", engine: "vector", size: 4, opacity: .5, relleno: true, blend: "screen", color: "#ffe9a8", smoothing: .5 }],
     // ── PINTURA ──
     ["flat-gouache", "Gouache plano", { cat: "pintura", engine: "raster", size: 34, opacity: .88, flow: .72, pressureOpacity: .25, spacing: .07, hardness: .74, texture: "gouache", textureStrength: .45 }],
     ["wet-gouache", "Gouache húmedo", { cat: "pintura", engine: "raster", size: 42, opacity: .62, flow: .38, pressureSize: .35, spacing: .06, hardness: .32, texture: "wet", textureStrength: .5 }],
@@ -35,6 +43,8 @@
     ["airbrush", "Aerógrafo", { cat: "pintura", engine: "raster", size: 48, opacity: .18, pressureOpacity: .75, flow: .3, hardness: .05 }],
     ["soft-shader", "Sombreado suave", { cat: "pintura", engine: "raster", size: 70, opacity: .16, flow: .18, pressureOpacity: .6, tiltSize: .4, hardness: .03 }],
     ["marker", "Marcador", { cat: "pintura", engine: "raster", size: 18, opacity: .62, pressureSize: .12, roundness: .42, angle: -18, hardness: .7 }],
+    ["tempera", "Témpera", { cat: "pintura", engine: "raster", size: 30, opacity: .95, flow: .85, pressureSize: .3, spacing: .06, hardness: .9, texture: "gouache", textureStrength: .6 }],
+    ["impasto", "Óleo empastado", { cat: "pintura", engine: "raster", size: 32, opacity: .95, flow: .9, pressureSize: .4, spacing: .05, hardness: .85, texture: "canvas", textureStrength: .8 }],
     ["pixel", "Pixel duro", { cat: "pintura", engine: "raster", size: 4, opacity: 1, flow: 1, pressureSize: 0, spacing: .25, hardness: 1, smoothing: 0, texture: "pixel" }],
     // ── TEXTURAS ──
     ["charcoal", "Carboncillo", { cat: "textura", engine: "raster", size: 24, opacity: .5, pressureSize: .65, tiltSize: .4, spacing: .08, texture: "charcoal", textureStrength: .7 }],
@@ -42,6 +52,8 @@
     ["pastel", "Pastel", { cat: "textura", engine: "raster", size: 30, opacity: .55, flow: .5, tiltSize: .55, roundness: .5, spacing: .08, texture: "pastel", textureStrength: .6 }],
     ["paper-grain", "Grano de papel", { cat: "textura", engine: "raster", size: 44, opacity: .5, flow: .45, spacing: .08, hardness: .25, texture: "paper", textureStrength: .85 }],
     ["stipple", "Puntillismo", { cat: "textura", engine: "raster", size: 5, opacity: .9, flow: 1, pressureSize: .4, spacing: 1.4, scatter: 1.6, sizeJitter: .6, shape: "dot", hardness: 1 }],
+    ["soft-graphite", "Grafito blando", { cat: "textura", engine: "raster", size: 9, opacity: .8, flow: .7, pressureSize: .6, pressureOpacity: .5, spacing: .08, hardness: .6, texture: "graphite", textureStrength: .75 }],
+    ["ballpoint", "Bolígrafo", { cat: "textura", engine: "vector", size: 2, opacity: .92, pressureSize: .3, smoothing: .3, texture: "graphite", textureStrength: .2 }],
     ["texture-spray", "Spray de textura", { cat: "textura", engine: "raster", size: 46, opacity: .34, flow: .26, pressureOpacity: .45, scatter: .8, spacing: .12, hardness: .55, texture: "spray", textureStrength: .7 }],
     // ── EFECTOS ──
     ["neon", "Neón", { cat: "efecto", engine: "vector", color: "#33B5E8", size: 6, opacity: 1, pressureSize: .3, smoothing: .55, glow: .9, neon: true }],
@@ -51,6 +63,11 @@
     ["grass", "Pasto", { cat: "efecto", engine: "raster", color: "#3f8f3a", size: 30, opacity: .95, flow: 1, spacing: .1, scatter: .5, sizeJitter: .55, angleJitter: .12, hueJitter: .06, angleFollowsStroke: false, shape: "blade", hardness: 1 }],
     ["leaves", "Hojas", { cat: "efecto", engine: "raster", color: "#4a8f3c", size: 22, opacity: .95, flow: 1, spacing: .7, scatter: 1.2, sizeJitter: .5, angleJitter: 1, hueJitter: .12, angleFollowsStroke: false, shape: "leaf", roundness: .7, hardness: 1 }],
     ["smoke", "Humo", { cat: "efecto", engine: "raster", size: 60, opacity: .14, flow: .3, spacing: .1, scatter: .4, sizeJitter: .4, hardness: .02, texture: "wet", textureStrength: .9 }],
+    ["rain", "Lluvia", { cat: "efecto", engine: "raster", size: 18, opacity: .55, flow: 1, pressureSize: .2, spacing: 1.2, scatter: 2, sizeJitter: .5, opacityJitter: .5, angle: 75, angleFollowsStroke: false, shape: "line", hardness: .9, color: "#9cc3e6" }],
+    ["snow", "Nieve", { cat: "efecto", engine: "raster", size: 7, opacity: .95, flow: 1, pressureSize: .2, spacing: 1.6, scatter: 2, sizeJitter: .8, opacityJitter: .3, shape: "dot", hardness: .7, color: "#ffffff" }],
+    ["splatter", "Salpicado", { cat: "efecto", engine: "raster", size: 16, opacity: .9, flow: 1, pressureSize: .4, spacing: .9, scatter: 1.8, sizeJitter: 1, shape: "dot", hardness: .95 }],
+    ["clouds", "Nubes", { cat: "efecto", engine: "raster", size: 80, opacity: .25, flow: .3, pressureSize: .3, spacing: .1, scatter: .6, sizeJitter: .5, hardness: .05, texture: "wet", textureStrength: .5, color: "#ffffff" }],
+    ["fur", "Pelaje", { cat: "efecto", engine: "raster", size: 10, opacity: .8, flow: 1, pressureSize: .6, spacing: .18, scatter: .3, sizeJitter: .4, angleJitter: .3, shape: "line", hardness: .8 }],
     ["hatching", "Rayado", { cat: "efecto", engine: "raster", size: 22, opacity: .85, flow: 1, pressureSize: .5, spacing: .28, sizeJitter: .15, angle: -45, angleFollowsStroke: false, shape: "line", hardness: 1 }],
     // ── BORRADORES ──
     ["soft-eraser", "Borrador suave", { cat: "borrador", engine: "raster", size: 40, opacity: .45, eraser: true, hardness: .08 }]

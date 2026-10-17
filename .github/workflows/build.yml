@@ -74,6 +74,7 @@ jobs:
           python tools/check_export_destino_backend.py
           python tools/check_guardar_extension_backend.py
           python tools/check_fondos_archivo_backend.py
+          python tools/check_abrir_web_backend.py
           python tools/check_sin_modo_menu.py
           python tools/check_escena_nueva_backend.py
           python tools/check_export_premiere_backend.py
@@ -173,6 +174,7 @@ jobs:
           node tools/check_composicion_botones_ui.js
           node tools/check_cebolla_al_abrir_ui.js
           node tools/check_pinceles_ui.js
+          node tools/check_pinceles_planos_ui.js
           node tools/check_pincel_vivo_ui.js
           node tools/check_bibliotecas_ui.js
           node tools/check_mesa_animacion_ui.js
@@ -207,6 +209,7 @@ jobs:
           node tools/check_3d_cajas_ui.js
           node tools/check_3d_calles_ui.js
           node tools/check_3d_biblioteca_ui.js
+          node tools/check_3d_terreno_ui.js
           node tools/check_3d_rectas_fuga_ui.js
           node tools/check_3d_cierre_ui.js
           node tools/check_3d_ver_fuga_ui.js

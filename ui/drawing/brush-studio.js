@@ -52,7 +52,9 @@
         angleJitter: "La variación es por sello: una cinta vectorial no tiene sellos. Usá un pincel raster.",
         hueJitter: "La variación es por sello: una cinta vectorial no tiene sellos. Usá un pincel raster.",
         opacityJitter: "La variación es por sello: una cinta vectorial no tiene sellos. Usá un pincel raster."
-      }, raster: {} };
+      }, raster: {
+        relleno: "El relleno a mano es de los pinceles vectoriales: el contorno se cierra y se llena. Usá un pincel vectorial (Planos)."
+      } };
     }
     /** Las BIBLIOTECAS instaladas (Photoshop, Procreate, Krita, GIMP…): elegir
      *  una muestra sólo sus pinceles; «Quitar» la desinstala. */
@@ -88,7 +90,10 @@
       };
       const texturas = [["", "Lisa"]].concat(Object.entries(fx.GRANOS).map(([k, v]) => [k, v.nombre]), Object.entries(fx.BORDES).map(([k, v]) => [k, v.nombre]));
       const formas = [["ellipse", "Redonda"], ["dot", "Punto"], ["star", "Destello"], ["blade", "Pasto"], ["leaf", "Hoja"], ["square", "Confeti"], ["line", "Rayita"]];
-      return `<div class="bst-controls bst-fx"><b class="bst-sub">Textura y efecto</b>${select("texture", "Textura", texturas, p.texture || "")}` +
+      const trazos = [["", "Línea"], ["1", "Relleno a mano (se cierra y se llena)"]];
+      const fusiones = [["", "Normal"], ["multiply", "Multiplicar (sombra)"], ["screen", "Trama (luz)"], ["overlay", "Superponer"], ["soft-light", "Luz suave"]];
+      return `<div class="bst-controls bst-fx"><b class="bst-sub">Plano</b>${select("relleno", "Trazo", trazos, p.relleno ? "1" : "")}${select("blend", "Fusión", fusiones, p.blend || "")}` +
+        `<b class="bst-sub">Textura y efecto</b>${select("texture", "Textura", texturas, p.texture || "")}` +
         `${slider("textureStrength", "Fuerza de textura", 0, 1, .01, p.textureStrength ?? .6)}${slider("textureScale", "Escala de textura", .2, 5, .05, p.textureScale ?? 1)}` +
         `${slider("glow", "Brillo", 0, 1, .01, p.glow ?? 0)}${slider("taperStart", "Remate al empezar", 0, 1, .01, p.taperStart ?? 0)}${slider("taperEnd", "Remate al terminar", 0, 1, .01, p.taperEnd ?? 0)}` +
         `<b class="bst-sub">Sellos</b>${select("shape", "Forma", formas, p.shape || "ellipse")}` +
