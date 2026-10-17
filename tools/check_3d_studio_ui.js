@@ -39,7 +39,7 @@ async function main(){
    await assert(`!document.querySelector('[aria-label="Deshacer (Ctrl+Z)"]').disabled`,'Deshacer no refleja el historial');
    await click('[aria-label="Deshacer (Ctrl+Z)"]');await assert('__low3d.exportProject().strokes.length===0','Deshacer no elimina el trazo');
    await click('[aria-label="Rehacer (Ctrl+Shift+Z)"]');await assert('__low3d.exportProject().strokes.length===1','Rehacer no restaura el trazo');
-   await click('.studio-header-actions button:nth-child(2)');
+   await click('[data-panel="guides"]');
    await click('.studio-option-grid button:first-child');
    await evaluate('__low3d.selectObjectById(__lowStore.getState().objects[0].id);document.querySelector(".studio-inspector input[type=number]").focus()');
    await key('Backspace','Backspace');await key('z','KeyZ',2);
@@ -63,7 +63,7 @@ async function main(){
    await click('[aria-label="Dibujo libre — sin guía; rueda ajusta profundidad (F)"]');
    await assert('__lowStore.getState().currentTool==="pencil-free"','La paleta perdió dibujo libre');
    await click('[aria-label="Cerrar inspector"]');
-   await click('.studio-header-actions button:nth-child(3)');
+   await click('[data-panel="scene"]');
    await assert(`!!document.querySelector('.studio-scene-section') && !!document.querySelector('button[title="Nueva capa"]')`,'Escena perdió objetos o capas');
    await click('[title="Nueva capa"]');await assert('__lowStore.getState().layers.length===2','No agrega capas');
    await click('[aria-label="Cerrar inspector"]');

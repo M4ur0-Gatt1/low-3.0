@@ -108,7 +108,7 @@ async function main() {
 
     // ── 4. un río
     await ev(`__lowStore.setCurrentTool("rio"); true`); await w(150);
-    for (const m of [[-70, 0, 30], [-30, 0, 34], [10, 0, 30], [60, 0, 36]]) await clicMundo(m);
+    for (const m of [[-70, 0, 30], [-30, 0, 34], [10, 0, 30], [48, 0, 30]]) await clicMundo(m);
     await tecla("Enter", "Enter", 13);
     let info = await ev(`__low3d.terrenoInfo()`);
     const rio = info.aguas.find(a => a.tipo === "rio");

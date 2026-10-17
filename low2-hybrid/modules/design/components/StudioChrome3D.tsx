@@ -85,7 +85,7 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
     if(state.currentTool==='pieza')setPanel('biblioteca');},[state.currentTool]);
   // editando un elemento, la biblioteca queda a la vista (ahí están Guardar y Cancelar)
   useEffect(()=>{const oir=()=>{if(engine.current?.enEdicion())setPanel('biblioteca');};window.addEventListener('low3d:edicion',oir);return()=>window.removeEventListener('low3d:edicion',oir);},[engine]);
-  const abrirConstruir=(b:HTMLElement)=>{const r=b.getBoundingClientRect();setMenuConstruir({x:r.right+8,y:Math.max(8,r.top-6)});};
+  const abrirConstruir=(b:HTMLElement)=>{const r=b.getBoundingClientRect();setMenuConstruir({x:Math.max(8,Math.min(window.innerWidth-200,r.left-60)),y:r.bottom+8});};
  // EL PINCEL DE TERRENO y el ancho del río (engine/terreno3d.ts)
  const [terreno,setTerreno]=useState<{modo:'levantar'|'hundir'|'suavizar'|'aplanar';radio:number;fuerza:number}>({modo:'levantar',radio:10,fuerza:0.5});
  const [anchoRio,setAnchoRio]=useState(6);
@@ -114,20 +114,18 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
  },[menu,help,panel,focus]);
  useEffect(()=>{const root=engine.current?.canvasElement()?.parentElement;root?.classList.toggle('studio-focus',focus);root?.classList.toggle('studio-inspector-open',!!panel&&!focus);return()=>{root?.classList.remove('studio-focus','studio-inspector-open');};},[focus,panel,engine]);
  const iconButton=(name:string,label:string,action:()=>void,pressed?:boolean,disabled=false)=><button type="button" className="studio-icon-button" title={label} aria-label={label} aria-pressed={pressed} disabled={disabled} onClick={action}><StudioIcon name={name}/></button>;
- return <div className={'studio-chrome'+(focus?' is-focused':'')}>
+ return <div className={'studio-chrome studio-feather'+(focus?' is-focused':'')}>
+   {/* LA LÓGICA DE FEATHER (Mauro: «que se parezca más a Feather en la lógica
+       de uso, no tanto a SketchUp»): arriba a la izquierda el sistema; arriba a
+       la derecha las herramientas en íconos; a la izquierda el pincel y la
+       historia; abajo al centro lo que cambia con la herramienta; a la derecha
+       el panel Escenario con sus pestañas. Sin la barra ancha de arriba. */}
    <header className="studio-header studio-surface">
      <div className="studio-project">
        {onClose&&iconButton('back','Volver a LOW',onClose)}<b className="studio-wordmark">LOW<span>3D</span></b>
        <button className="studio-project-menu" onClick={()=>{setMenu(v=>!v);setHelp(false);}} aria-expanded={menu} aria-label="Archivo del proyecto">{projectName}<span>⌄</span></button>
        {iconButton('save','Guardar proyecto (Ctrl+S)',()=>onSave(false))}
-     </div>
-     <div className="studio-history">{iconButton('undo','Deshacer (Ctrl+Z)',()=>engine.current?.undo(),undefined,!history.undo)}{iconButton('redo','Rehacer (Ctrl+Shift+Z)',()=>engine.current?.redo(),undefined,!history.redo)}</div>
-     <div className="studio-header-actions">
-       <button className="studio-text-button" onClick={()=>toggle('brush')} aria-pressed={panel==='brush'}>Pincel</button>
-       <button className="studio-text-button" onClick={()=>toggle('guides')} aria-pressed={panel==='guides'}>Guías</button>
-       <button className="studio-text-button" onClick={()=>toggle('scene')} aria-pressed={panel==='scene'}><StudioIcon name="layers"/>Escena <span className="studio-count">{state.objects.length}</span></button>
-       <button className="studio-text-button" data-panel="persp" title="La cámara del layout: altura de los ojos, encuadre, lente y el cuadro del 2D" onClick={()=>toggle('persp')} aria-pressed={panel==='persp'}>Cámara</button>
-       <button className="studio-text-button" data-panel="toma" title="Toma: la cámara animada que saca los fondos para el 2D (en JPG o PNG)" onClick={()=>toggle('toma')} aria-pressed={panel==='toma'}>Toma</button>
+       <span className="studio-header-sep"/>
        {iconButton('sun',dark?'Usar fondo claro':'Usar fondo oscuro',onTheme)}
        {iconButton('help','Ayuda y atajos (?)',()=>{setHelp(v=>!v);setMenu(false);},help)}
        {iconButton('focus','Concentración (Tab)',()=>setFocus(true))}
@@ -148,11 +146,11 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
        {tools.filter(t=>GRUPO_CONSTRUIR.includes(t.id)).map(t=><button key={t.id} role="menuitem" data-tool={t.id} aria-pressed={state.currentTool===t.id}
          onClick={()=>{state.setCurrentTool(t.id);setConstruir(t.id);setMenuConstruir(null);}}><StudioIcon name={t.icon}/><span>{t.name}</span><kbd>{t.key}</kbd></button>)}
      </div></>}
-   <div className={'studio-context'+(aviso?' is-aviso':'')} aria-live="polite"><strong>{active?.name||({'pencil-free':'Dibujo libre',select:'Editar puntos',scissors:'Tijera',fill:'Relleno',circle:'Círculo',poly:'Polígono'} as Record<string,string>)[state.currentTool]}</strong><span>{aviso||active?.hint||'Elegí las opciones de la herramienta en el inspector'}</span></div>
-   {state.currentTool==='move'&&<div className="studio-transform-strip studio-surface" aria-label="Transformación de selección">
-     {(['translate','rotate','scale'] as const).map((mode,i)=><button key={mode} aria-pressed={state.gizmoMode===mode&&!joystick} onClick={()=>{engine.current?.setJoystick(false);setJoystick(false);state.setGizmoMode(mode);}}>{['Mover','Rotar','Escalar'][i]}</button>)}
-     <button aria-pressed={joystick} onClick={()=>{engine.current?.setJoystick(!joystick);setJoystick(!joystick);}}>Joystick</button>
-   </div>}
+   <div className="studio-header-actions studio-stage-tabs studio-surface" role="tablist" aria-label="Panel Escenario">
+     {([['biblioteca','Escenografía','Biblioteca de escenografía: elementos para construir y su estilo'],['scene','Escena','Objetos, grupos y capas de la escena'],['guides','Guías','Guías y superficies para dibujar en el espacio'],
+        ['persp','Cámara','La cámara del layout: altura de los ojos, encuadre, lente y el cuadro del 2D'],['toma','Toma','Toma: un fondo, la toma animada o los planos para la multiplano'],['brush','Pincel','Ajustes del pincel']] as const).map(([id,nombre,ayuda])=>
+       <button key={id} role="tab" data-panel={id} title={ayuda} aria-selected={panel===id} aria-pressed={panel===id} onClick={()=>toggle(id)}>{nombre}{id==='scene'&&<span className="studio-count">{state.objects.length}</span>}</button>)}
+   </div>
    {panel&&<aside className="studio-inspector studio-surface" aria-label="Inspector 3D">
      <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Cámara del layout',toma:'Toma: fondos para el 2D',biblioteca:'Biblioteca de escenografía'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
      <div className="studio-inspector-content">
@@ -165,12 +163,21 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
        {panel==='scene'&&<><div className="studio-scene-section"><h3>Objetos</h3><ObjectList3D engine={engine}/><div className="studio-selection-actions"><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.groupSelection()}>Agrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.ungroupSelection()}>Desagrupar</button><button disabled={!state.objects.some(o=>o.selected)} onClick={()=>engine.current?.solidifySelection()}>Crear volumen</button></div><RepetirPanel3D engine={engine}/></div><div className="studio-scene-section"><h3>Capas</h3><LayerManager3D engine={engine}/></div></>}
      </div>
    </aside>}
-   <div className="studio-brush-strip studio-surface">
-     <input type="color" aria-label="Color del pincel" value={state.brushSettings.color} onChange={e=>state.setBrushSettings({...state.brushSettings,color:e.target.value})}/>
-     <label>Tamaño<input aria-label="Tamaño del pincel" type="range" min="1" max="100" value={state.brushSettings.size} onChange={e=>state.setBrushSettings({...state.brushSettings,size:Number(e.target.value)})}/><output>{state.brushSettings.size}</output></label>
-     <button title="Ajustes de pincel" onClick={()=>toggle('brush')}>{Math.round(state.brushSettings.opacity*100)}%<span> opacidad</span></button>
-     <button className="studio-fuga" aria-pressed={fuga} title={fuga?'Rectas a los ejes: una línea casi recta, al soltarla, va exacta por la arista o el eje de su superficie y fuga sola. Shift o apagarlo: queda como la dibujaste':'Rectas a los ejes apagado: las líneas quedan como las dibujaste'}
-       onClick={()=>{const e=engine.current;if(e){e.setImanFuga(!fuga);setFuga(!fuga);}}}>Rectas a los ejes</button>
+   <aside className="studio-sidebar studio-brush-strip studio-surface" aria-label="Pincel e historia">
+     <input type="color" aria-label="Color del pincel" title="Color del pincel" value={state.brushSettings.color} onChange={e=>state.setBrushSettings({...state.brushSettings,color:e.target.value})}/>
+     <label className="studio-vertical" title="Tamaño del pincel"><input aria-label="Tamaño del pincel" type="range" min="1" max="100" value={state.brushSettings.size} onChange={e=>state.setBrushSettings({...state.brushSettings,size:Number(e.target.value)})}/><output>{state.brushSettings.size}</output></label>
+     <label className="studio-vertical" title="Opacidad del pincel"><input aria-label="Opacidad del pincel" type="range" min="5" max="100" value={Math.round(state.brushSettings.opacity*100)} onChange={e=>state.setBrushSettings({...state.brushSettings,opacity:Number(e.target.value)/100})}/><output>{Math.round(state.brushSettings.opacity*100)}%</output></label>
+     <button className="studio-fuga" aria-pressed={fuga} aria-label="Rectas a los ejes" title={fuga?'Rectas a los ejes: una línea casi recta, al soltarla, va exacta por la arista o el eje de su superficie y fuga sola. Shift o apagarlo: queda como la dibujaste':'Rectas a los ejes apagado: las líneas quedan como las dibujaste'}
+       onClick={()=>{const e=engine.current;if(e){e.setImanFuga(!fuga);setFuga(!fuga);}}}><StudioIcon name="rect"/><span>Ejes</span></button>
+     <span className="studio-rail-divider"/>
+     <div className="studio-history">{iconButton('undo','Deshacer (Ctrl+Z)',()=>engine.current?.undo(),undefined,!history.undo)}{iconButton('redo','Rehacer (Ctrl+Shift+Z)',()=>engine.current?.redo(),undefined,!history.redo)}</div>
+   </aside>
+   <div className="studio-contextbar studio-surface" aria-label="Opciones de la herramienta">
+     <div className={'studio-context'+(aviso?' is-aviso':'')} aria-live="polite"><strong>{active?.name||({'pencil-free':'Dibujo libre',select:'Editar puntos',scissors:'Tijera',fill:'Relleno',circle:'Círculo',poly:'Polígono'} as Record<string,string>)[state.currentTool]}</strong><span>{aviso||active?.hint||'Elegí las opciones de la herramienta en el inspector'}</span></div>
+     {state.currentTool==='move'&&<div className="studio-transform-strip" aria-label="Transformación de selección">
+     {(['translate','rotate','scale'] as const).map((mode,i)=><button key={mode} aria-pressed={state.gizmoMode===mode&&!joystick} onClick={()=>{engine.current?.setJoystick(false);setJoystick(false);state.setGizmoMode(mode);}}>{['Mover','Rotar','Escalar'][i]}</button>)}
+     <button aria-pressed={joystick} onClick={()=>{engine.current?.setJoystick(!joystick);setJoystick(!joystick);}}>Joystick</button>
+     </div>}
      {state.currentTool==='terreno'&&<span className="studio-calle-tipo studio-terreno" role="group" aria-label="Pincel de terreno">{(['levantar','hundir','suavizar','aplanar'] as const).map(m=><button key={m} data-terreno={m} aria-pressed={terreno.modo===m} onClick={()=>{engine.current?.setPincelTerreno({modo:m});}}>{m[0].toUpperCase()+m.slice(1)}</button>)}
        <label title="Radio del pincel, en metros">Radio<input type="range" aria-label="Radio del pincel de terreno" min={2} max={40} value={terreno.radio} onChange={ev=>engine.current?.setPincelTerreno({radio:Number(ev.target.value)})}/>{terreno.radio} m</label>
        <label title="Cuánto cambia en cada pasada">Fuerza<input type="range" aria-label="Fuerza del pincel de terreno" min={5} max={100} value={Math.round(terreno.fuerza*100)} onChange={ev=>engine.current?.setPincelTerreno({fuerza:Number(ev.target.value)/100})}/></label></span>}

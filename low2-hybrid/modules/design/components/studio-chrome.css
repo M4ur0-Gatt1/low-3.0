@@ -179,3 +179,44 @@
 .studio-guia-link { background:none;border:0;padding:0;color:#F0450E;font-weight:600;cursor:pointer;text-decoration:underline; }
 .studio-vacia { position:absolute;left:50%;top:84px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:8px 10px 8px 16px;z-index:5;font-size:12px; }
 .studio-vacia button { background:#F0450E;color:#fff;border:0;border-radius:7px;padding:5px 12px;font-weight:600;cursor:pointer; }
+
+/* ══ LA LÓGICA DE FEATHER (v3.34) ════════════════════════════════════════════
+   Islas flotantes en vez de la barra ancha: sistema arriba a la izquierda,
+   herramientas arriba a la derecha (íconos), pincel e historia a la izquierda,
+   opciones de la herramienta abajo al centro, panel Escenario a la derecha. */
+.studio-feather .studio-header { left:12px;right:auto;top:12px;height:46px;padding:5px 8px;gap:4px; }
+.studio-feather .studio-header-sep { width:1px;height:22px;background:var(--studio-line);margin:0 4px; }
+.studio-feather .studio-file-menu { left:12px;top:64px; }
+.studio-feather .studio-tool-rail { left:auto;right:12px;top:12px;width:auto;height:46px;max-height:none;flex-direction:row;align-items:center;gap:2px;padding:5px;overflow:visible; }
+.studio-feather .studio-tool-rail>button { flex:0 0 36px;width:36px;height:36px;padding:0;gap:0;border-radius:9px; }
+.studio-feather .studio-tool-rail>button span { display:none; }
+.studio-feather .studio-tool-rail .studio-rail-divider { width:1px;height:24px;margin:0 4px; }
+.studio-feather .studio-grupo-caret { right:1px;bottom:0; }
+.studio-feather .studio-stage-tabs { position:absolute;right:12px;top:66px;display:flex;gap:2px;padding:4px;border-radius:12px; }
+.studio-feather .studio-stage-tabs button { padding:6px 10px;border-radius:8px;font-size:11.5px;display:inline-flex;align-items:center;gap:5px; }
+.studio-feather .studio-inspector { top:112px;right:12px;bottom:70px;width:300px; }
+.studio-feather .studio-help { top:64px;left:12px;right:auto; }
+.studio-feather .studio-sidebar { position:absolute;left:12px;top:70px;bottom:auto;height:auto;width:56px;flex-direction:column;align-items:center;gap:10px;padding:10px 6px; }
+.studio-feather .studio-sidebar input[type=color] { width:30px;height:30px; }
+.studio-feather .studio-vertical { flex-direction:column;gap:4px;font-size:10px; }
+.studio-feather .studio-vertical input[type=range] { writing-mode:vertical-lr;direction:rtl;width:16px;height:96px; }
+.studio-feather .studio-vertical output { min-width:0;font-size:10px; }
+.studio-feather .studio-sidebar .studio-fuga { display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;font-size:9.5px;text-decoration:none!important; }
+.studio-feather .studio-sidebar .studio-rail-divider { width:28px;height:1px;margin:2px 0; }
+.studio-feather .studio-sidebar .studio-history { flex-direction:column;gap:2px; }
+.studio-feather .studio-contextbar { position:absolute;left:50%;transform:translateX(-50%);bottom:14px;max-width:calc(100% - 560px);min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;padding:6px 12px;border-radius:12px; }
+.studio-feather .studio-context { position:static;right:auto;min-height:0;max-width:420px; }
+.studio-feather .studio-context span { white-space:normal; }
+.studio-feather .studio-transform-strip { position:static;padding:0;display:inline-flex; }
+.studio-feather .studio-view-strip { bottom:14px;right:12px; }
+.studio-feather .studio-navigation-hint { left:12px;top:62px;bottom:auto;opacity:.8; }
+.low-studio .studio-feather~.nav-cubo, .low-studio .nav-cubo { bottom:62px!important; }
+@media(max-width:1180px) {
+ .studio-feather .studio-contextbar { left:80px;right:auto;transform:none;max-width:calc(100% - 400px); }
+ .studio-feather .studio-context span { display:none; }
+ .studio-feather .studio-stage-tabs button { padding:6px 7px; }
+}
+@media(max-height:620px) {
+ .studio-feather .studio-vertical input[type=range] { height:64px; }
+ .studio-feather .studio-inspector { bottom:64px; }
+}
