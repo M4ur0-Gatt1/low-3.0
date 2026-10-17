@@ -88,6 +88,16 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
     setAviso('Mandando al 2D…');
     window.parent.postMessage({ type: 'low:send-to-2d', ...r }, '*');
   };
+  /** EN PLANOS: el encuadre partido por distancia, para la cámara multiplano del 2D. */
+  const [nPlanos, setNPlanos] = useState(3);
+  const mandarPlanos = () => {
+    const e = engine.current; if (!e) return;
+    if (!enLOW()) { setAviso('Abrí el estudio desde LOW (botón 3D) para mandar los planos al 2D'); return; }
+    const r = e.mandarEnPlanos(marco.w, marco.h, nPlanos, { cajas: op.cajas });
+    if (!r) { setAviso('Pasá a la vista Perspectiva, con algo a la vista, para mandar los planos'); return; }
+    setAviso(`Mandando ${r.planos.length} planos al 2D…`);
+    window.parent.postMessage({ type: 'low:send-planos', nombre: 'Multiplano', ...r }, '*');
+  };
   const mandar = async () => {
     const e = engine.current; if (!e || ocupado) return;
     if (!enLOW()) { setAviso('Abrí el estudio desde LOW (botón 3D) para mandar la toma al 2D'); return; }
@@ -110,6 +120,12 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
     <h3>Un fondo</h3>
     <label className="toma3d-check" title="Las cajas son andamio y no salen al 2D. Con esto salen como volúmenes grises, de referencia para dibujar encima"><input type="checkbox" checked={op.cajas} onChange={(ev) => setOp({ ...op, cajas: ev.target.checked })}/> Con las cajas (gris)</label>
     <button className="persp3d-boton toma3d-encuadre" onClick={mandarEncuadre} title="Un solo fondo: lo que se ve ahora, con sus puntos de fuga para dibujar encima en el 2D">Mandar este encuadre al 2D</button>
+    <div className="toma3d-planos">
+      <label title="El encuadre partido por distancia a la cámara: cada plano es una capa con su profundidad para la cámara multiplano del 2D">En planos
+        <select aria-label="Cuántos planos" value={nPlanos} onChange={(ev) => setNPlanos(Number(ev.target.value))}>
+          {[2, 3, 4, 5, 6].map((k) => <option key={k} value={k}>{k} planos</option>)}</select></label>
+      <button className="persp3d-boton toma3d-mandar-planos" onClick={mandarPlanos} title="Cada plano a su capa, del fondo al frente, con su profundidad: al panear o acercar la cámara del 2D, lo lejano se mueve menos">Mandar en planos (multiplano)</button>
+    </div>
     <h3>Toma animada</h3>
     <p className="persp3d-nota">Mové la vista (en Perspectiva), elegí el cuadro y poné una clave. La cámara pasa de clave en clave por una curva suave.</p>
     <label className="toma3d-fila">Nombre<input aria-label="Nombre de la toma" value={toma.nombre} maxLength={60}

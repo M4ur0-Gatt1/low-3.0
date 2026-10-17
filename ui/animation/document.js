@@ -1297,6 +1297,56 @@
       return ly;
     }
 
+    /** LOS PLANOS DEL 3D para la cámara multiplano: una capa por plano, al
+     *  FONDO de todo, del más lejano (abajo) al más cercano, cada una con un
+     *  dibujo expuesto en toda la escena. Volver a mandar el mismo conjunto
+     *  REEMPLAZA sus capas. Un paso de Ctrl+Z. items: [{ z, content }] del
+     *  fondo al frente. */
+    setPlanos3D(nombre, items) {
+      const sc = this.scene, clave = encodeURIComponent(String(nombre || "Multiplano"));
+      const marca = 'data-planos="' + clave + '"';
+      const validos = (items || []).filter((x) => x && x.content != null);
+      if (!validos.length) return null;
+      const foto = () => ({ levels: sc.levels.filter((l) => l.drawings.some((d) => String(d.content || "").includes(marca))).map((l) => ({ data: l.toJSON(), index: sc.levels.indexOf(l) })),
+        layers: sc.layers.filter((ly) => { const lv = sc.level(ly.levelId); return lv && lv.drawings.some((d) => String(d.content || "").includes(marca)); }).map((ly) => ({ data: ly.toJSON(), index: sc.layers.indexOf(ly) })) });
+      const before = foto();
+      // fuera las capas del envío anterior
+      const viejosLv = new Set(before.levels.map((x) => x.data.id)), viejosLy = new Set(before.layers.map((x) => x.data.id));
+      sc.levels = sc.levels.filter((l) => !viejosLv.has(l.id));
+      sc.layers = sc.layers.filter((l) => !viejosLy.has(l.id));
+      const n = Math.max(1, sc.lastFrame(), Number(sc.range && sc.range.out) || 0);
+      const nuevas = [];
+      validos.forEach((it, i) => {
+        const titulo = String(nombre || "Multiplano") + " · " + (i + 1);
+        const lv = sc.addLevel(titulo, "reference");
+        lv.addDrawing(1, String(it.content).replace("<image ", "<image " + marca + " "));
+        const ly = sc.addLayer(lv.id, titulo);
+        sc.layers.splice(sc.layers.indexOf(ly), 1);
+        for (let f = 1; f <= n; f++) ly.setCell(f, 1);
+        nuevas.push(ly);
+      });
+      // al fondo, en orden: el más lejano abajo de todo
+      sc.layers.unshift(...nuevas);
+      if (this.layerId && !sc.layer(this.layerId)) this.layerId = sc.layers.length ? sc.layers[sc.layers.length - 1].id : null;
+      const after = foto();
+      this.touch(); this.emit("layers"); this.emit("level"); this.emit("cells"); this.emit("frame");
+      if (this.history) {
+        const doc = this;
+        const ids = new Set([...before.levels, ...after.levels].map((x) => x.data.id)), lyIds = new Set([...before.layers, ...after.layers].map((x) => x.data.id));
+        this.history.push({ label: "Planos del estudio 3D (multiplano)", domain: "layout3d", before, after,
+          apply: (_dir, v) => {
+            const s = doc.scene;
+            s.levels = s.levels.filter((l) => !ids.has(l.id));
+            s.layers = s.layers.filter((l) => !lyIds.has(l.id));
+            for (const x of v.levels) s.levels.splice(Math.max(0, Math.min(s.levels.length, x.index)), 0, new animation.Level(x.data));
+            for (const x of v.layers.slice().sort((a, b) => a.index - b.index)) s.layers.splice(Math.max(0, Math.min(s.layers.length, x.index)), 0, new animation.Layer(x.data));
+            if (doc.layerId && !s.layer(doc.layerId)) doc.layerId = s.layers.length ? s.layers[s.layers.length - 1].id : null;
+            doc.touch(); doc.emit("layers"); doc.emit("level"); doc.emit("cells"); doc.emit("frame");
+          } });
+      }
+      return nuevas;
+    }
+
     addReferenceSequence(items, nombre) {
       const valid=(items||[]).filter(x=>x&&Number(x.frame)>0&&x.content!=null);
       if(!valid.length)return null;

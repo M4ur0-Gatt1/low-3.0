@@ -29,7 +29,7 @@
      `setItem` tira y LOW deja de guardar el rescate de esa escena. Si el rescate
      no entra, se guarda sin esas imágenes (todo el dibujo queda): la capa de la
      toma sigue y sus fondos se vuelven a mandar desde el estudio 3D. */
-  const TOMA_DATA = /(<image\b[^>]*data-low=\\?"toma-3d\\?"[^>]*href=\\?")data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/=]+/g;
+  const TOMA_DATA = /(<image\b[^>]*data-low=\\?"(?:toma|plano)-3d\\?"[^>]*href=\\?")data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/=]+/g;
   const sinFondosDeToma = (texto) => texto.replace(TOMA_DATA, "$1");
 
   class SceneRecoveryStore {

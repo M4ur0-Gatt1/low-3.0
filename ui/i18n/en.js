@@ -1550,5 +1550,7 @@ LOW_I18N.registrar("en", "English", {
  "Normal": "Normal",
  "Multiplicar (sombra)": "Multiply (shadow)",
  "Trama (luz)": "Screen (light)",
- "El relleno a mano es de los pinceles vectoriales: el contorno se cierra y se llena. Usá un pincel vectorial (Planos).": "Freehand fill belongs to vector brushes: the outline closes and fills. Use a vector brush (Flat)."
+ "El relleno a mano es de los pinceles vectoriales: el contorno se cierra y se llena. Usá un pincel vectorial (Planos).": "Freehand fill belongs to vector brushes: the outline closes and fills. Use a vector brush (Flat).",
+ "Abrí o creá un documento de animación en LOW para recibir los planos": "Open or create an animation document in LOW to receive the planes",
+ "{} planos en capas al fondo («{} · 1» es el más lejano) con su profundidad para la cámara multiplano · Ctrl+Z los saca": "{} planes in layers at the bottom («{} · 1» is the farthest) with their depth for the multiplane camera · Ctrl+Z removes them"
 });

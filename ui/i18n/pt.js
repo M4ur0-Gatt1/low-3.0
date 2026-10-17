@@ -1525,5 +1525,7 @@ LOW_I18N.registrar("pt", "Português", {
  "Multiplicar (sombra)": "Multiplicar (sombra)",
  "Trama (luz)": "Tela (luz)",
  "Luz suave": "Luz suave",
- "El relleno a mano es de los pinceles vectoriales: el contorno se cierra y se llena. Usá un pincel vectorial (Planos).": "O preenchimento à mão é dos pincéis vetoriais: o contorno fecha e preenche. Use um pincel vetorial (Planos)."
+ "El relleno a mano es de los pinceles vectoriales: el contorno se cierra y se llena. Usá un pincel vectorial (Planos).": "O preenchimento à mão é dos pincéis vetoriais: o contorno fecha e preenche. Use um pincel vetorial (Planos).",
+ "Abrí o creá un documento de animación en LOW para recibir los planos": "Abra ou crie um documento de animação no LOW para receber os planos",
+ "{} planos en capas al fondo («{} · 1» es el más lejano) con su profundidad para la cámara multiplano · Ctrl+Z los saca": "{} planos em camadas no fundo («{} · 1» é o mais distante) com sua profundidade para a câmera multiplano · Ctrl+Z os remove"
 });

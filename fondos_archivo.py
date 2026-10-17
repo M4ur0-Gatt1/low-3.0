@@ -27,7 +27,7 @@ from pathlib import Path
 PREFIJO = "low-archivo:"
 _TAG = re.compile(r"<image\b[^>]*>")
 # adentro del JSON las comillas del SVG vienen escapadas (\"); en un SVG suelto, no
-_MARCA = re.compile(r'data-low=\\?"toma-3d\\?"')
+_MARCA = re.compile(r'data-low=\\?"(?:toma|plano)-3d\\?"')
 _HREF_DATA = re.compile(r'href=(\\?")data:image/(jpeg|png);base64,([A-Za-z0-9+/=]+)(\\?")')
 _HREF_ARCH = re.compile(r'href=(\\?")' + re.escape(PREFIJO) + r'([^"\\]+)(\\?")')
 _NOMBRE_NUESTRO = re.compile(r"^[0-9a-f]{20}\.(jpg|png)$")
@@ -43,7 +43,7 @@ def carpeta_de(ruta_low):
 def afuera(texto, ruta_low):
     """Devuelve (texto_liviano, cuantos). Si no se puede escribir la carpeta,
     devuelve el texto como vino: nunca se pierde un fondo por guardar."""
-    if "toma-3d" not in texto:
+    if "toma-3d" not in texto and "plano-3d" not in texto:
         return texto, 0
     carpeta = carpeta_de(ruta_low)
     usados = set()

@@ -139,6 +139,9 @@
 .toma3d-botones .toma3d-jugar { grid-column:1 / -1; }
 .toma3d-check { flex-direction:row!important;align-items:center;grid-column:1 / -1; }
 .toma3d-mandar { width:100%;padding:8px; }
+.toma3d-planos { display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:end;font-size:12px; }
+.toma3d-planos label { display:flex;flex-direction:column;gap:3px; }
+.toma3d-planos select { background:var(--studio-input);border:1px solid var(--studio-line);border-radius:8px;padding:5px;color:var(--studio-fg); }
 .toma3d-mandar:disabled { opacity:.6;cursor:progress; }
 .studio-terreno label { display:inline-flex;align-items:center;gap:5px;font-size:11.5px;margin-left:6px; }
 .studio-terreno input[type=range] { width:84px; }

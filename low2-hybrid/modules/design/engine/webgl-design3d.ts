@@ -957,6 +957,80 @@ export class WebGLDesign3D {
     return { png, width: W, height: H, vps, paralelas, ajustes: { ...this.perspAjustes } };
   }
 
+  /** EN PLANOS PARA LA MULTIPLANO (Mauro: «falta el flujo para usarlo en la
+   *  mesa multiplano del 2D»). Lo que se ve, partido por DISTANCIA a la cámara
+   *  en `n` planos (más finos cerca, más gruesos lejos): cada plano se
+   *  renderiza sólo con lo que cae entre sus dos distancias (el terreno y lo
+   *  que cruza profundidades queda repartido). Cada uno lleva su profundidad
+   *  para la cámara multiplano del 2D (`data-z`: 0 = plano de acción, el punto
+   *  adonde mira la cámara; p = 100 / (100 + z) = distancia de acción /
+   *  distancia del plano). Los planos vacíos no se mandan. Del fondo al frente. */
+  mandarEnPlanos(W: number, H: number, n: number, op: { cajas?: boolean } = {}):
+    { planos: { png: string; z: number; desde: number; hasta: number }[]; width: number; height: number; accion: number } | null {
+    if (!(W > 0) || !(H > 0) || this.view !== 'persp') return null;
+    this.detachRig();
+    n = Math.max(2, Math.min(8, Math.round(n) || 3));
+    const cam = new THREE.PerspectiveCamera(fovRender(this.lenteActual(), W / H), W / H, 0.1, 2000);
+    cam.position.copy(this.perspCamera.position);
+    cam.quaternion.copy(this.perspCamera.quaternion);
+    cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
+    const adelante = new THREE.Vector3(); cam.getWorldDirection(adelante);
+    // entre qué distancias está lo que hay (dibujo, modelado, terreno)
+    const prof = (p: THREE.Vector3) => p.clone().sub(cam.position).dot(adelante);
+    let dmin = Infinity, dmax = 0;
+    const medir = (o: THREE.Object3D) => {
+      const b = new THREE.Box3().setFromObject(o);
+      if (b.isEmpty()) return;
+      for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+        const d = prof(new THREE.Vector3(x, y, z)); dmin = Math.min(dmin, d); dmax = Math.max(dmax, d);
+      }
+    };
+    for (const o of this.strokesGroup.children) medir(o);
+    if (op.cajas) for (const o of this.boxesGroup.children) medir(o);
+    for (const o of this.terrenoGroup.children) medir(o);
+    if (!(dmax > 0)) return null;
+    dmin = Math.max(0.3, dmin); dmax = Math.min(1900, Math.max(dmax, dmin * 1.5));
+    const cortes = Array.from({ length: n + 1 }, (_, k) => dmin * Math.pow(dmax / dmin, k / n));
+    cortes[0] = Math.max(0.1, dmin * 0.9); cortes[n] = dmax * 1.05;
+    const accion = Math.max(cortes[0], Math.min(cortes[n], prof(this.controls.target)));
+    const antes = new Map<THREE.Object3D, boolean>();
+    for (const o of this.scene.children) {
+      antes.set(o, o.visible);
+      o.visible = o === this.strokesGroup || o === this.terrenoGroup || (o as THREE.Light).isLight === true || (!!op.cajas && o === this.boxesGroup);
+    }
+    const fondo = this.scene.background, niebla = this.scene.fog;
+    this.scene.background = null; this.scene.fog = null;
+    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    const planos: { png: string; z: number; desde: number; hasta: number }[] = [];
+    try {
+      r.setPixelRatio(1); r.setSize(W, H, false);
+      r.outputColorSpace = this.renderer.outputColorSpace;
+      r.toneMapping = this.renderer.toneMapping; r.toneMappingExposure = this.renderer.toneMappingExposure;
+      r.setClearColor(0x000000, 0);
+      const gl = r.getContext(), px = new Uint8Array(4 * 64 * 36);
+      for (let k = n - 1; k >= 0; k--) {               // del fondo al frente
+        cam.near = cortes[k]; cam.far = cortes[k + 1]; cam.updateProjectionMatrix();
+        r.clear();
+        if (op.cajas) this.conCajasLisas(() => r.render(this.scene, cam)); else r.render(this.scene, cam);
+        // ¿quedó algo? (una muestra de 64 × 36 puntos repartidos)
+        let hay = false;
+        for (let j = 0; j < 36 && !hay; j++) for (let i = 0; i < 64 && !hay; i++) {
+          gl.readPixels(Math.floor((i + 0.5) * W / 64), Math.floor((j + 0.5) * H / 36), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          if (px[3] > 0) hay = true;
+        }
+        if (!hay) continue;
+        const d = Math.sqrt(cortes[k] * cortes[k + 1]);
+        const z = Math.max(-60, Math.min(400, Math.round(100 * (d / accion - 1))));
+        planos.push({ png: r.domElement.toDataURL('image/png'), z, desde: +cortes[k].toFixed(2), hasta: +cortes[k + 1].toFixed(2) });
+      }
+    } finally {
+      r.dispose(); r.forceContextLoss();
+      for (const [o, v] of antes) o.visible = v;
+      this.scene.background = fondo; this.scene.fog = niebla;
+    }
+    return planos.length ? { planos, width: W, height: H, accion: +accion.toFixed(2) } : null;
+  }
+
   // ---------------------------------------------------------------- tomas (cámara animada)
   getToma(): Toma3D { return tomaValida(this.toma); }
   setToma(c: Partial<Pick<Toma3D, 'nombre' | 'cuadros'>>): Toma3D {

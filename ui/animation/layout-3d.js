@@ -88,6 +88,38 @@
     responderToma({ ok: true, aviso: texto });
   }
 
+  /** EN PLANOS (cámara multiplano): cada plano del estudio 3D a una capa al
+   *  fondo, del más lejano al más cercano, con su imagen y su profundidad
+   *  (`data-z`): la cámara del 2D los mueve en paralaje al panear y acercar. */
+  function recibirPlanos(m, f) {
+    const sc = escena();
+    const responderP = (r) => responder(f, { type: "low:planos-recibidos", ...r });
+    if (!sc || typeof DZ.doc.setPlanos3D !== "function") {
+      const error = "Abrí o creá un documento de animación en LOW para recibir los planos";
+      aviso(error);
+      return responderP({ error });
+    }
+    const planos = (Array.isArray(m.planos) ? m.planos : [])
+      .filter((p) => p && typeof p.png === "string" && /^data:image\/png;base64,/.test(p.png) && Number.isFinite(Number(p.z)));
+    if (!planos.length) return responderP({ error: "no llegaron los planos" });
+    const W = sc.width || 1920, H = sc.height || 1080;
+    if (typeof global.dzDocCommit === "function") global.dzDocCommit();
+    const nombre = String(m.nombre || "Multiplano").slice(0, 60);
+    const capas = DZ.doc.setPlanos3D(nombre, planos.map((p) => ({ z: Math.max(-60, Math.min(400, Math.round(Number(p.z)))),
+      content: `<image data-low="plano-3d" data-z="${Math.max(-60, Math.min(400, Math.round(Number(p.z))))}" href="${p.png}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none"/>` })));
+    if (!capas) return responderP({ error: "no se pudieron armar las capas" });
+    try {
+      if (typeof global.dzBuildLayers === "function") global.dzBuildLayers();
+      if (typeof global.dzTlFramesRender === "function") global.dzTlFramesRender();
+      if (typeof global.dzMarkDirty === "function") global.dzMarkDirty();
+      if (typeof global.dzCapasEnMesa === "function") global.dzCapasEnMesa();
+    } catch (e) { console.warn("[planos 3D]", e); }
+    const texto = planos.length + " planos en capas al fondo («" + nombre + " · 1» es el más lejano) con su profundidad para la cámara multiplano · Ctrl+Z los saca";
+    if (typeof global.closeL3d === "function") global.closeL3d();
+    aviso(texto);
+    responderP({ ok: true, aviso: texto });
+  }
+
   global.addEventListener("message", (ev) => {
     const f = marco();
     if (!f || ev.source !== f.contentWindow) return;
@@ -101,6 +133,8 @@
       recibir(m, f);
     } else if (m.type === "low:send-toma") {
       recibirToma(m, f);
+    } else if (m.type === "low:send-planos") {
+      recibirPlanos(m, f);
     } else if (m.type === "low:guardar-kit" && typeof m.json === "string") {
       // los kits de la biblioteca 3D (.lowkit): dentro del estudio las descargas no andan
       Promise.resolve(typeof api !== "undefined" && api.save_file("", m.json, String(m.name || "kit.lowkit")))
@@ -115,5 +149,5 @@
 
   global.LOW = global.LOW || {};
   global.LOW.animation = global.LOW.animation || {};
-  global.LOW.animation.layout3d = { recibir, recibirToma };
+  global.LOW.animation.layout3d = { recibir, recibirToma, recibirPlanos };
 })(typeof window !== "undefined" ? window : globalThis);
