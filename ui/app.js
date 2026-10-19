@@ -5228,7 +5228,7 @@ function _drawFinish() {
     }
     else { t.el.remove(); finalEl = null; }
   }
-  if (finalEl) dzMirrorClone(finalEl);
+  if (finalEl) { dzMirrorClone(finalEl); window.dzUnirPuntas?.(finalEl, t.mode, pts); }   // ui/drawing/unir-puntas.js
   _hideGuideLine();
   dzMarkDirty(); dzBuildLayers();
 }
@@ -11923,11 +11923,11 @@ function dzToolOptsRender() {
     <span class="dz-artmodes" title="Plano de arte activo"><button id="toArtLine" class="${(DZ.artMode || "line") === "line" ? "on" : ""}" title="Dibujar contorno arriba">╱</button><button id="toArtColour" class="${DZ.artMode === "colour" ? "on" : ""}" title="Dibujar color debajo">●</button></span>`;
   if (["pencil", "brush", "pen"].includes(t)) {
     const presets = window.LOW?.drawing?.brushes?.all?.() || [];
-    const presetSelect = t !== "pen" && presets.length ? `<label>Pincel <select id="toBrushPreset" class="langsel">${LOW.drawing.opcionesDePinceles(DZ.brushPreset)}</select></label>` : "";
+    const presetSelect = t !== "pen" && presets.length ? `<label title="Pincel"><span class="to-lbl">Pincel</span> <select id="toBrushPreset" class="langsel">${LOW.drawing.opcionesDePinceles(DZ.brushPreset)}</select></label>` : "";
     // por CATEGORÍA (Lápices, Tintas, Pintura, Texturas, Efectos…): con 40 pinceles una lista plana no se recorre (ui/drawing/brushes.js)
-    html += presetSelect + (t !== "pen" ? `<button class="ghost" id="toBrushStudio" title="Biblioteca, preview y dinámica de pinceles">Pinceles…</button>` : "") + `<label>Trazo <input type="color" id="toColor" value="${dzHex(DZ.drawColor) || "#1a1a1a"}"></label>
+    html += presetSelect + (t !== "pen" ? `<button class="ghost" id="toBrushStudio" title="Biblioteca, preview y dinámica de pinceles">Pinceles…</button>` : "") + `<label title="Color del trazo"><span class="to-lbl">Trazo</span> <input type="color" id="toColor" value="${dzHex(DZ.drawColor) || "#1a1a1a"}"></label>
       <label>Grosor <input type="number" id="toW" min="1" max="120" value="${DZ.drawW || 6}" class="dz-win"></label>` +
-      (t !== "pen" ? `<label>Suavizado <input type="range" id="toSmooth" min="0" max="100" value="${sm}"><span id="toSmoothLbl">${sm}</span></label>` : "") +
+      (t !== "pen" ? `<label title="Suavizado del trazo al soltar (0 % crudo, 100 % máximo)">Suavizado <input type="range" id="toSmooth" min="0" max="100" value="${sm}"><span id="toSmoothLbl" class="to-pct">${sm}</span></label>` : "") +
       (t === "brush" ? `<span class="dz-hint">el grosor sigue la presión de la tableta</span>` : "") +
       (DZ.mirror ? `<span class="dz-hint">🔄 espejo activo</span>` : "");
   } else if (t === "bucket") {

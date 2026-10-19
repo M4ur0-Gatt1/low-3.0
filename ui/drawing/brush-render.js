@@ -69,7 +69,8 @@ function dzBrushRenderElement(points, color, opciones) {
 function dzBrushRenderElementBase(points, color, opciones) {
   const fijo = opciones && opciones.brushId
     ? (window.LOW?.drawing?.brushes?.get?.(opciones.brushId) || null) : null;
-  const preset = opciones?.brush || fijo || dzCurrentBrush(), engine = window.LOW?.drawing?.brushEngine;
+  // el pincel ELEGIDO lleva la variación de presión del panel del lápiz (drawing/pincel-rapido.js)
+  const preset = opciones?.brush || fijo || (window.dzPresionAplicada ? dzPresionAplicada(dzCurrentBrush()) : dzCurrentBrush()), engine = window.LOW?.drawing?.brushEngine;
   const grosor = (opciones && opciones.size) || DZ.drawW || 6;
   if (!preset || !engine) return dzBrushRibbon(points, grosor, color);
   // el pincel sigue la CURVA del trazo (con sus esquinas), no rectas entre los
@@ -227,7 +228,7 @@ function dzBrushFinalElement(points, color, options) {
   const result=dzBrushRenderElement(points,color,options);
   if(result && !options) {
     result.setAttribute('data-low-brush-points',JSON.stringify(points));
-    result.setAttribute('data-low-brush-config',JSON.stringify(dzCurrentBrush()));
+    result.setAttribute('data-low-brush-config',JSON.stringify(window.dzPresionAplicada ? dzPresionAplicada(dzCurrentBrush()) : dzCurrentBrush()));   // con la presión con que se dibujó: repintarlo no lo cambia
     result.setAttribute('data-low-brush-size',DZ.drawW||6);
     result.setAttribute('data-low-brush-color',color);
     result.setAttribute('data-low-brush-fixed',DZ.anchoFijo?'1':'0');

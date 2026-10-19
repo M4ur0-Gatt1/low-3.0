@@ -16,7 +16,7 @@
       (lo que manda Windows): no selecciona, no abre menú, sigue el Lápiz.
    2. El clic derecho del MOUSE sigue abriendo el menú y seleccionando.
    3. El clic derecho del lápiz con la punta EN EL AIRE (el botón lateral,
-      lejos de un trazo) también abre el menú. */
+      lejos de un trazo) abre el panel del pincel (v3.35; antes el menú). */
 const assert = require("node:assert/strict");
 const endpoint = process.argv[2] || "http://127.0.0.1:9223";
 const url = process.argv[3] || "http://127.0.0.1:8791/ui/index.html?mock=1";
@@ -82,9 +82,12 @@ async function main() {
     // ── 3. el botón lateral con la punta en el aire, lejos de un trazo ─────
     await pen("mouseMoved", c[0] + 200, c[1] + 100, 0); await wait(900);
     await derecho(c[0] + 200, c[1] + 100, "pen");
-    const lateral = await estado();
-    assert.ok(lateral.menu, "el botón lateral del lápiz (en el aire, lejos de un trazo) ya no abre el menú: " + JSON.stringify(lateral));
-    await cerrarMenu();
+    // v3.35 (pedido de Mauro): con el Lápiz o el Pincel, el botón lateral abre
+    // el panel del PINCEL (espesor, suavizado, presión), no el menú general
+    // (drawing/pincel-rapido.js; ver check_pincel_rapido_ui)
+    const lateral = { ...(await estado()), panel: await ev(`!!(document.querySelector("#dzPincelRapido") && !document.querySelector("#dzPincelRapido").hidden)`) };
+    assert.ok(lateral.panel && !lateral.menu && !lateral.sel, "el botón lateral del lápiz (en el aire, lejos de un trazo) no abrió el panel del pincel: " + JSON.stringify(lateral));
+    await ev(`LOW.drawing.pincelRapido.cerrar()`);
 
     assert.deepEqual(errores, [], "errores de JavaScript: " + errores.join(" | "));
     console.log("E2E pulsación larga del lápiz OK", JSON.stringify({ tras, mouse, lateral }));

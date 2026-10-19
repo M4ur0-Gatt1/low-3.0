@@ -27,7 +27,8 @@
 
   function pincelActual() {
     const D = (typeof DZ !== "undefined") ? DZ : null;
-    const b = global.dzCurrentBrush ? global.dzCurrentBrush() : null;
+    const b0 = global.dzCurrentBrush ? global.dzCurrentBrush() : null;
+    const b = b0 && global.dzPresionAplicada ? global.dzPresionAplicada(b0) : b0;   // igual que el trazo final
     if (!D || !b) return null;
     const fijo = !!D.anchoFijo;
     return { ...b, size: D.drawW || b.size || 6, seed: b.seed || 1, ...(fijo ? { pressureSize: 0, tiltSize: 0, velocitySize: 0 } : {}) };

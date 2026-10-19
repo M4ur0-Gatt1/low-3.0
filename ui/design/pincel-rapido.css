@@ -1,0 +1,44 @@
+/* El panel del clic derecho del lápiz (drawing/pincel-rapido.js) y el botón
+   «Unir puntas» de la barra del Lápiz y del Pincel (drawing/unir-puntas.js). */
+.dz-pincel-rapido { position: fixed; z-index: 900; width: 262px; padding: 8px 10px 10px; background: var(--panel, #17181b); color: var(--txt, #e9ebe8);
+  border: 1px solid var(--line, #2c2e33); border-radius: 12px; box-shadow: 0 14px 38px rgba(0,0,0,.5); font-size: 12.5px; }
+.dz-pincel-rapido[hidden] { display: none; }
+.dz-pincel-rapido .pr-cab { display: flex; align-items: center; justify-content: space-between; margin: 0 0 6px; }
+.dz-pincel-rapido .pr-cab strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dz-pincel-rapido .pr-x { border: 0; background: none; color: var(--muted, #8b8f97); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.dz-pincel-rapido .pr-x:hover { color: inherit; }
+.dz-pincel-rapido .pr-fila { display: grid; grid-template-columns: 74px 1fr 44px; align-items: center; gap: 6px; min-height: 30px; }
+.dz-pincel-rapido .pr-fila > span { color: var(--muted, #8b8f97); }
+.dz-pincel-rapido .pr-fila input[type="range"] { width: 100%; min-width: 0; }
+.dz-pincel-rapido .pr-fila input[disabled] { opacity: .4; }
+.dz-pincel-rapido output { text-align: right; font-variant-numeric: tabular-nums; }
+.dz-pincel-rapido .pr-sw { grid-column: 2 / 4; justify-self: start; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line, #2c2e33);
+  background: none; color: inherit; font: inherit; cursor: pointer; }
+.dz-pincel-rapido .pr-sw.on { background: rgba(240,69,14,.16); border-color: #F0450E; color: #ff8a5c; }
+.dz-pincel-rapido .pr-sw[disabled] { opacity: .45; cursor: default; }
+.dz-pincel-rapido .pr-nota { margin: 2px 0 4px; color: var(--muted, #8b8f97); font-size: 11.5px; }
+#dzToolOpts .dz-unir-puntas.on { color: #ff8a5c; border-color: #F0450E; background: rgba(240,69,14,.14); }
+
+/* El valor del suavizado se lee como porcentaje en la barra, en el inspector
+   y en Preferencias (Mauro: «el dial de suavizado no muestra el porcentaje»). */
+#toSmoothLbl::after, #dzSmoothLbl::after, #prefSmoothLbl::after { content: " %"; }
+#toSmoothLbl, #dzSmoothLbl, #prefSmoothLbl { display: inline-block; min-width: 3.4em; font-variant-numeric: tabular-nums; color: var(--txt, #e9ebe8); }
+
+/* A MEDIA PANTALLA la barra del Lápiz y el Pincel no entraba: el suavizado y
+   su valor quedaban fuera de la vista, a la derecha (la barra se desplaza de
+   costado, pero sin barrita a la vista nadie lo sabe). Se compacta: el nombre
+   de la herramienta ya está en la barra de abajo, «Pincel» y «Trazo» se
+   explican con el menú y la muestra de color, el menú y el dial se achican. */
+@media (max-width: 1280px) {
+  #designView .dz-optionsbar .dz-toolopts { gap: 6px; }
+  #designView .dz-optionsbar .dz-toolopts .dz-to-name { display: none; }
+  #designView .dz-optionsbar .dz-toolopts .to-lbl { display: none; }
+  #designView .dz-optionsbar .dz-toolopts label { gap: 4px; }
+  #designView .dz-optionsbar .dz-toolopts #toBrushPreset { max-width: 104px; }
+  #designView .dz-optionsbar .dz-toolopts input[type="range"] { width: 64px; }
+  /* los botones con texto largo, cortos (el título completo sigue al pasar el mouse) */
+  #designView .dz-optionsbar .dz-toolopts #toBrushStudio,
+  #designView .dz-optionsbar .dz-toolopts .dz-unir-puntas { font-size: 0; padding-left: 7px; padding-right: 7px; }
+  #designView .dz-optionsbar .dz-toolopts #toBrushStudio::after { content: "▤"; font-size: 13px; }
+  #designView .dz-optionsbar .dz-toolopts .dz-unir-puntas::after { content: "Unir"; font-size: 11.5px; }
+}
