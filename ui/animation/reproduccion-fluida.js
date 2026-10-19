@@ -51,11 +51,30 @@
     const m = s.match(/rotate\(\s*(-?[\d.]+)deg\)/);
     return !!(m && Math.abs(+m[1]) > 0.01);
   }
+  /* POR LA CÁMARA (v3.36). El play mostraba la hoja entera y la exportación
+     salía por la cámara: lo que se veía no era lo que salía (Mauro: «no
+     entiendo cómo se maneja el movimiento de cámara»). Con claves de cámara,
+     cada cuadro se renderiza por la cámara —igual que la exportación, con la
+     profundidad de la multiplano— y se muestra DENTRO del marco, girado como
+     él; lo de afuera se oscurece. Se apaga en el panel Cámara («Play por la
+     cámara») y con «Ver por la cámara», donde la vista ya sigue a la cámara. */
+  const porCamara = () => !!global.LOW?.camara2d?.playPorCamara?.();
   function claveActual(t) {
     const a = app(); const sc = a && a.doc && a.doc.scene;
     if (!sc || !t) return "";
     const capas = sc.layers.map((l) => [l.id, l.visible !== false, l.opacity, l.blend].join(":")).join(",");
-    return [sc.id, sc.revision, t.w, t.h, capas].join("|");
+    const cam = porCamara() ? JSON.stringify(sc.camera && sc.camera.keys || {}) : "hoja";
+    return [sc.id, sc.revision, t.w, t.h, capas, cam].join("|");
+  }
+  /** El rectángulo del marco de la cámara en el cuadro f, en la pantalla. */
+  function marcoEn(f) {
+    const cam = global.LOW?.camara2d?.camaraEn?.(f), vb = global.dzVB?.(), a = app();
+    if (!cam || !vb || typeof global.dzToScreen !== "function") return null;
+    const h = cam.w * (vb[3] / vb[2]), c = global.dzToScreen(cam.cx, cam.cy);
+    const e1 = global.dzToScreen(cam.cx - cam.w / 2, cam.cy), e2 = global.dzToScreen(cam.cx + cam.w / 2, cam.cy);
+    const t1 = global.dzToScreen(cam.cx, cam.cy - h / 2), t2 = global.dzToScreen(cam.cx, cam.cy + h / 2);
+    return { x: c.x, y: c.y, w: Math.hypot(e2.x - e1.x, e2.y - e1.y), h: Math.hypot(t2.x - t1.x, t2.y - t1.y),
+      rot: (cam.rot || 0) + ((a && a.viewRot) || 0) };
   }
   function vaciar() {
     for (const b of estado.cache.values()) try { b.close && b.close(); } catch (_) { /* nada */ }
@@ -81,15 +100,28 @@
     const bg = svg && getComputedStyle(svg).backgroundColor;
     return bg && !/rgba\([^)]*,\s*0\)|transparent/i.test(bg) ? bg : "#ffffff";
   }
-  function ocultar() { if (estado.lienzo) estado.lienzo.hidden = true; estado.mostrado = null; }
+  function ocultar() {
+    if (estado.lienzo) { estado.lienzo.hidden = true; estado.lienzo.classList.remove("por-camara"); estado.lienzo.style.transform = ""; }
+    estado.mostrado = null;
+  }
 
   /** Muestra el cuadro f si está listo. Devuelve si lo mostró. */
   function mostrar(f) {
     const bmp = estado.cache.get(f); if (!bmp) return false;
     const t = tamano(); const c = lienzo(); if (!t || !c) return false;
     const host = c.parentElement.getBoundingClientRect();
-    c.style.left = (t.r.left - host.left) + "px"; c.style.top = (t.r.top - host.top) + "px";
-    c.style.width = t.r.width + "px"; c.style.height = t.r.height + "px";
+    const m = bmp.__porCamara ? marcoEn(f) : null;
+    if (m) {
+      // la toma, adentro del marco (dzToScreen ya da coordenadas del lienzo)
+      c.style.left = (m.x - m.w / 2) + "px"; c.style.top = (m.y - m.h / 2) + "px";
+      c.style.width = m.w + "px"; c.style.height = m.h + "px";
+      c.style.transform = `rotate(${m.rot}deg)`; c.classList.add("por-camara");
+      global.dzCamOverlay?.();      // el marco naranja acompaña a la toma (el play fluido no rearma la hoja y lo dejaba quieto)
+    } else {
+      c.style.left = (t.r.left - host.left) + "px"; c.style.top = (t.r.top - host.top) + "px";
+      c.style.width = t.r.width + "px"; c.style.height = t.r.height + "px";
+      c.style.transform = ""; c.classList.remove("por-camara");
+    }
     if (c.width !== t.w) c.width = t.w;
     if (c.height !== t.h) c.height = t.h;
     const g = c.getContext("2d");
@@ -107,11 +139,14 @@
 
   async function rasterizar(f, t) {
     if (typeof global.dzExportCuadroSvg !== "function") return null;
-    const txt = global.dzExportCuadroSvg(f, false);
+    const conCamara = porCamara();
+    const txt = global.dzExportCuadroSvg(f, conCamara);
     const url = URL.createObjectURL(new Blob([txt], { type: "image/svg+xml" }));
     try {
       const img = new Image(); img.src = url; await img.decode();
-      return await createImageBitmap(img, { resizeWidth: t.w, resizeHeight: t.h, resizeQuality: "high" });
+      const bmp = await createImageBitmap(img, { resizeWidth: t.w, resizeHeight: t.h, resizeQuality: "high" });
+      bmp.__porCamara = conCamara;
+      return bmp;
     } catch (_) { return null; } finally { URL.revokeObjectURL(url); }
   }
 

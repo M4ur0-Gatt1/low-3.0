@@ -74,3 +74,54 @@
 
 /* la barra de opciones de la cámara: X e Y de 4 cifras se cortaban («192») */
 #dzToolOpts #toCamX, #dzToolOpts #toCamY { width: 64px; }
+
+/* ── EL MÉTODO: inicio → final → ▶ (v3.36) ── */
+.cam2d-cab .cam2d-ayudame { margin-left: auto; width: 22px; padding: 2px 0; border-radius: 50%; font-weight: 700; }
+.cam2d-oferta { margin: 0 0 8px; padding: 6px 8px; border-radius: 5px; background: rgba(51,181,232,.1); border: 1px solid rgba(51,181,232,.35); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cam2d-oferta[hidden] { display: none; }
+.cam2d-oferta button[data-a="tutorial"] { border-color: #33B5E8; }
+.cam2d-pasos { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cam2d-pasos li { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 5px;
+  border: 1px solid var(--line, #2a2a2a); background: var(--panel, #131315); }
+.cam2d-pasos li.aca { border-color: #33B5E8; }
+.cam2d-pasos li div { display: flex; flex-direction: column; min-width: 0; }
+.cam2d-pasos li small { color: var(--mut, #98988F); font-size: 10.5px; display: flex; align-items: center; gap: 4px; }
+.cam2d-pasos li small input { width: 52px; padding: 1px 4px; }
+.cam2d-n { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 700 11px Figtree, sans-serif;
+  background: var(--panel2, #19191C); border: 1px solid #F0450E; color: #ff8a5c; }
+.cam2d-pasos li.hecho .cam2d-n { background: #F0450E; color: #fff; }
+.cam2d-pasos li.hecho .cam2d-n::before { content: "✓"; }
+.cam2d-pasos li.hecho .cam2d-n { font-size: 0; }
+.cam2d-pasos li.hecho .cam2d-n::before { font-size: 11px; }
+.cam2d-pista { margin: 2px 0 6px; color: var(--txt, #e9ebe8); font-size: 11px; line-height: 1.35; }
+.cam2d-saltos { display: inline-flex; gap: 3px; margin-left: auto; }
+.cam2d-lista li .cam2d-f { width: 44px; padding: 0 3px; font: 600 11px 'JetBrains Mono', monospace; background: transparent; border: 1px solid transparent; color: inherit; }
+.cam2d-lista li .cam2d-f:hover, .cam2d-lista li .cam2d-f:focus { border-color: var(--line, #2a2a2a); background: var(--panel, #131315); }
+
+/* el play por la cámara: la toma adentro del marco, lo de afuera oscuro */
+#dzReproFluida.por-camara { transform-origin: 50% 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 0 200vmax rgba(8, 8, 8, .82); }
+
+/* ── el tutorial: una tarjeta, un paso por vez ── */
+.cam-tuto { position: fixed; left: 18px; bottom: 96px; z-index: 950; width: 340px; padding: 10px 12px 10px; border-radius: 12px;
+  background: var(--panel, #17181b); color: var(--txt, #e9ebe8); border: 1px solid #33B5E8; box-shadow: 0 16px 40px rgba(0,0,0,.5);
+  font: 400 12.5px/1.45 Figtree, sans-serif; }
+.cam-tuto[hidden] { display: none; }
+.cam-tuto header { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cam-tuto header b { font-size: 13.5px; }
+.cam-tuto-n { color: #33B5E8; font: 600 10.5px 'JetBrains Mono', monospace; width: 100%; }
+.cam-tuto-x { position: absolute; right: 8px; top: 6px; border: 0; background: none; color: var(--mut, #98988F); font-size: 18px; cursor: pointer; }
+.cam-tuto-barra { height: 3px; margin: 7px 0 8px; background: var(--line, #2a2a2a); border-radius: 2px; overflow: hidden; }
+.cam-tuto-barra i { display: block; height: 100%; background: #33B5E8; }
+.cam-tuto p { margin: 0 0 10px; }
+.cam-tuto kbd { padding: 0 4px; border: 1px solid var(--line, #2a2a2a); border-radius: 3px; font: 600 11px 'JetBrains Mono', monospace; }
+.cam-tuto footer { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.cam-tuto-acciones { display: inline-flex; gap: 6px; }
+.cam-tuto footer button { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line, #2a2a2a); background: none; color: inherit; font: inherit; cursor: pointer; }
+.cam-tuto footer button.principal { background: #33B5E8; border-color: #33B5E8; color: #0b1a22; font-weight: 600; }
+
+/* el panel flota sobre el lienzo cuando el inspector no está a la vista */
+.cam2d.cam2d-flotante { position: fixed; z-index: 700; width: 276px; margin: 0; overflow-y: auto; box-shadow: 0 14px 36px rgba(0,0,0,.5); }
+.cam2d .cam2d-alargar { width: 100%; margin: -2px 0 8px; border-color: #F0450E; }
+.cam2d .cam2d-alargar[hidden] { display: none; }
+.cam2d.cam2d-flotante .cam2d-cab { cursor: move; }
+.cam-tuto header { cursor: move; }

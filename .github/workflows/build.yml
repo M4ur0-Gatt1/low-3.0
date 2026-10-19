@@ -179,6 +179,7 @@ jobs:
           node tools/check_bibliotecas_ui.js
           node tools/check_mesa_animacion_ui.js
           node tools/check_camara_2d_ui.js
+          node tools/check_camara_metodo_ui.js
           node tools/check_pincel_suave_ui.js
           node tools/check_mover_cuadros_ui.js
           node tools/check_mano_ui.js

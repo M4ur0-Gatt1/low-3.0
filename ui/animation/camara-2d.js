@@ -126,12 +126,25 @@
     return true;
   }
 
-  /** La clave del cuadro actual (la de los arrastres y los campos). Conserva la curva. */
-  function ponerClave(cam, etiqueta) {
-    const f = cuadro();
-    return cambiar(etiqueta || "Clave de cámara en el cuadro " + f, (c) => {
+  /** La clave del cuadro actual (la de los arrastres y los campos). Conserva la curva.
+   *
+   *  LA CLAVE DE PARTIDA (v3.36). Con UNA sola clave la cámara no se mueve:
+   *  queda fija en toda la toma. Medido con Mauro («no entiendo cómo se maneja
+   *  el movimiento de cámara»): ir al cuadro 24 y mover el encuadre —lo natural—
+   *  dejaba una clave sola y una toma quieta, sin aviso. Ahora, si no había
+   *  ninguna clave y se edita un cuadro posterior al comienzo, también queda la
+   *  clave del comienzo con la hoja entera: el movimiento existe y se ve. */
+  const primerCuadro = () => Math.max(1, Math.round(Number(D()?.doc?.scene?.range?.in) || 1));
+  function ponerClave(cam, etiqueta, op = {}) {
+    const f = cuadro(), ini = primerCuadro();
+    const partida = !op.sinPartida && !numeros().length && f > ini;
+    const ok = cambiar(etiqueta || "Clave de cámara en el cuadro " + f, (c) => {
+      if (partida) c[ini] = redondear(global.dzCamDefault());
       c[f] = redondear(cam, (c[f] && c[f].ease) || cam.ease);
     });
+    if (ok && partida) global.dzSetStatus?.("🎬 Movimiento del cuadro " + ini + " al " + f + ": la clave del " + ini +
+      " guarda la hoja entera como punto de partida (con una sola clave la cámara no se mueve) · Ctrl+Z la saca");
+    return ok;
   }
   function alternarClave() {
     if (!hayDocumento()) return false;
@@ -164,6 +177,9 @@
   function tramo(etiqueta, hacia) {
     const f0 = cuadro(), f1 = f0 + Math.max(1, duracion);
     const base = camaraEn(f0), fin = hacia(base);
+    const medio = numeros().filter((n) => n > f0 && n < f1).length;
+    if (medio) global.setTimeout(() => global.dzSetStatus?.("🎬 " + etiqueta + " · cuadros " + f0 + "–" + f1 +
+      " · reemplazó " + medio + " clave(s) que había en el medio (Ctrl+Z las vuelve)"), 0);
     return cambiar(etiqueta + " · cuadros " + f0 + "–" + f1, (c) => {
       for (const k of Object.keys(c)) { const n = +k; if (n > f0 && n < f1) delete c[k]; }
       c[f0] = redondear(base, c[f0] && c[f0].ease);
@@ -229,6 +245,86 @@
   function borrarTodas() { return cambiar("Borrar todas las claves de cámara", (c) => { for (const k of Object.keys(c)) delete c[k]; }); }
   function borrarClave(f) { return cambiar("Clave de cámara del cuadro " + f + " borrada", (c) => { delete c[f]; }); }
 
+  /* ── EL MÉTODO: ENCUADRE DE INICIO → ENCUADRE FINAL (v3.36) ──────────────
+     Un movimiento de cámara se piensa así: cómo arranca la toma, cómo
+     termina y cuánto tarda. El panel lo pide en ese orden (paso 1, paso 2,
+     ▶) y cada paso lleva al cuadro y deja su clave: sólo queda arrastrar. */
+  let desdeElegido = null, hastaElegido = null;
+  function desdeYHasta() {
+    const ks = numeros();
+    const desde = desdeElegido ?? (ks.length ? ks[0] : primerCuadro());
+    let hasta = hastaElegido ?? (ks.length > 1 ? ks[ks.length - 1] : desde + 23);
+    if (hasta <= desde) hasta = desde + 1;
+    return { desde, hasta };
+  }
+  function encuadreDeInicio() {
+    const { desde } = desdeYHasta();
+    irA(desde);
+    if (!claves()[desde]) ponerClave(camaraEn(desde), "Encuadre de inicio en el cuadro " + desde, { sinPartida: true });
+    global.dzSetStatus?.("🎬 Paso 1 · cuadro " + desde + ": arrastrá el marco naranja para elegir cómo ARRANCA la toma");
+  }
+  /* LA ESCENA TIENE QUE DURAR LO QUE DURA EL MOVIMIENTO. Una escena nueva (o
+     un fondo quieto) dura UN cuadro: la cámara podía ir del 1 al 24 y el play
+     no tenía nada que reproducir. Alargar = sostener el último dibujo de cada
+     capa hasta el cuadro final, en un solo paso de Ctrl+Z. Con una escena
+     sola de un cuadro se hace al pedir el encuadre final; con una escena ya
+     animada, sólo si se pide (la pista lo ofrece). */
+  const finDeEscena = () => { const sc = D()?.doc?.scene; return sc ? sc.playRange().out : 1; };
+  function alargarEscena(hasta) {
+    const d = D()?.doc, sc = d && d.scene;
+    if (!sc || typeof d._snapshot !== "function") return false;
+    const capas = sc.layers.filter((l) => { const u = l.lastFrame(); return u > 0 && u < hasta; });
+    const ids = capas.map((l) => l.id), antes = d._snapshot(ids, []);
+    for (const ly of capas) { const u = ly.lastFrame(), n = ly.cellAt(u); for (let f = u + 1; f <= hasta; f++) ly.setCell(f, n); }
+    if (sc.range.out > 0 && sc.range.out < hasta) { sc.range.out = hasta; const o = $q("#tlOut"); if (o) o.value = hasta; }
+    d._histRange("Alargar la escena hasta el cuadro " + hasta + " (para la cámara)", antes, d._snapshot(ids, []));
+    d.touch(); d.emit("cells"); d.emit("frame");
+    global.dzSetStatus?.("🎬 La escena ahora dura " + hasta + " cuadros: cada capa sostiene su último dibujo hasta el final del movimiento · Ctrl+Z lo deshace");
+    return true;
+  }
+  function encuadreFinal() {
+    const { desde, hasta } = desdeYHasta();
+    const ini = camaraEn(desde), fin = camaraEn(hasta);
+    if (finDeEscena() < hasta && (D()?.doc?.scene?.lastFrame?.() || 0) <= 1) alargarEscena(hasta);
+    irA(hasta);
+    cambiar("Encuadre final en el cuadro " + hasta, (c) => {
+      if (!c[desde]) c[desde] = redondear(ini);
+      if (!c[hasta]) c[hasta] = redondear(fin);
+    });
+    global.dzSetStatus?.("🎬 Paso 2 · cuadro " + hasta + ": mové el marco a donde TERMINA la toma (el cuerpo lo mueve, la esquina acerca o aleja, el círculo lo gira)");
+  }
+  function verMovimiento() {
+    const { desde } = desdeYHasta(), dz = D();
+    irA(desde);
+    if (dz && !(dz.playback && dz.playback.playing)) global.dzPlayToggle?.();
+  }
+  function saltarClave(dir) {
+    const f = cuadro(), ks = numeros();
+    const k = dir < 0 ? [...ks].reverse().find((n) => n < f) : ks.find((n) => n > f);
+    if (k == null) { global.dzSetStatus?.("🎬 No hay otra clave " + (dir < 0 ? "antes" : "después") + " del cuadro " + f); return false; }
+    irA(k); return true;
+  }
+  /** Muda una clave a otro cuadro (retiming): el número de la lista se edita. */
+  function mudarClave(de, a) {
+    a = Math.round(Number(a));
+    if (!Number.isFinite(a) || a < 1 || a === de || !claves()[de]) { pintarPanel(); return false; }
+    if (claves()[a]) { global.dzSetStatus?.("🎬 El cuadro " + a + " ya tiene una clave de cámara"); pintarPanel(); return false; }
+    return cambiar("Clave de cámara del cuadro " + de + " al " + a, (c) => { c[a] = c[de]; delete c[de]; });
+  }
+  const VISTO = "low.camara.tutorial.visto";
+  function tutorialVisto() { try { global.localStorage.setItem(VISTO, "1"); } catch (_) { /* sin almacenamiento */ } }
+  const yaVioTutorial = () => { try { return global.localStorage.getItem(VISTO) === "1"; } catch (_) { return true; } };
+  /** Lo que falta para que haya movimiento, en palabras. */
+  function pista() {
+    const ks = numeros(), cams = claves();
+    if (!ks.length) return "Empezá por el paso 1: el encuadre con que ARRANCA la toma.";
+    const distintas = ks.some((k) => JSON.stringify({ ...cams[k], ease: 0 }) !== JSON.stringify({ ...cams[ks[0]], ease: 0 }));
+    if (ks.length === 1) return "Falta el encuadre final (paso 2): con una sola clave la cámara no se mueve.";
+    if (!distintas) return "Las claves tienen el mismo encuadre: mové el marco en una de ellas para que la cámara se mueva.";
+    if (ks[ks.length - 1] > finDeEscena()) return "La escena dura " + finDeEscena() + " cuadros y la cámara sigue hasta el " + ks[ks.length - 1] + ": el play corta antes.";
+    return "La cámara se mueve del cuadro " + ks[0] + " al " + ks[ks.length - 1] + ". ▶ para verla; la línea naranja es su recorrido (puntos juntos = lento).";
+  }
+
   /* ── EL PANEL ───────────────────────────────────────────────────────────── */
   let panel = null;
   function montarPanel() {
@@ -238,7 +334,20 @@
     panel = doc.createElement("section");
     panel.id = "dzCamPanel"; panel.className = "cam2d"; panel.hidden = true;
     panel.innerHTML = `
-      <header class="cam2d-cab"><b>🎬 Cámara</b><span class="cam2d-estado"></span></header>
+      <header class="cam2d-cab"><b>🎬 Cámara</b><span class="cam2d-estado"></span>
+        <button type="button" data-a="tutorial" class="cam2d-chico cam2d-ayudame" title="Tutorial: mover la cámara, paso a paso">?</button></header>
+      <p class="cam2d-oferta" hidden>¿Primera vez con la cámara? <button type="button" data-a="tutorial">Hacé el tutorial (2 min)</button>
+        <button type="button" data-a="no-tutorial" class="cam2d-chico" title="No mostrar más">✕</button></p>
+      <ol class="cam2d-pasos" aria-label="Un movimiento de cámara, paso a paso">
+        <li data-paso="1"><span class="cam2d-n">1</span><div><b>Encuadre de inicio</b><small>en el cuadro <input type="number" data-a="desde" min="1" value="1"></small></div>
+          <button type="button" data-a="ir-desde" title="Va a ese cuadro y deja su clave: arrastrá el marco naranja para elegir cómo ARRANCA la toma">Ir y encuadrar</button></li>
+        <li data-paso="2"><span class="cam2d-n">2</span><div><b>Encuadre final</b><small>en el cuadro <input type="number" data-a="hasta" min="2" value="24"></small></div>
+          <button type="button" data-a="ir-hasta" title="Va a ese cuadro y deja su clave: mové el marco a donde TERMINA la toma">Ir y encuadrar</button></li>
+        <li data-paso="3"><span class="cam2d-n">3</span><div><b>Mirá el movimiento</b><small>la curva de cada tramo, abajo</small></div>
+          <button type="button" data-a="ver" title="Va al encuadre de inicio y reproduce por la cámara">▶ Ver</button></li>
+      </ol>
+      <p class="cam2d-pista" aria-live="polite"></p>
+      <button type="button" data-a="alargar" class="cam2d-alargar" hidden title="Cada capa sostiene su último dibujo hasta el final del movimiento">Alargar la escena hasta la última clave</button>
       <div class="cam2d-campos">
         <label>X <input type="number" data-c="cx" step="1"></label>
         <label>Y <input type="number" data-c="cy" step="1"></label>
@@ -267,11 +376,14 @@
       <div class="cam2d-ver">
         <label><input type="checkbox" data-a="recorrido"> Ver el recorrido</label>
         <label><input type="checkbox" data-a="porcamara"> Ver por la cámara</label>
+        <label title="El play muestra la toma dentro del marco, igual que la exportación"><input type="checkbox" data-a="playcam"> Play por la cámara</label>
       </div>
-      <h4>Claves <button type="button" data-a="borrar-todas" class="cam2d-chico">Borrar todas</button></h4>
+      <h4>Claves <span class="cam2d-saltos"><button type="button" data-a="clave-ant" class="cam2d-chico" title="Ir a la clave anterior">◀ Clave</button><button type="button" data-a="clave-sig" class="cam2d-chico" title="Ir a la clave siguiente">Clave ▶</button></span>
+        <button type="button" data-a="borrar-todas" class="cam2d-chico">Borrar todas</button></h4>
       <ol class="cam2d-lista"></ol>
-      <p class="cam2d-ayuda">Arrastrá el encuadre para moverla, la esquina para el zoom y el tirador para girarla. Cada cambio deja una clave en este cuadro y se deshace con Ctrl+Z.</p>`;
+      <p class="cam2d-ayuda">Arrastrá el marco para moverla; la esquina de abajo a la derecha: hacia adentro ACERCA, hacia afuera ALEJA; el círculo de arriba la gira. Cada cambio deja una clave en este cuadro y se deshace con Ctrl+Z. El número de una clave se edita para mudarla de cuadro.</p>`;
     insp.insertBefore(panel, insp.firstChild);
+    arrastrable(panel);
     panel.addEventListener("change", (e) => {
       const el = e.target;
       if (el.dataset.c) {
@@ -284,8 +396,22 @@
       else if (el.dataset.a === "duracion") duracion = Math.max(2, Math.min(600, Math.round(Number(el.value) || 24)));
       else if (el.dataset.a === "recorrido") { verRecorrido = el.checked; guardar(); pintarRecorrido(); }
       else if (el.dataset.a === "porcamara") verPorCamara(el.checked);
+      else if (el.dataset.a === "playcam") { playCam = el.checked; guardar(); }
+      else if (el.dataset.a === "desde") { desdeElegido = Math.max(1, Math.round(Number(el.value) || 1)); pintarPanel(); }
+      else if (el.dataset.a === "hasta") { hastaElegido = Math.max(2, Math.round(Number(el.value) || 24)); pintarPanel(); }
+      else if (el.classList.contains("cam2d-f")) mudarClave(Number(el.closest("li").dataset.f), Number(el.value));
     });
     panel.addEventListener("click", (e) => {
+      // el número de una clave: el clic lleva a esa clave Y deja el número listo
+      // para editarlo (mudar la clave). El panel se repinta al cambiar de
+      // cuadro, así que se vuelve a enfocar el campo nuevo.
+      const num = e.target.closest("input.cam2d-f");
+      if (num) {
+        const k = Number(num.closest("li").dataset.f);
+        if (k !== cuadro()) { irA(k); const n = panel.querySelector(`.cam2d-lista li[data-f="${k}"] input.cam2d-f`); if (n) { n.focus(); n.select(); } }
+        return;
+      }
+      if (e.target.closest("input")) return;
       const b = e.target.closest("button, li[data-f]");
       if (!b) return;
       if (b.dataset.m) mover(b.dataset.m);
@@ -294,10 +420,57 @@
       else if (b.dataset.a === "encuadrar") encuadrarSeleccion();
       else if (b.dataset.a === "completo") planoCompleto();
       else if (b.dataset.a === "borrar-todas") borrarTodas();
+      else if (b.dataset.a === "ir-desde") encuadreDeInicio();
+      else if (b.dataset.a === "ir-hasta") encuadreFinal();
+      else if (b.dataset.a === "ver") verMovimiento();
+      else if (b.dataset.a === "alargar") { const ks = numeros(); if (ks.length) alargarEscena(ks[ks.length - 1]); pintarPanel(); }
+      else if (b.dataset.a === "clave-ant") saltarClave(-1);
+      else if (b.dataset.a === "clave-sig") saltarClave(1);
+      else if (b.dataset.a === "tutorial") { tutorialVisto(); global.LOW?.camaraTutorial?.abrir(); }
+      else if (b.dataset.a === "no-tutorial") { tutorialVisto(); pintarPanel(); }
       else if (b.dataset.a === "borrar") { e.stopPropagation(); borrarClave(Number(b.closest("li").dataset.f)); }
       else if (b.dataset.f) irA(Number(b.dataset.f));
     });
     return panel;
+  }
+  /** EL PANEL SIEMPRE A LA VISTA (v3.36). Vivía sólo en el inspector, y en los
+   *  espacios de trabajo donde el inspector no se muestra (Animación, Dibujo…)
+   *  el modo cámara se prendía SIN panel: ni pasos, ni claves, ni curva. Ahí
+   *  flota a la derecha del lienzo; si el inspector está, vuelve adentro. */
+  function ubicarPanel(p) {
+    const insp = $q("#dzInspector");
+    const inspVisible = !!(insp && insp.getClientRects().length && insp.getBoundingClientRect().width > 120);
+    if (inspVisible) {
+      if (p.parentElement !== insp) insp.insertBefore(p, insp.firstChild);
+      p.classList.remove("cam2d-flotante");
+    } else {
+      const cv = $q("#dzCanvas"), host = $q("#designView") || doc.body;
+      if (p.parentElement !== host) host.appendChild(p);
+      p.classList.add("cam2d-flotante");
+      // contra el borde derecho de la ventana (sobre los paneles de al lado, no
+      // sobre la hoja ni el marco); si se lo arrastró, donde quedó
+      const r = cv && cv.getBoundingClientRect();
+      const top = flotante ? flotante.top : Math.max(8, (r && r.width ? r.top : 100) + 10);
+      const left = flotante ? flotante.left : global.innerWidth - 276 - 10;
+      p.style.top = Math.max(8, Math.min(top, global.innerHeight - 120)) + "px";
+      p.style.left = Math.max(8, Math.min(left, global.innerWidth - 120)) + "px";
+      p.style.maxHeight = Math.max(200, global.innerHeight - Math.max(8, top) - 60) + "px";
+    }
+  }
+  /* el panel flotante se arrastra por su cabecera */
+  let flotante = null;
+  function arrastrable(p) {
+    const cab = p.querySelector(".cam2d-cab");
+    if (!cab || cab.__arrastre) return;
+    cab.__arrastre = true;
+    cab.addEventListener("pointerdown", (e) => {
+      if (!p.classList.contains("cam2d-flotante") || e.button !== 0 || e.target.closest("button, input, select")) return;
+      e.preventDefault();
+      const r = p.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+      const mover = (ev) => { flotante = { left: ev.clientX - dx, top: ev.clientY - dy }; ubicarPanel(p); };
+      const soltar = () => { doc.removeEventListener("pointermove", mover); doc.removeEventListener("pointerup", soltar); };
+      doc.addEventListener("pointermove", mover); doc.addEventListener("pointerup", soltar);
+    });
   }
   function irA(f) {
     const dz = D();
@@ -313,9 +486,17 @@
     const visible = !!(dz && dz.camMode && hayDocumento());
     p.hidden = !visible;
     if (!visible) return;
+    ubicarPanel(p);
     const f = cuadro(), cam = global.dzCamCur(), v = vb(), cams = claves(), ks = numeros();
     const tramoK = claveDelTramo(f);
-    p.querySelector(".cam2d-estado").textContent = "cuadro " + f + (cams[f] ? " · clave" : ks.length ? " · interpolada" : " · sin claves");
+    // lo mismo que el rótulo del marco: «interpolada» no decía entre qué claves
+    const F = (n) => "F" + String(n).padStart(3, "0");
+    let lugar = " · sin claves";
+    if (cams[f]) lugar = " · clave";
+    else if (ks.length && f < ks[0]) lugar = " · quieta hasta " + F(ks[0]);
+    else if (ks.length && f > ks[ks.length - 1]) lugar = " · quieta desde " + F(ks[ks.length - 1]);
+    else if (ks.length) { let a = ks[0], b = ks[ks.length - 1]; for (const k of ks) { if (k < f) a = k; else if (k > f) { b = k; break; } } lugar = " · entre " + F(a) + " y " + F(b); }
+    p.querySelector(".cam2d-estado").textContent = "cuadro " + f + lugar;
     const campo = (c, val) => { const el = p.querySelector(`[data-c="${c}"]`); if (el && doc.activeElement !== el) el.value = val; };
     campo("cx", Math.round(cam.cx)); campo("cy", Math.round(cam.cy));
     campo("zoom", Math.round(v[2] / cam.w * 100)); campo("rot", r1(cam.rot || 0));
@@ -333,6 +514,19 @@
       (CURVAS.find((x) => x[0] === sel.value) || CURVAS[0])[2] : "Sin clave en este cuadro ni antes";
     p.querySelector('[data-a="recorrido"]').checked = verRecorrido;
     p.querySelector('[data-a="porcamara"]').checked = !!porCamara;
+    p.querySelector('[data-a="playcam"]').checked = playCam;
+    // el paso a paso: los cuadros de inicio y fin, qué está hecho, qué falta
+    const { desde, hasta } = desdeYHasta();
+    const num = (a, v) => { const el = p.querySelector(`[data-a="${a}"]`); if (el && doc.activeElement !== el) el.value = v; };
+    num("desde", desde); num("hasta", hasta);
+    const igual = (a, b) => a && b && Math.abs(a.cx - b.cx) < .05 && Math.abs(a.cy - b.cy) < .05 && Math.abs(a.w - b.w) < .05 && Math.abs((a.rot || 0) - (b.rot || 0)) < .05;
+    p.querySelector('[data-paso="1"]').classList.toggle("hecho", !!cams[desde]);
+    p.querySelector('[data-paso="2"]').classList.toggle("hecho", !!cams[hasta] && !igual(cams[desde], cams[hasta]));
+    p.querySelector('[data-paso="1"]').classList.toggle("aca", f === desde);
+    p.querySelector('[data-paso="2"]').classList.toggle("aca", f === hasta);
+    p.querySelector(".cam2d-pista").textContent = pista();
+    p.querySelector(".cam2d-alargar").hidden = !(ks.length && ks[ks.length - 1] > finDeEscena());
+    p.querySelector(".cam2d-oferta").hidden = yaVioTutorial() || !!global.LOW?.camaraTutorial?.abierto?.();
     const ol = p.querySelector(".cam2d-lista");
     ol.textContent = "";
     if (!ks.length) {
@@ -344,7 +538,8 @@
       const c = cams[k], li = doc.createElement("li");
       li.dataset.f = k; li.className = k === f ? "actual" : "";
       li.title = "Ir al cuadro " + k;
-      li.innerHTML = `<b>F${String(k).padStart(3, "0")}</b><span></span><em></em><button type="button" data-a="borrar" title="Borrar esta clave">✕</button>`;
+      // el número se edita: mudar la clave a otro cuadro (antes no había forma de retemporizar)
+      li.innerHTML = `<b>F<input type="number" class="cam2d-f" min="1" value="${k}" title="Escribí otro cuadro para mudar esta clave" aria-label="Cuadro de la clave"></b><span></span><em></em><button type="button" data-a="borrar" title="Borrar esta clave">✕</button>`;
       li.querySelector("span").textContent = "x " + Math.round(c.cx) + " · y " + Math.round(c.cy) +
         " · " + Math.round(v[2] / c.w * 100) + " %" + (c.rot ? " · " + r1(c.rot) + "°" : "");
       li.querySelector("em").textContent = k === ks[ks.length - 1] ? "" : nombreCurva(c.ease || "inout");
@@ -354,9 +549,12 @@
 
   /* ── EL RECORRIDO ───────────────────────────────────────────────────────── */
   const CLAVE_PREF = "low.camara2d.v1";
-  let verRecorrido = true;
-  try { const g = JSON.parse(global.localStorage.getItem(CLAVE_PREF) || "{}"); if (g.recorrido === false) verRecorrido = false; } catch (_) { /* sin almacenamiento */ }
-  function guardar() { try { global.localStorage.setItem(CLAVE_PREF, JSON.stringify({ recorrido: verRecorrido })); } catch (_) { /* */ } }
+  let verRecorrido = true, playCam = true;
+  try { const g = JSON.parse(global.localStorage.getItem(CLAVE_PREF) || "{}"); if (g.recorrido === false) verRecorrido = false; if (g.playCam === false) playCam = false; } catch (_) { /* sin almacenamiento */ }
+  function guardar() { try { global.localStorage.setItem(CLAVE_PREF, JSON.stringify({ recorrido: verRecorrido, playCam })); } catch (_) { /* */ } }
+  /** ¿El play sale por la cámara? Con claves y la opción prendida, como la
+   *  exportación. Con «Ver por la cámara» no: la VISTA ya sigue a la cámara. */
+  function playPorCamara() { return playCam && hayDocumento() && numeros().length > 0 && !porCamara; }
 
   let lienzoRec = null;
   function pintarRecorrido() {
@@ -472,6 +670,25 @@
     });
   }
 
+  /** El rótulo del encuadre decía «interpolada» aunque no hubiera ninguna clave.
+   *  Ahora dice dónde está el cuadro respecto de las claves y, arrastrando, el
+   *  zoom y el giro que van quedando. */
+  function rotular() {
+    const tag = $q("#dzCamTag"), box = $q("#dzCam");
+    if (!tag || !box || box.hidden) return;
+    const dz = D(), f = cuadro(), ks = numeros(), cams = claves(), F = (n) => "F" + String(n).padStart(3, "0");
+    let estado;
+    if (dz.camDrag) {
+      const c = dz.camDrag;
+      estado = "zoom " + Math.round(vb()[2] / Math.max(1e-6, c.w) * 100) + " %" + (Math.abs(c.rot || 0) > .05 ? " · giro " + r1(c.rot) + "°" : "");
+    } else if (cams[f]) estado = "CLAVE";
+    else if (!ks.length) estado = "sin claves: la hoja entera";
+    else if (f < ks[0]) estado = "quieta hasta " + F(ks[0]);
+    else if (f > ks[ks.length - 1]) estado = "quieta desde " + F(ks[ks.length - 1]);
+    else { let a = ks[0], b = ks[ks.length - 1]; for (const k of ks) { if (k < f) a = k; else if (k > f) { b = k; break; } } estado = "entre " + F(a) + " y " + F(b); }
+    tag.textContent = "Cámara 2D · " + F(f) + " · " + estado;
+  }
+
   function apagarModo() {
     const dz = D();
     if (!dz || !dz.camMode) return;
@@ -510,7 +727,7 @@
     envolver("dzSetTool", null, (t) => { if (t !== "camera") apagarModo(); });
     // el recorrido sigue al zoom, al paneo y a la mesa giratoria
     envolver("dzApplyZoom", () => pintarRecorrido());
-    envolver("dzCamOverlay", () => { if (D().camDrag) pintarRecorrido(); });
+    envolver("dzCamOverlay", () => { rotular(); if (D().camDrag) pintarRecorrido(); });
     // los campos de la barra de opciones de la herramienta: nunca tuvieron oyentes
     envolver("dzToolOptsRender", () => {
       if ((D().tool || "") !== "camera") return;
@@ -549,7 +766,10 @@
   global.LOW = global.LOW || {};
   global.LOW.camara2d = { camaraEn, cambiar, ponerClave, alternarClave, ponerCurva, mover, temblor,
     encuadrarSeleccion, planoCompleto, borrarTodas, borrarClave, verPorCamara, pintarPanel, pintarRecorrido,
-    CURVAS, MOVIMIENTOS, get duracion() { return duracion; }, set duracion(n) { duracion = Math.max(2, Math.round(n) || 24); } };
+    CURVAS, MOVIMIENTOS, get duracion() { return duracion; }, set duracion(n) { duracion = Math.max(2, Math.round(n) || 24); },
+    // v3.36: el método inicio → fin
+    desdeYHasta, encuadreDeInicio, encuadreFinal, verMovimiento, alargarEscena, saltarClave, mudarClave, playPorCamara, pista, rotular,
+    viendoPorCamara: () => !!porCamara };
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", enganchar, { once: true });
   else enganchar();
 })(typeof window !== "undefined" ? window : globalThis);

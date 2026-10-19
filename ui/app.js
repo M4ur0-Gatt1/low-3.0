@@ -7727,7 +7727,7 @@ function dzCamToggle() {
   dzCamOverlay();
   dzToolOptsRender(); dzSbTool();
   dzSetStatus(DZ.camMode ?
-    "🎬 Cámara: arrastrá el encuadre (mover), la esquina (zoom),  (rotar) — cada cambio deja CLAVE en este cuadro. El play y el export salen por acá." : "");
+    "🎬 Cámara: arrastrá el marco (mover), la esquina (adentro acerca, afuera aleja), el círculo de arriba (girar) — cada cambio deja CLAVE en este cuadro. Panel Cámara: inicio → final → ▶." : "");
 }
 function dzCamCur() { return DZ.camDrag || dzCamAt(dzCamFrame()); }
 function dzCamOverlay() {
