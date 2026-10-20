@@ -1593,5 +1593,14 @@ LOW_I18N.registrar("pt", "Português", {
  "El recorrido y la curva": "O percurso e a curva",
  "3 · Miralo": "3 · Veja",
  "¡Listo!": "Pronto!",
- "Paso {} de {}": "Passo {} de {}"
+ "Paso {} de {}": "Passo {} de {}",
+ "Opciones del pincel (donde está la lapicera)": "Opções do pincel (onde está a caneta)",
+ "Configurar el botón de la lapicera…": "Configurar o botão da caneta…",
+ "Ponérselo al botón de la lapicera…": "Colocar no botão da caneta…",
+ "Atajo:": "Atalho:",
+ "El botón de la lapicera abre el pincel": "O botão da caneta abre o pincel",
+ "Probalo acá: apretá el botón de la lapicera…": "Teste aqui: aperte o botão da caneta…",
+ "¡Anda! El botón manda Shift+B: va a abrir las opciones del pincel.": "Funciona! O botão manda Shift+B: vai abrir as opções do pincel.",
+ "Llegó «{}». Para abrir el pincel tiene que mandar Shift+B.": "Chegou «{}». Para abrir o pincel tem que mandar Shift+B.",
+ "Llegó un clic derecho. Funciona, pero sólo al levantar la punta quieta: asignale Shift+B para que sea inmediato.": "Chegou um clique direito. Funciona, mas só ao levantar a ponta parada: atribua Shift+B para ser imediato."
 });

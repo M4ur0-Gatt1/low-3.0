@@ -129,6 +129,83 @@ async function main() {
     assert.ok(s.panel && !s.menu, "el botón lateral mandado como clic del mouse (lápiz flotando) no abrió el panel: " + JSON.stringify(s));
     await ev(`LOW.drawing.pincelRapido.cerrar()`);
 
+    // ── 7b. LAS FORMAS REALES DEL BOTÓN LATERAL (v3.36.1: con la lapicera de
+    //    Mauro «no hace nada»). Con el Pincel y lejos de lo dibujado:
+    await ev('(()=>{ dzSetTool("brush"); LOW.drawing.pincelRapido.cerrar(); return true; })()'); await wait(800);
+    const hay = () => ev(`document.querySelectorAll("#dzCanvas > svg [data-low-brush-points]").length`);
+    const n0 = await hay();
+    //  b1. BOTÓN + TOCAR: un toque corto y, al levantar, el clic derecho de Windows
+    const T = [c[0] + 240, c[1] + 40];
+    await pen("mouseMoved", T[0], T[1], 0); await wait(40);
+    await pen("mousePressed", T[0], T[1], .5, { buttons: 1, clickCount: 1 }); await wait(60);
+    await pen("mouseReleased", T[0], T[1], 0, { buttons: 0, clickCount: 1 }); await wait(30);
+    await ev(`(()=>{ const el = document.elementFromPoint(${T[0]}, ${T[1]}); el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: ${T[0]}, clientY: ${T[1]}, button: 2 })); return true; })()`); await wait(250);
+    s = await estado();
+    assert.ok(s.panel && !s.menu, "BOTÓN + TOCAR (un toque y el clic derecho al levantar) no abrió el panel: " + JSON.stringify(s));
+    assert.strictEqual(await hay(), n0, "el toque del botón lateral dejó un trazo");
+    await ev(`LOW.drawing.pincelRapido.cerrar()`); await wait(800);
+    //  b1'. LO QUE MANDA LA LAPICERA DE MAURO (medido en la app real): todo es
+    //  button 0; el botón sólo se nota en el clic derecho «de lapicera» que
+    //  Windows manda al levantar tras ~700 ms con la punta QUIETA
+    const Q = [c[0] + 200, c[1] + 140];
+    await pen("mouseMoved", Q[0], Q[1], 0); await wait(40);
+    await pen("mousePressed", Q[0], Q[1], .3, { buttons: 1, clickCount: 1 });
+    for (let i = 0; i < 6; i++) { await pen("mouseMoved", Q[0] + (i % 2), Q[1], .3 + i * .1, { buttons: 1 }); await wait(110); }
+    await pen("mouseReleased", Q[0] + 1, Q[1], 0, { buttons: 0, clickCount: 1 }); await wait(5);
+    await ev(`(()=>{ const el = document.elementFromPoint(${Q[0]}, ${Q[1]}); el.dispatchEvent(new PointerEvent("contextmenu", { bubbles: true, cancelable: true, clientX: ${Q[0]}, clientY: ${Q[1]}, pointerType: "pen", button: -1 })); return true; })()`); await wait(300);
+    s = await estado();
+    assert.ok(s.panel && !s.menu, "la lapicera de Mauro (punta quieta ~700 ms y el clic derecho al levantar) no abrió el panel: " + JSON.stringify(s));
+    assert.strictEqual(await hay(), n0, "el toque quieto del botón dejó un punto en la hoja");
+    await ev(`LOW.drawing.pincelRapido.cerrar()`); await wait(800);
+    //  b2. BOTÓN APRETADO CON LA PUNTA APOYADA: button 0 con el bit del botón lateral (buttons 3)
+    const U = [c[0] + 260, c[1] - 60];
+    await pen("mouseMoved", U[0], U[1], 0); await wait(40);
+    await pen("mousePressed", U[0], U[1], .5, { buttons: 3, clickCount: 1 }); await wait(60);
+    await pen("mouseMoved", U[0] + 20, U[1], .5, { buttons: 3 }); await wait(30);
+    await pen("mouseReleased", U[0] + 20, U[1], 0, { buttons: 0, clickCount: 1 }); await wait(250);
+    s = await estado();
+    assert.ok(s.panel && !s.menu, "el botón lateral apretado con la punta apoyada (buttons 3) no abrió el panel: " + JSON.stringify(s));
+    assert.strictEqual(await hay(), n0, "el botón lateral con la punta apoyada dibujó");
+    await ev(`LOW.drawing.pincelRapido.cerrar()`); await wait(800);
+    //  b3. BOTÓN CON LA PUNTA EN EL AIRE: un movimiento del lápiz con el bit 2
+    const V = [c[0] - 260, c[1] - 60];
+    await pen("mouseMoved", V[0], V[1], 0); await wait(40);
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: V[0] + 3, y: V[1], button: "right", buttons: 2, pointerType: "pen", force: 0 }); await wait(250);
+    s = await estado();
+    assert.ok(s.panel && !s.menu, "el botón lateral con la punta en el aire (movimiento con buttons 2) no abrió el panel: " + JSON.stringify(s));
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: V[0] + 6, y: V[1], button: "none", buttons: 0, pointerType: "pen", force: 0 });
+    await ev(`LOW.drawing.pincelRapido.cerrar()`); await wait(800);
+    //  b4. un TRAZO de verdad y el clic derecho de la pulsación larga: se sigue descartando
+    await pen("mouseMoved", c[0] - 100, c[1] + 120, 0); await pen("mousePressed", c[0] - 100, c[1] + 120, .5, { buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 16; i++) { await pen("mouseMoved", c[0] - 100 + i * 6, c[1] + 120, .5, { buttons: 1 }); await wait(30); }
+    await pen("mouseReleased", c[0] - 4, c[1] + 120, 0, { buttons: 0, clickCount: 1 }); await wait(30);
+    await ev(`(()=>{ const el = document.elementFromPoint(${c[0] - 4}, ${c[1] + 120}); el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: ${c[0] - 4}, clientY: ${c[1] + 120}, button: 2 })); return true; })()`); await wait(250);
+    s = await estado();
+    assert.ok(!s.panel && !s.menu, "el clic derecho de la pulsación larga tras un trazo abrió el panel o el menú: " + JSON.stringify(s));
+
+    // ── 7c. SHIFT+B (el botón de la lapicera con una tecla asignada: lo que
+    //    sí anda con la Huion de Mauro) y la ayuda para configurarlo ──
+    const tecla = async (key, code, vk, mods = 0) => { await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: vk, modifiers: mods });
+      await send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk, modifiers: mods }); await wait(250); };
+    await ev(`(()=>{ document.activeElement?.blur?.(); return true; })()`);
+    await pen("mouseMoved", c[0] - 120, c[1] + 60, 0); await wait(80);
+    await tecla("B", "KeyB", 66, 8);
+    s = await estado();
+    assert.ok(s.panel && Math.abs(s.x - (c[0] - 120)) < 60, "Shift+B no abrió el panel del pincel donde está la lapicera: " + JSON.stringify(s));
+    assert.ok(await ev(`!!document.querySelector('#dzPincelRapido [data-pr="ayuda-lapicera"]')`), "el panel no explica cómo ponérselo al botón de la lapicera");
+    await ev(`(()=>{ document.activeElement?.blur?.(); return true; })()`);
+    await tecla("B", "KeyB", 66, 8);
+    assert.ok(!(await estado()).panel, "Shift+B otra vez no cerró el panel");
+    await ev(`dzMenuAction("lapicera")`); await wait(300);
+    assert.ok(await ev(`!!document.querySelector("#lapPrueba") && !document.querySelector("#overlay").hidden`), "Ayuda → «Configurar el botón de la lapicera…» no abrió la explicación");
+    await tecla("B", "KeyB", 66, 8);
+    const prueba = await ev(`({ cls: document.querySelector("#lapPrueba").className, txt: document.querySelector("#lapPrueba").textContent, panel: !!(document.querySelector("#dzPincelRapido") && !document.querySelector("#dzPincelRapido").hidden) })`);
+    assert.ok(/ok/.test(prueba.cls) && /Anda/.test(prueba.txt) && !prueba.panel, "la prueba en vivo no reconoció Shift+B (o abrió el panel por detrás): " + JSON.stringify(prueba));
+    await tecla("K", "KeyK", 75, 0);
+    assert.match(await ev(`document.querySelector("#lapPrueba").textContent`), /Llegó «K»/, "la prueba en vivo no dice qué tecla llegó");
+    await ev(`document.querySelector("#lapCerrar").click()`); await wait(200);
+    assert.ok(await ev(`document.querySelector("#overlay").hidden`), "«Listo» no cerró la explicación");
+
     // ── 8. a media pantalla el suavizado y su % se ven ──
     await preparar(1000, 560);
     const barra = await ev(`(()=>{ const box = document.querySelector("#dzToolOpts"), l = document.querySelector("#toSmoothLbl"), r = box.getBoundingClientRect(), q = l.getBoundingClientRect();

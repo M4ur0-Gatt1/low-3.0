@@ -1616,5 +1616,14 @@ LOW_I18N.registrar("en", "English", {
  "El recorrido y la curva": "The path and the curve",
  "3 · Miralo": "3 · Watch it",
  "¡Listo!": "Done!",
- "Paso {} de {}": "Step {} of {}"
+ "Paso {} de {}": "Step {} of {}",
+ "Opciones del pincel (donde está la lapicera)": "Brush options (where the pen is)",
+ "Configurar el botón de la lapicera…": "Set up the pen button…",
+ "Ponérselo al botón de la lapicera…": "Put it on the pen button…",
+ "Atajo:": "Shortcut:",
+ "El botón de la lapicera abre el pincel": "The pen button opens the brush",
+ "Probalo acá: apretá el botón de la lapicera…": "Try it here: press the pen button…",
+ "¡Anda! El botón manda Shift+B: va a abrir las opciones del pincel.": "It works! The button sends Shift+B: it will open the brush options.",
+ "Llegó «{}». Para abrir el pincel tiene que mandar Shift+B.": "Got «{}». To open the brush it has to send Shift+B.",
+ "Llegó un clic derecho. Funciona, pero sólo al levantar la punta quieta: asignale Shift+B para que sea inmediato.": "Got a right click. It works, but only when lifting a still tip: assign Shift+B to make it instant."
 });

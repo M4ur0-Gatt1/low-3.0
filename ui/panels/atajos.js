@@ -54,6 +54,9 @@
     ["hand", "Mano (navegar)", "Herramientas", "h", '[data-tool="hand"]'],
     ["pencil", "Lápiz", "Herramientas", "n", '[data-tool="pencil"]'],
     ["brush", "Pincel", "Herramientas", "b", '[data-tool="brush"]'],
+    // v3.36.1: el botón de la lapicera de Mauro (Huion) manda TECLAS bien y el
+    // «botón derecho» mal; en el controlador se le asigna Shift+B
+    ["pincelopciones", "Opciones del pincel (donde está la lapicera)", "Herramientas", "shift+b", null],
     ["pen", "Pluma vectorial", "Herramientas", "p", '[data-tool="pen"]'],
     ["eraser", "Borrador", "Herramientas", "e", '[data-tool="eraser"]'],
     ["bucket", "Balde de pintura", "Herramientas", "g", '[data-tool="bucket"]'],
@@ -228,6 +231,7 @@
     recorrido: () => (typeof global.dzRecorrido === "function" ? global.dzRecorrido() : clic("#tlRecorrido")()),
     exportar: clic("#tlExport"),
     camkey: () => (typeof global.dzCamKeyToggle === "function" ? global.dzCamKeyToggle() : clic("#tlCamKey")()),
+    pincelopciones: () => global.LOW?.drawing?.pincelRapido?.abrirAqui?.(),
     rig: clic("#dzRigBtn"),
   };
   for (const id of ["drawing", "animation", "cleanup", "color", "composite", "camera", "3d"])

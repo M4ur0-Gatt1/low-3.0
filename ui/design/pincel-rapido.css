@@ -42,3 +42,14 @@
   #designView .dz-optionsbar .dz-toolopts #toBrushStudio::after { content: "▤"; font-size: 13px; }
   #designView .dz-optionsbar .dz-toolopts .dz-unir-puntas::after { content: "Unir"; font-size: 11.5px; }
 }
+
+/* el pie del panel y la ayuda del botón de la lapicera */
+.dz-pincel-rapido .pr-pie { margin: 8px 0 0; padding-top: 7px; border-top: 1px solid var(--line, #2c2e33); color: var(--muted, #8b8f97); font-size: 11px; }
+.dz-pincel-rapido kbd, .lap-pasos kbd, .lap-prueba kbd { padding: 0 4px; border: 1px solid var(--line, #2c2e33); border-radius: 3px; font: 600 10.5px 'JetBrains Mono', monospace; }
+.dz-pincel-rapido .pr-link { border: 0; background: none; padding: 0; color: #33B5E8; font: inherit; cursor: pointer; text-decoration: underline; }
+.lap-pasos h3 { margin: 12px 0 4px; font-size: 13px; }
+.lap-pasos ol { margin: 0 0 4px 18px; padding: 0; line-height: 1.5; }
+.lap-nota { margin: 10px 0 0; font-size: 12px; color: var(--mut, #98988F); }
+.lap-prueba { margin: 12px 0 4px; padding: 14px; border: 1px dashed var(--line, #2c2e33); border-radius: 8px; text-align: center; outline: none; }
+.lap-prueba.ok { border: 1px solid #3fbf6f; background: rgba(63,191,111,.12); color: #8fe3ae; }
+.lap-prueba.otra { border: 1px solid #F0450E; background: rgba(240,69,14,.1); }
