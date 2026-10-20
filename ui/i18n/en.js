@@ -1625,5 +1625,7 @@ LOW_I18N.registrar("en", "English", {
  "Probalo acá: apretá el botón de la lapicera…": "Try it here: press the pen button…",
  "¡Anda! El botón manda Shift+B: va a abrir las opciones del pincel.": "It works! The button sends Shift+B: it will open the brush options.",
  "Llegó «{}». Para abrir el pincel tiene que mandar Shift+B.": "Got «{}». To open the brush it has to send Shift+B.",
- "Llegó un clic derecho. Funciona, pero sólo al levantar la punta quieta: asignale Shift+B para que sea inmediato.": "Got a right click. It works, but only when lifting a still tip: assign Shift+B to make it instant."
+ "Llegó un clic derecho. Funciona, pero sólo al levantar la punta quieta: asignale Shift+B para que sea inmediato.": "Got a right click. It works, but only when lifting a still tip: assign Shift+B to make it instant.",
+ "Con cualquier tableta": "With any tablet",
+ "Dónde está en cada marca": "Where it is for each brand"
 });

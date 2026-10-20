@@ -1602,5 +1602,7 @@ LOW_I18N.registrar("pt", "Português", {
  "Probalo acá: apretá el botón de la lapicera…": "Teste aqui: aperte o botão da caneta…",
  "¡Anda! El botón manda Shift+B: va a abrir las opciones del pincel.": "Funciona! O botão manda Shift+B: vai abrir as opções do pincel.",
  "Llegó «{}». Para abrir el pincel tiene que mandar Shift+B.": "Chegou «{}». Para abrir o pincel tem que mandar Shift+B.",
- "Llegó un clic derecho. Funciona, pero sólo al levantar la punta quieta: asignale Shift+B para que sea inmediato.": "Chegou um clique direito. Funciona, mas só ao levantar a ponta parada: atribua Shift+B para ser imediato."
+ "Llegó un clic derecho. Funciona, pero sólo al levantar la punta quieta: asignale Shift+B para que sea inmediato.": "Chegou um clique direito. Funciona, mas só ao levantar a ponta parada: atribua Shift+B para ser imediato.",
+ "Con cualquier tableta": "Com qualquer mesa digitalizadora",
+ "Dónde está en cada marca": "Onde fica em cada marca"
 });

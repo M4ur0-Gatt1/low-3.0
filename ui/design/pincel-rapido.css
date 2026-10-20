@@ -53,3 +53,4 @@
 .lap-prueba { margin: 12px 0 4px; padding: 14px; border: 1px dashed var(--line, #2c2e33); border-radius: 8px; text-align: center; outline: none; }
 .lap-prueba.ok { border: 1px solid #3fbf6f; background: rgba(63,191,111,.12); color: #8fe3ae; }
 .lap-prueba.otra { border: 1px solid #F0450E; background: rgba(240,69,14,.1); }
+.lap-marcas { margin: 0 0 4px 18px; padding: 0; line-height: 1.55; }

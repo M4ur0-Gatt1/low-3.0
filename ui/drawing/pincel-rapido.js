@@ -144,18 +144,22 @@
       <div class="sub">En LOW, <kbd>Shift+B</kbd> abre las opciones del pincel —espesor, suavizado, presión— ahí donde está la punta.
         Asignale esa combinación a un botón de la lapicera en el programa de tu tableta y queda a un clic.</div>
       <div class="lap-pasos">
-        <h3>Huion (Inspiroy, Kamvas)</h3>
-        <ol><li>Abrí <b>HuionTablet</b> → pestaña <b>Lápiz Digital</b>.</li>
-          <li>Hacé clic en el botón de la lapicera que quieras usar (el de arriba o el de abajo).</li>
-          <li>Elegí <b>Teclado</b> (atajo de teclado) y apretá <kbd>Shift</kbd> + <kbd>B</kbd>. Guardá.</li></ol>
-        <h3>Wacom</h3>
-        <ol><li>Abrí <b>Propiedades de la tableta Wacom</b> (o Wacom Center → Configuración del lápiz).</li>
-          <li>Elegí el botón lateral → <b>Pulsación de tecla…</b> → escribí <kbd>Shift+B</kbd> → Aceptar.</li></ol>
-        <h3>XP-Pen</h3>
-        <ol><li>Abrí <b>Pentablet</b> → <b>Lápiz</b>.</li>
-          <li>Elegí el botón → <b>Teclado</b> → <kbd>Shift</kbd> + <kbd>B</kbd> → Aceptar.</li></ol>
-        <p class="lap-nota">Si el botón queda como <b>botón derecho del ratón</b> también funciona, pero con Windows Ink el clic llega recién
-          al <b>levantar</b> la punta después de apoyarla quieta un momento, y no siempre. Con la tecla es inmediato.</p>
+        <h3>Con cualquier tableta</h3>
+        <ol><li>Abrí el <b>programa de tu tableta</b> (el controlador que trae la marca).</li>
+          <li>Buscá la configuración del <b>lápiz</b> o de sus <b>botones</b>.</li>
+          <li>En el botón que quieras, elegí la función de <b>teclado</b>. Según la marca se llama «Teclado», «Pulsación de tecla»,
+            «Atajo de teclado», «Keystroke» o «Shortcut».</li>
+          <li>Apretá <kbd>Shift</kbd> + <kbd>B</kbd>, guardá o aplicá, y probalo acá abajo.</li></ol>
+        <h3>Dónde está en cada marca</h3>
+        <ul class="lap-marcas">
+          <li><b>Huion</b> (Inspiroy, Kamvas): HuionTablet → <i>Lápiz Digital</i> → el botón → <i>Teclado</i>.</li>
+          <li><b>Wacom</b>: Propiedades de la tableta Wacom o Wacom Center → el botón lateral → <i>Pulsación de tecla…</i></li>
+          <li><b>XP-Pen</b>: Pentablet → <i>Lápiz</i> → el botón → <i>Teclado</i>.</li>
+          <li><b>Gaomon, Veikk, Ugee, Parblo</b> y otras: el mismo camino en su programa: <i>Lápiz</i> → el botón → <i>Teclado</i> o <i>Atajo</i>.</li>
+        </ul>
+        <p class="lap-nota">Si el botón queda como <b>botón derecho del ratón</b> también funciona, pero con Windows Ink el clic suele llegar recién
+          al <b>levantar</b> la punta después de apoyarla quieta un momento, y no siempre. Con la tecla es inmediato.
+          Si tu programa no deja asignar teclas, apretá <kbd>Shift+B</kbd> en el teclado: se abre donde está la lapicera.</p>
       </div>
       <div class="lap-prueba" id="lapPrueba" tabindex="-1">Probalo acá: apretá el botón de la lapicera…</div>
       <div class="modal-actions"><button type="button" class="ghost" id="lapCerrar">Listo</button></div>`);

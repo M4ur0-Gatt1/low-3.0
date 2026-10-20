@@ -12,21 +12,21 @@ Asignale **Shift+B** a un botón de la lapicera en el programa de tu tableta y l
 
 > En LOW: **Ayuda → Configurar el botón de la lapicera…** muestra estos mismos pasos y tiene una **prueba en vivo**: apretás el botón y te dice qué llegó.
 
-## Huion (Inspiroy, Kamvas)
+## Con cualquier tableta
 
-1. Abrí **HuionTablet** y entrá en la pestaña **Lápiz Digital**.
-2. Hacé clic en el botón de la lapicera que quieras usar (el de arriba o el de abajo).
-3. Elegí **Teclado** (atajo de teclado), apretá **Shift + B** y guardá.
+1. Abrí el **programa de tu tableta**: el controlador que trae la marca.
+2. Buscá la configuración del **lápiz** o de sus **botones**.
+3. En el botón que quieras, elegí la función de **teclado**. Según la marca se llama «Teclado», «Pulsación de tecla», «Atajo de teclado», «Keystroke» o «Shortcut».
+4. Apretá **Shift + B**, guardá o aplicá, y probalo en **Ayuda → Configurar el botón de la lapicera…**
 
-## Wacom
+## Dónde está en cada marca
 
-1. Abrí **Propiedades de la tableta Wacom** (o **Wacom Center → Configuración del lápiz**).
-2. Elegí el botón lateral, después **Pulsación de tecla…**, escribí **Shift+B** y aceptá.
-
-## XP-Pen
-
-1. Abrí **Pentablet** y entrá en **Lápiz**.
-2. Elegí el botón, después **Teclado**, apretá **Shift + B** y aceptá.
+| Marca | Camino |
+|---|---|
+| **Huion** (Inspiroy, Kamvas) | HuionTablet → *Lápiz Digital* → el botón → *Teclado* |
+| **Wacom** | Propiedades de la tableta Wacom (o Wacom Center) → el botón lateral → *Pulsación de tecla…* |
+| **XP-Pen** | Pentablet → *Lápiz* → el botón → *Teclado* |
+| **Gaomon, Veikk, Ugee, Parblo** y otras | El mismo camino en su programa: *Lápiz* → el botón → *Teclado* o *Atajo* |
 
 ## ¿Y «botón derecho del ratón»?
 
