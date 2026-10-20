@@ -58,7 +58,7 @@
         if (!(b.width > 0 && b.height > 0)) return;
         if (!im.hasAttribute("width")) im.setAttribute("width", r1(b.width));
         if (!im.hasAttribute("height")) im.setAttribute("height", r1(b.height));
-        if (global.DZ && global.DZ.sel === im) global.dzPositionHandle?.();
+        if (typeof DZ !== "undefined" && DZ.sel === im) global.dzPositionHandle?.();   // DZ es variable global de app.js, no de window
       };
       let b0 = null; try { b0 = im.getBBox(); } catch (_) { /* nada */ }
       if (b0 && b0.width > 0 && b0.height > 0) fijar();
