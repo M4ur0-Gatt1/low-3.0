@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { lowStore } from '../../../store/low-store';
 import type { WebGLDesign3D } from '../engine/webgl-design3d';
+import { TallerPanel3D, destinoTaller } from './TallerPanel3D';
 import { CATEGORIAS, cargarKitsPropios, guardarKitsPropios, kitAArchivo, kitDeArchivo, kitsDeFabrica,
   type Categoria, type EstiloKit, type Kit, type Pieza } from '../engine/biblioteca3d';
 
@@ -124,6 +125,13 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
   /* ── el editor de elementos ── */
   const editar = (p: Pieza | null, nombre: string, categoria: Categoria) => {
     const e = engine.current; if (!e) return;
+    // un PERSONAJE (o un maniquí) se edita en el Taller de personaje
+    if (p?.maniqui || categoria === 'personaje') {
+      destinoTaller.kitId = kit.fabrica ? null : kit.id; destinoTaller.piezaId = kit.fabrica ? null : p?.id ?? null;
+      if (!e.abrirTaller(p, nombre, p?.maniqui)) setAviso('Ya estás editando algo: guardalo o cancelalo primero');
+      setNueva(null);
+      return;
+    }
     // lo de fábrica se guarda en TU copia; lo tuyo, en su lugar
     destino.current = { kitId: kit.fabrica ? '' : kit.id, piezaId: kit.fabrica ? null : p?.id ?? null };
     if (!e.editarElemento(p, nombre, categoria)) setAviso('Ya estás editando un elemento: guardalo o cancelalo primero');
@@ -186,6 +194,8 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
     <select aria-label={etiqueta} value={valor} onChange={(ev) => cambiar(ev.target.value as Categoria)}>
       {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>;
 
+  /* ── EN EL TALLER DE PERSONAJE: su panel ── */
+  if (edicion && engine.current?.enTaller()) return <TallerPanel3D engine={engine}/>;
   /* ── EDITANDO: sólo el editor ── */
   if (edicion) return <div className="persp3d biblio3d biblio3d-editor">
     <p className="biblio3d-editando">Editando un elemento</p>

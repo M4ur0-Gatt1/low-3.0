@@ -1604,5 +1604,10 @@ LOW_I18N.registrar("pt", "Português", {
  "Llegó «{}». Para abrir el pincel tiene que mandar Shift+B.": "Chegou «{}». Para abrir o pincel tem que mandar Shift+B.",
  "Llegó un clic derecho. Funciona, pero sólo al levantar la punta quieta: asignale Shift+B para que sea inmediato.": "Chegou um clique direito. Funciona, mas só ao levantar a ponta parada: atribua Shift+B para ser imediato.",
  "Con cualquier tableta": "Com qualquer mesa digitalizadora",
- "Dónde está en cada marca": "Onde fica em cada marca"
+ "Dónde está en cada marca": "Onde fica em cada marca",
+ "Abrí o creá un documento de animación en LOW para recibir el personaje": "Abra ou crie um documento de animação no LOW para receber o personagem",
+ "Hoja de modelo · {}": "Folha de modelo · {}",
+ "Giro · {}": "Giro · {}",
+ "El giro de «{}»: {} vistas, una por cuadro, en la capa «{}» (al fondo) · Ctrl+Z la saca": "O giro de «{}»: {} vistas, uma por quadro, na camada «{}» (no fundo) · Ctrl+Z a remove",
+ "La hoja de modelo de «{}» ({} vistas, con las líneas de modelo) está en la capa «{}» (al fondo, para calcar) · Ctrl+Z la saca": "A folha de modelo de «{}» ({} vistas, com as linhas de modelo) está na camada «{}» (no fundo, para decalcar) · Ctrl+Z a remove"
 });

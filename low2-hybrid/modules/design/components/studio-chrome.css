@@ -220,3 +220,21 @@
  .studio-feather .studio-vertical input[type=range] { height:64px; }
  .studio-feather .studio-inspector { bottom:64px; }
 }
+
+/* ══ EL TALLER DE PERSONAJE (TallerPanel3D) ══ */
+.taller3d-presets { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:4px 0 10px; }
+.taller3d-presets button { display:flex; flex-direction:column; align-items:flex-start; gap:1px; padding:7px 9px; border-radius:8px;
+  border:1px solid var(--studio-line, #2c2e33); background:transparent; color:inherit; font:inherit; cursor:pointer; text-align:left; }
+.taller3d-presets button small { opacity:.65; font-size:10.5px; }
+.taller3d-presets button.on { border-color:#F0450E; background:rgba(240,69,14,.12); }
+.taller3d-mios { display:flex; flex-wrap:wrap; gap:5px; margin:4px 0 10px; }
+.taller3d-mios button { padding:4px 9px; border-radius:999px; border:1px solid var(--studio-line, #2c2e33); background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.taller3d-vistas { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 8px; }
+.taller3d-vistas button { flex:1 1 auto; padding:5px 7px; border-radius:7px; border:1px solid var(--studio-line, #2c2e33); background:transparent; color:inherit; font:inherit; font-size:11.5px; cursor:pointer; }
+.taller3d-vistas button[aria-pressed="true"] { border-color:#33B5E8; background:rgba(51,181,232,.14); }
+.taller3d-vistas label { display:inline-flex; align-items:center; gap:3px; font-size:11.5px; margin-right:6px; }
+.taller3d-ver { display:flex; flex-direction:column; gap:3px; margin:2px 0 8px; font-size:12px; }
+.taller3d-ver label, .taller3d-ver span { display:flex; align-items:center; gap:6px; cursor:pointer; }
+.taller3d-desl input[type=range] { flex:1 1 auto; min-width:0; }
+.taller3d-desl output, .taller3d .toma3d-fila output { min-width:34px; text-align:right; font-variant-numeric:tabular-nums; font-size:11px; }
+.taller3d-cierre { margin-top:12px; }

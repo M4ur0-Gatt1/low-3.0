@@ -10,9 +10,10 @@ import { PerspectivaPanel3D } from './PerspectivaPanel3D';
 import { RepetirPanel3D } from './RepetirPanel3D';
 import { TomaPanel3D } from './TomaPanel3D';
 import { BibliotecaPanel3D } from './BibliotecaPanel3D';
+import { TallerPanel3D } from './TallerPanel3D';
 import './studio-chrome.css';
 
-type Panel = 'brush' | 'scene' | 'tools' | 'guides' | 'persp' | 'toma' | 'biblioteca' | null;
+type Panel = 'brush' | 'scene' | 'tools' | 'guides' | 'persp' | 'toma' | 'biblioteca' | 'personaje' | null;
 const paths: Record<string,string> = {
  pencil:'M4 17 16 5l3 3L7 20H4v-3ZM14 7l3 3', guide:'M3 17 11 5l10 4-8 12L3 17ZM8 11l10 4',
  move:'M12 3v18M3 12h18M9 6l3-3 3 3M6 9l-3 3 3 3M18 9l3 3-3 3M9 18l3 3 3-3',
@@ -67,6 +68,8 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
  // VISTA VACÍA: hay cosas pero la cámara no muestra ninguna → «Encuadrar lo dibujado»
  const [vacia,setVacia]=useState(false);
  useEffect(()=>{const oir=(e:Event)=>setVacia(!!(e as CustomEvent).detail);window.addEventListener('low3d:vista-vacia',oir);return()=>window.removeEventListener('low3d:vista-vacia',oir);},[]);
+ // el Taller de personaje abre su panel (se entre desde la Biblioteca o desde Personaje)
+ useEffect(()=>{const oir=()=>{if(engine.current?.enTaller())setPanel('personaje');};window.addEventListener('low3d:taller',oir);return()=>window.removeEventListener('low3d:taller',oir);},[engine]);
  // GUÍA «Armar un fondo»: la primera vez que se abre el estudio; después, desde la ayuda (?)
  const [guia,setGuia]=useState(()=>{try{return localStorage.getItem('low3d:guia-fondos')!=='1';}catch{return false;}});
  const cerrarGuia=()=>{setGuia(false);try{localStorage.setItem('low3d:guia-fondos','1');}catch{/* sin almacenamiento */}};
@@ -148,15 +151,16 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
      </div></>}
    <div className="studio-header-actions studio-stage-tabs studio-surface" role="tablist" aria-label="Panel Escenario">
      {([['biblioteca','Escenografía','Biblioteca de escenografía: elementos para construir y su estilo'],['scene','Escena','Objetos, grupos y capas de la escena'],['guides','Guías','Guías y superficies para dibujar en el espacio'],
-        ['persp','Cámara','La cámara del layout: altura de los ojos, encuadre, lente y el cuadro del 2D'],['toma','Toma','Toma: un fondo, la toma animada o los planos para la multiplano'],['brush','Pincel','Ajustes del pincel']] as const).map(([id,nombre,ayuda])=>
+        ['persp','Cámara','La cámara del layout: altura de los ojos, encuadre, lente y el cuadro del 2D'],['toma','Toma','Toma: un fondo, la toma animada o los planos para la multiplano'],['personaje','Personaje','Taller de personaje: dibujá sobre un maniquí y armá sus vistas (frente, perfil, espalda) para la hoja de modelo'],['brush','Pincel','Ajustes del pincel']] as const).map(([id,nombre,ayuda])=>
        <button key={id} role="tab" data-panel={id} title={ayuda} aria-selected={panel===id} aria-pressed={panel===id} onClick={()=>toggle(id)}>{nombre}{id==='scene'&&<span className="studio-count">{state.objects.length}</span>}</button>)}
    </div>
    {panel&&<aside className="studio-inspector studio-surface" aria-label="Inspector 3D">
-     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Cámara del layout',toma:'Toma: fondos para el 2D',biblioteca:'Biblioteca de escenografía'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
+     <div className="studio-inspector-title"><h2>{{brush:'Pincel',guides:'Guías y superficies',scene:'Escena',tools:'Herramientas',persp:'Cámara del layout',toma:'Toma: fondos para el 2D',biblioteca:'Biblioteca de escenografía',personaje:'Taller de personaje'}[panel]}</h2><button aria-label="Cerrar inspector" title="Cerrar inspector (Esc)" onClick={()=>setPanel(null)}>×</button></div>
      <div className="studio-inspector-content">
        {panel==='tools'&&<Toolbar3D engine={engine}/>}
        {panel==='persp'&&<PerspectivaPanel3D engine={engine}/>}
        {panel==='toma'&&<TomaPanel3D engine={engine}/>}
+       {panel==='personaje'&&<TallerPanel3D engine={engine}/>}
        {panel==='biblioteca'&&<BibliotecaPanel3D engine={engine}/>}
        {panel==='brush'&&<PropertiesPanel3D section="brush"/>}
        {panel==='guides'&&<><div className="studio-guide-tools"><p>Una superficie orienta los trazos en el espacio.</p><div className="studio-option-grid">{(['plane','cylinder','sphere','torus','loft'] as const).map((type,i)=><button key={type} aria-pressed={state.activeSurface?.type===type} onClick={()=>state.setActiveSurface(state.activeSurface?.type===type?null:{type,params:{}})}>{['Plano','Cilindro','Esfera','Toro','Loft'][i]}</button>)}</div><label>Visibilidad de guías <output>{guideOpacity}%</output><input aria-label="Visibilidad de guías" type="range" min="0" max="100" value={guideOpacity} onChange={e=>onGuideOpacity(Number(e.target.value))}/></label><button className="studio-text-button" onClick={()=>engine.current?.deleteGuide()}>Quitar última guía</button></div><PropertiesPanel3D section="surface"/></>}

@@ -20,6 +20,7 @@
 import * as THREE from 'three';
 import { piezasDeCalle, pegarARed, estirarPuntas, franja, correr, MEDIDAS, type CalleRed, type TipoCalle } from './calles';
 import { ESTILO_BASE, type EstiloKit, type Pieza, type Categoria } from './biblioteca3d';
+import { MANIQUIES, maniquiValido, itemsDeManiqui, lineasDeModelo, partesDeManiqui, type Maniqui, type LineaModelo } from './maniqui3d';
 import { Terreno, LADO as LADO_TERRENO, PINCEL_INICIAL, type PincelTerreno, type Parche } from './terreno3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -97,6 +98,12 @@ interface StrokeRecord {
    *  la malla (calzada, veredas, cordones, pintura) se arma con la red entera,
    *  porque los cruces dependen de las otras calles. Ver calles.ts. */
   calle?: TipoCalle;
+  /** TALLER DE PERSONAJE (maniqui3d.ts): la parte del maniquí (cabeza,
+   *  brazo-izq…). En un volumen del maniquí, cuál es; en un trazo, sobre qué
+   *  parte se dibujó: la sigue cuando cambian las proporciones (o la pose). */
+  parte?: string;
+  /** true = es un volumen DEL MANIQUÍ (no un trazo del personaje). */
+  maniqui?: boolean;
 }
 
 interface Command {
@@ -166,6 +173,9 @@ export interface Low3DProject {
     calle?: TipoCalle;
     /** true = la figura lleva cara sólida ADEMÁS del contorno (una sola pieza). */
     filled?: boolean;
+    /** la parte del maniquí (ver StrokeRecord) */
+    parte?: string;
+    maniqui?: boolean;
   }>;
   /** El relieve (terreno3d.ts: centímetros Int16 en base64; vacío = plano). */
   terreno?: string;
@@ -316,6 +326,8 @@ export class WebGLDesign3D {
     limite?: LimiteApoyo;
     /** El cuerpo del elemento donde arrancó (todas sus piezas macizas). */
     cuerpos?: THREE.Object3D[];
+    /** La parte del maniquí sobre la que se dibuja (taller de personaje). */
+    parte?: string;
   } | null = null;
   private downScreen = new THREE.Vector2();
   /** RECTAS A LOS EJES (v3.29.3), como el «Draw Shape» de Feather: al SOLTAR,
@@ -655,6 +667,7 @@ export class WebGLDesign3D {
     window.removeEventListener('keyup', this.onKeyUp);
     this.cursorEl?.remove();
     this.freeDepthEl?.remove();
+    this.lineasEl?.remove();
     this.joyLecturaEl?.remove();
     this.lassoEl?.remove();
     this.vpEl?.remove();
@@ -2221,6 +2234,8 @@ export class WebGLDesign3D {
     while (obj && !obj.userData.strokeId) obj = obj.parent;
     if (!obj) return null;
     const rec = this.strokes.find((s) => s.id === obj!.userData.strokeId) ?? null;
+    // en el taller el maniquí es el soporte: la goma y la flecha no lo agarran
+    if (rec?.maniqui && this.taller) return null;
     // los trazos de una capa bloqueada son inertes: no se seleccionan ni se
     // agarran para mover/liquify/editar.
     return rec && this.isLayerLocked(rec.layerId) ? null : rec;
@@ -3078,6 +3093,7 @@ export class WebGLDesign3D {
       // sigue la malla de una guía/superficie real (curvas incluidas).
       drawTarget: this.tool === 'pencil' && surf && surf.kind !== 'stroke' && surf.kind !== 'box' ? surf.target : undefined,
       cuerpos: this.tool === 'pencil' ? surf?.cuerpos : undefined,
+      parte: this.parteDelApoyo(surf),
       limite: estricto && kind === 'stroke' && surf ? this.limiteDelApoyo(surf) : undefined,
       ejes: hit.ejes ? [hit.ejes[0].clone(), hit.ejes[1].clone()] : undefined,
       // PLANO BLOQUEADO para todo el trazo. Si el soporte no traía plano
@@ -4175,7 +4191,11 @@ export class WebGLDesign3D {
     if (guardar) {
       pieza = this.elementoDeLaMesa();
       if (!pieza) { this.avisar('La mesa está vacía: dibujá el elemento antes de guardarlo (o «Cancelar»)'); return { ok: false, pieza: null }; }
+      if (this.taller) { pieza.maniqui = { ...this.taller.m }; pieza.categoria = 'personaje'; }
     }
+    const eraTaller = !!this.taller;
+    this.taller = null;
+    if (this.lineasEl) this.lineasEl.style.display = 'none';
     this.calleCancelar(); this.aguaCancelar(); this.cajaCancelar();
     this.edicion = null;
     // fuera lo del elemento; vuelve TU escena con sus mismos objetos
@@ -4198,9 +4218,215 @@ export class WebGLDesign3D {
     this.applyLayerStyles(); this.publishObjects();
     this.undoStack = ed.deshacer; this.redoStack = ed.rehacer;
     window.dispatchEvent(new Event('low3d:edicion'));
+    if (eraTaller) window.dispatchEvent(new Event('low3d:taller'));
     window.dispatchEvent(new Event('low3d:history'));
-    this.avisar(pieza ? '«' + pieza.nombre + '» guardado en la escenografía · elegilo en la biblioteca para colocarlo' : 'Edición cancelada: tu escena quedó como estaba');
+    this.avisar(pieza ? '«' + pieza.nombre + '» guardado en la ' + (eraTaller ? 'biblioteca de personajes' : 'escenografía') + ' · elegilo en la biblioteca para colocarlo' : 'Edición cancelada: tu escena quedó como estaba');
     return { ok: true, pieza };
+  }
+
+  // ══ EL TALLER DE PERSONAJE (maniqui3d.ts) ══════════════════════════════════
+  // Mauro: «un módulo de diseño de personaje con todas las herramientas al
+  // mejor estilo Grease Pencil… una biblioteca de maniquíes distintos que
+  // también sirva para la composición de fondos». Sin IA: el personaje se
+  // dibuja SOBRE un maniquí y se gira de verdad. Es el editor de elementos
+  // (la escena espera afuera, intacta) con el maniquí, sus proporciones, el
+  // giradiscos, las líneas de modelo y la hoja de modelo para el 2D. Lo que se
+  // guarda es un elemento de la categoría Personajes con sus proporciones:
+  // se reabre en el taller o se coloca en la escena como figura.
+  private taller: { m: Maniqui; lineas: boolean; vista: number } | null = null;
+  private lineasEl: HTMLCanvasElement | null = null;
+  enTaller(): { m: Maniqui; lineas: boolean; vista: number } | null {
+    return this.taller ? { m: { ...this.taller.m }, lineas: this.taller.lineas, vista: this.taller.vista } : null;
+  }
+  /** Abre el taller con un personaje de la biblioteca (o uno nuevo con esas proporciones). */
+  abrirTaller(p: Pieza | null, nombre: string, m?: Maniqui): boolean {
+    const maniqui = maniquiValido(p?.maniqui ?? m ?? MANIQUIES[3].m);
+    if (!this.editarElemento(p, nombre || p?.nombre || 'Personaje', 'personaje')) return false;
+    this.taller = { m: maniqui, lineas: true, vista: 25 };
+    if (!this.strokes.some((r) => r.maniqui)) this.ponerManiqui(maniqui);
+    this.undoStack = []; this.redoStack = [];
+    this.vistaPersonaje(25);
+    window.dispatchEvent(new Event('low3d:taller'));
+    window.dispatchEvent(new Event('low3d:history'));
+    this.avisar('Taller de personaje: dibujá sobre el maniquí (los trazos se pegan a cada parte y la siguen) · las vistas giran el personaje · «Guardar» lo lleva a la biblioteca');
+    return true;
+  }
+  /** Las proporciones nuevas (un paso de Ctrl+Z). Los trazos dibujados sobre
+   *  una parte la siguen: se corren con su articulación y se estiran con ella. */
+  setManiqui(m: Partial<Maniqui>): boolean {
+    if (!this.taller) return false;
+    const antes = { ...this.taller.m }, despues = maniquiValido({ ...antes, ...m });
+    if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+    this.ponerManiqui(despues);
+    this.pushCmd({ undo: () => this.ponerManiqui(antes), redo: () => this.ponerManiqui(despues) });
+    return true;
+  }
+  /** Mientras se arrastra un deslizador: se ve al instante, sin pasos de Ctrl+Z. */
+  verManiqui(m: Partial<Maniqui>): void {
+    if (!this.taller) return;
+    const nuevo = maniquiValido({ ...this.taller.m, ...m });
+    if (JSON.stringify(nuevo) !== JSON.stringify(this.taller.m)) this.ponerManiqui(nuevo);
+  }
+  /** Al soltar el deslizador: UN paso de Ctrl+Z desde como estaba antes de arrastrar. */
+  confirmarManiqui(antes: Maniqui): void {
+    if (!this.taller) return;
+    const a = maniquiValido(antes), d = { ...this.taller.m };
+    if (JSON.stringify(a) === JSON.stringify(d)) return;
+    this.pushCmd({ undo: () => this.ponerManiqui(a), redo: () => this.ponerManiqui(d) });
+  }
+  /** El maniquí transparente, para ver el dibujo solo (sigue siendo apoyo). */
+  setManiquiFantasma(on: boolean): void {
+    for (const r of this.strokes) if (r.maniqui) r.object.traverse((o) => {
+      const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (!mat || !(o as THREE.Mesh).isMesh) return;
+      mat.transparent = on || r.baseOpacity < 1; mat.opacity = on ? 0.22 : 1; mat.depthWrite = !on; mat.needsUpdate = true;
+    });
+    if (this.taller) (this.taller as { fantasma?: boolean }).fantasma = on;
+  }
+  private ponerManiqui(m: Maniqui): void {
+    if (!this.taller) return;
+    const items = itemsDeManiqui(m);
+    const partes = new Map(this.strokes.filter((r) => r.maniqui && r.parte).map((r) => [r.parte!, r] as [string, StrokeRecord]));
+    for (const it of items) {
+      const v = partes.get(it.parte!);
+      const nuevos = it.points.map((q) => new THREE.Vector3(q[0], q[1], q[2]));
+      if (!v) {
+        const rec = this.registroDeItem({ ...it, id: '', layerId: this.activeLayerId() });
+        if (rec) this.addStrokeRecord(rec);
+        continue;
+      }
+      const vieja = v.object.position.clone(), nueva = new THREE.Vector3().fromArray(it.position);
+      const s0 = new THREE.Box3().setFromPoints(v.points).getSize(new THREE.Vector3());
+      const s1 = new THREE.Box3().setFromPoints(nuevos).getSize(new THREE.Vector3());
+      const esc = new THREE.Vector3(s0.x > 1e-6 ? s1.x / s0.x : 1, s0.y > 1e-6 ? s1.y / s0.y : 1, s0.z > 1e-6 ? s1.z / s0.z : 1);
+      // los trazos de esa parte la siguen: la articulación se corre y la forma se estira desde ella
+      const M = new THREE.Matrix4().makeTranslation(nueva.x, nueva.y, nueva.z)
+        .multiply(new THREE.Matrix4().makeScale(esc.x, esc.y, esc.z))
+        .multiply(new THREE.Matrix4().makeTranslation(-vieja.x, -vieja.y, -vieja.z));
+      for (const r of this.strokes) if (!r.maniqui && r.parte === it.parte) { r.object.applyMatrix4(M); r.object.updateMatrixWorld(true); }
+      v.points = nuevos; v.pressures = nuevos.map(() => 1);
+      v.object.position.copy(nueva);
+      v.brush = { ...v.brush, color: m.color };
+      this.rebuildStrokeMesh(v);
+    }
+    this.taller.m = m;
+    this.applyLayerStyles(); this.publishObjects();
+    if ((this.taller as { fantasma?: boolean }).fantasma) this.setManiquiFantasma(true);
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  /** La parte del maniquí que hay bajo el apoyo de un trazo: el volumen de la
+   *  parte o un trazo ya pegado a ella (dibujar el pelo sobre la cabeza). */
+  private parteDelApoyo(hit: HitInfo | null | undefined): string | undefined {
+    if (!this.taller || !hit?.target) return undefined;
+    const rec = this.strokes.find((s) => s.object === hit.target || s.object === hit.target!.parent);
+    return rec?.parte;
+  }
+  /** EL GIRADISCOS: la cámara gira alrededor del personaje (0 = frente, 90 =
+   *  perfil, 180 = espalda), a la altura del medio del cuerpo, encuadrándolo. */
+  vistaPersonaje(grados: number): void {
+    if (!this.taller) return;
+    if (this.view !== 'persp') this.setView('persp');
+    const alto = this.taller.m.alto, mira = new THREE.Vector3(0, alto * 0.52, 0);
+    const fov = ((this.perspCamera.fov || 45) * Math.PI) / 180;
+    const dist = (alto * 0.8) / Math.tan(fov / 2);   // entero, de la cabeza a los pies, con aire
+    const a = (grados * Math.PI) / 180;
+    this.camera.position.set(Math.sin(a) * dist, mira.y, Math.cos(a) * dist);
+    this.controls.target.copy(mira);
+    this.camera.lookAt(mira); this.controls.update();
+    this.taller.vista = ((grados % 360) + 360) % 360;
+    window.dispatchEvent(new Event('low3d:view'));
+  }
+  setLineasModelo(on: boolean): void { if (this.taller) { this.taller.lineas = on; window.dispatchEvent(new Event('low3d:taller')); } }
+  lineasModelo(): LineaModelo[] { return this.taller ? lineasDeModelo(this.taller.m) : []; }
+  /** Las líneas de modelo sobre la vista: cada altura del maniquí proyectada,
+   *  de lado a lado, con su nombre (como en una hoja de modelo). */
+  private pintarLineasModelo(): void {
+    const ver = !!(this.taller && this.taller.lineas);
+    if (!ver) { if (this.lineasEl) this.lineasEl.style.display = 'none'; return; }
+    if (!this.lineasEl) {
+      this.lineasEl = document.createElement('canvas');
+      this.lineasEl.className = 'low3d-lineas-modelo';
+      Object.assign(this.lineasEl.style, { position: 'absolute', left: '0', top: '0', pointerEvents: 'none', zIndex: '6' } as CSSStyleDeclaration);
+      this.canvas.parentElement?.appendChild(this.lineasEl);
+    }
+    const c = this.lineasEl, W = this.canvas.clientWidth, Hh = this.canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+    if (c.width !== Math.round(W * dpr) || c.height !== Math.round(Hh * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(Hh * dpr); c.style.width = W + 'px'; c.style.height = Hh + 'px'; }
+    c.style.display = 'block';
+    const g = c.getContext('2d'); if (!g) return;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, Hh);
+    const cam = this.camera as THREE.Camera;
+    g.font = '600 10px system-ui, sans-serif'; g.textBaseline = 'bottom'; g.textAlign = 'right';
+    // los nombres van a la IZQUIERDA del personaje (contra el borde los tapaba la barra del pincel)
+    const m = this.taller!.m, H = m.alto / m.cabezas;
+    const p0 = new THREE.Vector3(0, 0, 0).project(cam), p1 = new THREE.Vector3(0, m.alto, 0).project(cam);
+    const pxm = Math.abs(((1 - p1.y) / 2 - (1 - p0.y) / 2) * Hh) / Math.max(1e-6, m.alto);
+    const xEt = Math.max(70, ((p0.x + 1) / 2) * W - (Math.max(m.hombros, m.cadera) * H * 0.5 + H * 0.45) * pxm - 12);
+    for (const l of lineasDeModelo(m)) {
+      const v = new THREE.Vector3(0, l.y, 0).project(cam);
+      if (v.z > 1) continue;
+      const y = ((1 - v.y) / 2) * Hh;
+      g.strokeStyle = l.id === 'piso' ? 'rgba(240,69,14,.55)' : 'rgba(51,181,232,.55)';
+      g.setLineDash(l.id === 'piso' ? [] : [6, 5]); g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(W, y + 0.5); g.stroke();
+      g.fillStyle = 'rgba(51,181,232,.95)'; g.fillText(l.nombre, xEt, y - 2);
+    }
+  }
+  static nombreVista(grados: number): string {
+    const g = ((Math.round(grados) % 360) + 360) % 360;
+    return ({ 0: 'Frente', 45: 'Tres cuartos', 90: 'Perfil', 135: 'Tres cuartos de espalda', 180: 'Espalda', 225: 'Tres cuartos de espalda (otro lado)', 270: 'Perfil (otro lado)', 315: 'Tres cuartos (otro lado)' } as Record<number, string>)[g] || g + '°';
+  }
+  /** LA HOJA DE MODELO: el personaje SIN PERSPECTIVA desde cada ángulo, con el
+   *  MISMO encuadre en todas las vistas (así las líneas de modelo coinciden),
+   *  fondo transparente. Para mandar al 2D. */
+  hojaDeModelo(W: number, H: number, grados: number[] = [0, 45, 90, 135, 180], op: { maniqui?: boolean } = {}):
+    { vistas: { grados: number; nombre: string; png: string }[]; abajo: number; arriba: number; lineas: LineaModelo[] } | null {
+    if (!this.taller || !(W > 0) || !(H > 0) || !grados.length) return null;
+    this.detachRig();
+    const m = this.taller.m;
+    const box = new THREE.Box3();
+    for (const r of this.strokes) if (r.kind !== 'guide' && (op.maniqui !== false || !r.maniqui)) { r.object.updateMatrixWorld(true); box.expandByObject(r.object); }
+    if (box.isEmpty()) return null;
+    let arriba = Math.max(box.max.y, m.alto) + m.alto * 0.06, abajo = Math.min(0, box.min.y) - m.alto * 0.04;
+    let alto = arriba - abajo, ancho = alto * (W / H);
+    const medio = (arriba + abajo) / 2;
+    // el personaje GIRA: tiene que entrar de costado en todas las vistas (los
+    // brazos abiertos se cortaban en las vistas angostas de la hoja)
+    // (medido en los vértices: las esquinas de la caja lo exageraban y achicaban todo)
+    let radio = 0;
+    const pv = new THREE.Vector3();
+    for (const r of this.strokes) if (r.kind !== 'guide' && (op.maniqui !== false || !r.maniqui)) r.object.traverse((o) => {
+      const pos = (o as THREE.Mesh).geometry?.getAttribute?.('position');
+      if (!pos) return;
+      for (let i = 0; i < pos.count; i++) { pv.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld); radio = Math.max(radio, Math.hypot(pv.x, pv.z)); }
+    });
+    if (radio * 2.16 > ancho) { alto *= (radio * 2.16) / ancho; ancho = radio * 2.16; arriba = medio + alto / 2; abajo = medio - alto / 2; }
+    const antes = new Map<THREE.Object3D, boolean>();
+    for (const o of this.scene.children) { antes.set(o, o.visible); o.visible = o === this.strokesGroup || (o as THREE.Light).isLight === true; }
+    const ocultos: THREE.Object3D[] = [];
+    if (op.maniqui === false) for (const r of this.strokes) if (r.maniqui && r.object.visible) { r.object.visible = false; ocultos.push(r.object); }
+    const fondo = this.scene.background, niebla = this.scene.fog;
+    this.scene.background = null; this.scene.fog = null;
+    const rr = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    const vistas: { grados: number; nombre: string; png: string }[] = [];
+    try {
+      rr.setPixelRatio(1); rr.setSize(W, H, false);
+      rr.outputColorSpace = this.renderer.outputColorSpace; rr.toneMapping = this.renderer.toneMapping; rr.toneMappingExposure = this.renderer.toneMappingExposure;
+      rr.setClearColor(0x000000, 0);
+      for (const g of grados) {
+        const a = (g * Math.PI) / 180;
+        const cam = new THREE.OrthographicCamera(-ancho / 2, ancho / 2, alto / 2, -alto / 2, 0.01, 2000);
+        cam.position.set(Math.sin(a) * 60, medio, Math.cos(a) * 60);
+        cam.lookAt(0, medio, 0); cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
+        rr.render(this.scene, cam);
+        vistas.push({ grados: g, nombre: WebGLDesign3D.nombreVista(g), png: rr.domElement.toDataURL('image/png') });
+      }
+    } finally {
+      rr.dispose(); rr.forceContextLoss();
+      for (const [o, v] of antes) o.visible = v;
+      for (const o of ocultos) o.visible = true;
+      this.scene.background = fondo; this.scene.fog = niebla;
+    }
+    return { vistas, abajo, arriba, lineas: lineasDeModelo(m) };
   }
 
   // ══ PIEZAS DE LA BIBLIOTECA (N) ═════════════════════════════════════════════
@@ -4877,7 +5103,7 @@ export class WebGLDesign3D {
     }
     let { points, pressures } = this.current;
     const apoyo = this.apoyoDe(this.current.drawPlane);
-    const { kind, baseNormal, noSupport, surfaceId } = this.current;
+    const { kind, baseNormal, noSupport, surfaceId, parte } = this.current;
     this.current = null;
     if (points.length < 2) return;
 
@@ -4916,6 +5142,7 @@ export class WebGLDesign3D {
       id: `stroke-${this.seq++}`, object: group, points, pressures, kind,
       layerId: this.activeLayerId(), baseOpacity: this.brush.opacity, brush: { ...this.brush },
       apoyo: kind === 'stroke' ? apoyo : undefined,
+      parte: kind === 'stroke' ? parte : undefined,
     };
     group.userData.strokeId = rec.id;
     this.addStrokeRecord(rec);
@@ -6814,6 +7041,7 @@ export class WebGLDesign3D {
       groupId: rec.groupId || undefined, solid: rec.solid || undefined,
       shape: rec.shape || undefined, apoyo: rec.apoyo || undefined, caja: rec.kind === 'box' || undefined, hueco: (rec.kind === 'box' && rec.object.userData.hueco) || undefined,
       calle: rec.calle || undefined,
+      parte: rec.parte || undefined, maniqui: rec.maniqui || undefined,
     };
   }
 
@@ -6890,6 +7118,8 @@ export class WebGLDesign3D {
     rec.solid = item.solid || undefined;
     rec.shape = item.shape || undefined;
     rec.groupId = item.groupId || undefined;
+    rec.parte = typeof item.parte === 'string' ? item.parte.slice(0, 40) : undefined;
+    rec.maniqui = item.maniqui || undefined;
     if (Array.isArray(item.apoyo) && item.apoyo.length === 4 && item.apoyo.every((v: unknown) => Number.isFinite(Number(v))))
       rec.apoyo = item.apoyo.map(Number) as [number, number, number, number];
     return rec;
@@ -7037,6 +7267,7 @@ export class WebGLDesign3D {
     this.perspPreRender();
     this.grid.seguir(this.camera as THREE.Camera);   // el piso sin fin va debajo de la cámara
     this.renderer.render(this.scene, this.camera as THREE.Camera);
+    if (this.taller || (this.lineasEl && this.lineasEl.style.display !== 'none')) this.pintarLineasModelo();
     // el cubo copia la orientación de la cámara y se dibuja aparte: su canvas
     // no entra en el picking del dibujo ni en el export
     this.refrescarNavCubo();

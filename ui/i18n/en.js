@@ -1627,5 +1627,10 @@ LOW_I18N.registrar("en", "English", {
  "Llegó «{}». Para abrir el pincel tiene que mandar Shift+B.": "Got «{}». To open the brush it has to send Shift+B.",
  "Llegó un clic derecho. Funciona, pero sólo al levantar la punta quieta: asignale Shift+B para que sea inmediato.": "Got a right click. It works, but only when lifting a still tip: assign Shift+B to make it instant.",
  "Con cualquier tableta": "With any tablet",
- "Dónde está en cada marca": "Where it is for each brand"
+ "Dónde está en cada marca": "Where it is for each brand",
+ "Abrí o creá un documento de animación en LOW para recibir el personaje": "Open or create an animation document in LOW to receive the character",
+ "Hoja de modelo · {}": "Model sheet · {}",
+ "Giro · {}": "Turnaround · {}",
+ "El giro de «{}»: {} vistas, una por cuadro, en la capa «{}» (al fondo) · Ctrl+Z la saca": "The turnaround of «{}»: {} views, one per frame, in layer «{}» (at the bottom) · Ctrl+Z removes it",
+ "La hoja de modelo de «{}» ({} vistas, con las líneas de modelo) está en la capa «{}» (al fondo, para calcar) · Ctrl+Z la saca": "The model sheet of «{}» ({} views, with the model lines) is in layer «{}» (at the bottom, for tracing) · Ctrl+Z removes it"
 });

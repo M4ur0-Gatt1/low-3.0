@@ -120,6 +120,62 @@
     responderP({ ok: true, aviso: texto });
   }
 
+  /** EL TALLER DE PERSONAJE (estudio 3D): la HOJA DE MODELO —las vistas lado
+   *  a lado, sin perspectiva, con las líneas de modelo y el nombre de cada
+   *  vista— en una capa de referencia al fondo; o el GIRO EN CUADROS: cada
+   *  vista en un cuadro de esa capa, para animar el giro. Volver a mandar el
+   *  mismo personaje reemplaza la capa. Un paso de Ctrl+Z. */
+  function recibirHoja(m, f) {
+    const sc = escena();
+    const responderH = (r) => responder(f, { type: "low:hoja-recibida", ...r });
+    if (!sc || typeof DZ.doc.setToma3D !== "function") {
+      const error = "Abrí o creá un documento de animación en LOW para recibir el personaje";
+      aviso(error);
+      return responderH({ error });
+    }
+    const vistas = (Array.isArray(m.vistas) ? m.vistas : []).filter((v) => v && typeof v.png === "string" && /^data:image\/png;base64,/.test(v.png));
+    if (!vistas.length) return responderH({ error: "no llegaron las vistas" });
+    const W = sc.width || 1920, H = sc.height || 1080;
+    const nombre = String(m.nombre || "Personaje").slice(0, 60);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    if (typeof global.dzDocCommit === "function") global.dzDocCommit();
+    let ly, texto;
+    if (m.modo === "giro") {
+      const items = vistas.map((v, i) => ({ cuadro: i + 1,
+        content: `<image data-low="toma-3d" href="${v.png}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid meet"/>` }));
+      ly = DZ.doc.setToma3D("giro:" + nombre, items, { hasta: vistas.length, titulo: "Giro · " + nombre });
+      texto = "El giro de «" + nombre + "»: " + vistas.length + " vistas, una por cuadro, en la capa «" + (ly && ly.name) + "» (al fondo) · Ctrl+Z la saca";
+    } else {
+      // a la izquierda, un margen para los rótulos de las líneas (no tapan la primera vista)
+      const n = vistas.length, margen = Math.round(W * 0.08), anchoVista = (W - margen) / n, altoImg = Math.round(H * 0.9);
+      const arriba = Number(m.arriba), abajo = Number(m.abajo), rango = arriba - abajo;
+      let svg = "";
+      vistas.forEach((v, i) => {
+        svg += `<image data-low="toma-3d" href="${v.png}" x="${(margen + i * anchoVista).toFixed(1)}" y="0" width="${anchoVista.toFixed(1)}" height="${altoImg}" preserveAspectRatio="xMidYMid meet"/>`;
+        svg += `<text x="${(margen + (i + 0.5) * anchoVista).toFixed(1)}" y="${(altoImg + (H - altoImg) * 0.62).toFixed(1)}" text-anchor="middle" font-family="Figtree, sans-serif" font-size="${Math.round(H * 0.032)}" fill="#55606b">${esc(v.nombre || "")}</text>`;
+      });
+      if (Number.isFinite(rango) && rango > 0) for (const l of (Array.isArray(m.lineas) ? m.lineas : [])) {
+        const y = ((arriba - Number(l.y)) / rango) * altoImg;
+        if (!(y >= 0 && y <= altoImg)) continue;
+        svg += `<line x1="0" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}" stroke="#33B5E8" stroke-width="2" stroke-dasharray="14 9" opacity=".75"/>`;
+        svg += `<text x="10" y="${(y - 6).toFixed(1)}" font-family="Figtree, sans-serif" font-size="${Math.round(H * 0.022)}" fill="#2a8fbd">${esc(l.nombre || "")}</text>`;
+      }
+      ly = DZ.doc.setToma3D("hoja:" + nombre, [{ cuadro: 1, content: svg }],
+        { hasta: Math.max(1, sc.lastFrame ? sc.lastFrame() : 1), titulo: "Hoja de modelo · " + nombre });
+      texto = "La hoja de modelo de «" + nombre + "» (" + n + " vistas, con las líneas de modelo) está en la capa «" + (ly && ly.name) + "» (al fondo, para calcar) · Ctrl+Z la saca";
+    }
+    if (!ly) return responderH({ error: "no se pudo armar la capa" });
+    try {
+      if (typeof global.dzBuildLayers === "function") global.dzBuildLayers();
+      if (typeof global.dzTlFramesRender === "function") global.dzTlFramesRender();
+      if (typeof global.dzMarkDirty === "function") global.dzMarkDirty();
+      if (typeof global.dzCapasEnMesa === "function") global.dzCapasEnMesa();
+    } catch (e) { console.warn("[hoja de modelo]", e); }
+    if (typeof global.closeL3d === "function") global.closeL3d();
+    aviso(texto);
+    responderH({ ok: true, aviso: texto });
+  }
+
   global.addEventListener("message", (ev) => {
     const f = marco();
     if (!f || ev.source !== f.contentWindow) return;
@@ -135,6 +191,8 @@
       recibirToma(m, f);
     } else if (m.type === "low:send-planos") {
       recibirPlanos(m, f);
+    } else if (m.type === "low:send-hoja-modelo") {
+      recibirHoja(m, f);
     } else if (m.type === "low:guardar-kit" && typeof m.json === "string") {
       // los kits de la biblioteca 3D (.lowkit): dentro del estudio las descargas no andan
       Promise.resolve(typeof api !== "undefined" && api.save_file("", m.json, String(m.name || "kit.lowkit")))

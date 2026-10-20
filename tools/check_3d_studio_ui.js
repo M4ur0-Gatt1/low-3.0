@@ -32,7 +32,8 @@ async function main(){
    await assert('!!document.querySelector(".studio-guia")','La primera vez no aparece la guía para armar un fondo');
    await click('.studio-guia-ok');
    await assert('!document.querySelector(".studio-guia") && localStorage.getItem("low3d:guia-fondos")==="1"','«Entendido» no cerró la guía o no se recuerda');
-   await assert('!document.querySelector(".studio-inspector") && document.querySelectorAll("button").length<=26','La vista inicial vuelve a saturarse de paneles');
+   // 27: la pestaña «Personaje» (el Taller de personaje, v3.37) es la única que se sumó a propósito
+   await assert('!document.querySelector(".studio-inspector") && document.querySelectorAll("button").length<=27','La vista inicial vuelve a saturarse de paneles');
    // v3.34: se dibuja sobre algo que se vea (Feather); desde Arriba, el piso
    await evaluate('__low3d.newProject();__low3d.setView("top")');
    await click('[data-tool="pencil"]');await stroke(350,330,180,55);

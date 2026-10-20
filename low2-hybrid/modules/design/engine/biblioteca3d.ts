@@ -22,12 +22,15 @@
    Este módulo es sólo DATOS (sin three): los kits de fábrica se fabrican acá
    como nubes de puntos (volúmenes) y polilíneas (líneas). */
 import type { ItemProyecto } from './webgl-design3d';
+import { MANIQUIES, itemsDeManiqui, maniquiValido, tamDeManiqui, type Maniqui } from './maniqui3d';
 
-export type Categoria = 'edificio' | 'casa' | 'arbol' | 'vegetacion' | 'calle' | 'roca' | 'otro';
+export type Categoria = 'edificio' | 'casa' | 'arbol' | 'vegetacion' | 'calle' | 'roca' | 'otro' | 'personaje';
 export const CATEGORIAS: { id: Categoria; nombre: string }[] = [
   // decorados (lo que arma el lugar), ambientación (lo que lo viste), utilería (lo que se usa)
   { id: 'casa', nombre: 'Casas' }, { id: 'edificio', nombre: 'Edificios' }, { id: 'arbol', nombre: 'Árboles' },
   { id: 'vegetacion', nombre: 'Plantas' }, { id: 'calle', nombre: 'Ambientación' }, { id: 'roca', nombre: 'Rocas' }, { id: 'otro', nombre: 'Utilería' },
+  // los personajes del TALLER DE PERSONAJE (maniqui3d.ts): figuras para dar escala a un fondo
+  { id: 'personaje', nombre: 'Personajes' },
 ];
 
 /** Cómo varía cada copia al colocarla. */
@@ -41,6 +44,8 @@ export interface Pieza {
   /** ancho (x), alto (y), fondo (z) en metros */
   tam: [number, number, number];
   variacion: Variacion;
+  /** un PERSONAJE del taller: sus proporciones (se reabre con los deslizadores) */
+  maniqui?: Maniqui;
 }
 export interface EstiloKit { calzada: string; vereda: string; pintura: string; tinta: string;
   /** el paisaje: pasto, tierra (cauces), roca (laderas), nieve (cumbres) y agua */
@@ -166,12 +171,21 @@ function piezasDeFabrica(e: Estilo): Pieza[] {
   ];
 }
 
+/** LOS MANIQUÍES de fábrica: el maniquí de cada proporción, como figura para
+ *  colocar en un fondo (escala humana) o para abrir en el Taller de personaje. */
+function maniquiesDeFabrica(): Pieza[] {
+  return MANIQUIES.map((x) => ({ id: 'maniqui-' + x.id, nombre: x.nombre, categoria: 'personaje' as Categoria,
+    items: itemsDeManiqui(x.m), tam: tamDeManiqui(x.m), variacion: { escalaMin: 1, escalaMax: 1, giro: 'libre' }, maniqui: { ...x.m } }));
+}
+
 export function kitsDeFabrica(): Kit[] {
   return [
     { id: 'fabrica-plano', nombre: 'Color plano', fabrica: true, descripcion: 'Volúmenes de colores lisos con aristas: ciudad y paisaje listos para el fondo',
       estilo: { ...ESTILO_BASE }, piezas: piezasDeFabrica('plano') },
     { id: 'fabrica-linea', nombre: 'Boceto en línea', fabrica: true, descripcion: 'Las mismas formas como líneas, para layouts a lápiz que después se pasan en limpio',
       estilo: { calzada: '#f4f2ee', vereda: '#fbfaf7', pintura: '#1d1d1f', tinta: '#1d1d1f', pasto: '#f3f1ec', tierra: '#e2ddd3', roca: '#cfcac0', nieve: '#ffffff', agua: '#cfe0ea' }, piezas: piezasDeFabrica('linea') },
+    { id: 'fabrica-maniquies', nombre: 'Maniquíes', fabrica: true, descripcion: 'Figuras de distintas proporciones: dan escala a un fondo y son la base del Taller de personaje',
+      estilo: { ...ESTILO_BASE }, piezas: maniquiesDeFabrica() },
   ];
 }
 
@@ -193,6 +207,7 @@ export function piezaValida(x: unknown): Pieza | null {
     items: JSON.parse(JSON.stringify(items)),
     tam: Array.isArray(o.tam) && o.tam.length === 3 ? o.tam.map((n) => num(n, 1, 0.01, 10000)) as [number, number, number] : [1, 1, 1],
     variacion: { escalaMin: Math.min(min, max), escalaMax: Math.max(min, max), giro: v.giro === 'libre' || v.giro === 'no' ? v.giro : 'recto' },
+    ...(o.maniqui ? { maniqui: maniquiValido(o.maniqui) } : {}),
   };
 }
 export function kitValido(x: unknown): Kit | null {

@@ -1248,7 +1248,7 @@
      *  el siguiente. Se reconoce por data-toma="<nombre>": volver a mandar la
      *  misma toma REEMPLAZA sus fondos (no apila capas). Un paso de Ctrl+Z.
      *  items: [{ cuadro, content }] ordenados; hasta: último cuadro de la toma. */
-    setToma3D(nombre, items, { hasta = 0 } = {}) {
+    setToma3D(nombre, items, { hasta = 0, titulo: tituloPedido = "" } = {}) {
       const sc = this.scene, clave = encodeURIComponent(String(nombre || "Toma"));
       const marca = 'data-toma="' + clave + '"';
       const validos = (items || []).filter((x) => x && Number(x.cuadro) > 0 && x.content != null)
@@ -1262,7 +1262,7 @@
       };
       const before = foto();
       let lv = before.level ? sc.level(before.level.id) : null;
-      const titulo = "Toma 3D · " + String(nombre || "Toma");
+      const titulo = tituloPedido ? String(tituloPedido).slice(0, 80) : "Toma 3D · " + String(nombre || "Toma");
       if (!lv) lv = sc.addLevel(titulo, "reference");
       lv.drawings = [];
       validos.forEach((it, i) => lv.addDrawing(i + 1, String(it.content).replace("<image ", "<image " + marca + " ")));
