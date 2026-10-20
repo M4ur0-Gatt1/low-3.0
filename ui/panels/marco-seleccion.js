@@ -129,7 +129,10 @@
    *  está justo en el techo del presupuesto de §12. */
   function envolver() {
     let puestas = 0;
-    for (const nombre of ["dzSelect", "dzDeselect", "dzClearMulti"]) {
+    // dzPositionHandle: el recuadro de transformación se reubica al mover,
+    // escalar, girar, hacer zoom o deshacer; el marco lo acompaña (v3.36.2: se
+    // quedaba en el lugar viejo — «no respeta la posición ni la escala»)
+    for (const nombre of ["dzSelect", "dzDeselect", "dzClearMulti", "dzPositionHandle", "dzApplyZoom"]) {
       const original = global[nombre];
       if (typeof original !== "function" || original.__conMarco) continue;
       const envuelta = function (...args) {

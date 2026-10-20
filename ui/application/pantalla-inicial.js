@@ -244,10 +244,29 @@
   }
 
   /** La invitación, sólo cuando no hay nada abierto. */
+  /* SIN DOCUMENTO, LA MESA VACÍA (v3.36.2). Reporte de Mauro: «lo cerré y
+     sigue apareciendo abajo» — al cerrar la última escena, la HOJA del
+     documento cerrado (con su imagen) y los recuadros de selección y de cámara
+     seguían en la mesa, debajo de la invitación. La hoja no se puede borrar
+     (al abrir otro documento se reusa): se esconde con la clase, y la clase se
+     va al abrir uno (quitarInvitacion). */
+  function vaciarMesa() {
+    document.querySelector("#designView")?.classList.add("sin-documento");
+    try { if (typeof global.dzDeselect === "function") global.dzDeselect(); } catch (_) { /* nada elegido */ }
+    // al abrir o crear un documento la mesa vuelve EN EL ACTO (no al medio segundo del reloj)
+    for (const nombre of ["dzDocInit", "dzSceneOpen", "openDesign"]) {
+      const orig = global[nombre];
+      if (typeof orig !== "function" || orig.__mesaVacia) continue;
+      const f = function () { document.querySelector("#designView")?.classList.remove("sin-documento"); return orig.apply(this, arguments); };
+      Object.assign(f, orig); f.__mesaVacia = true;
+      global[nombre] = f;
+    }
+  }
   function pintarInvitacion() {
     const lienzo = document.querySelector("#dzCanvas");
     if (!lienzo) return;
     if (hayTrabajoAbierto()) { quitarInvitacion(); return; }
+    vaciarMesa();
     if (document.querySelector("#" + ID_INVITACION)) return;
     const caja = document.createElement("div");
     caja.id = ID_INVITACION;
@@ -428,6 +447,7 @@
 
   function quitarInvitacion() {
     document.querySelector("#" + ID_INVITACION)?.remove();
+    document.querySelector("#designView")?.classList.remove("sin-documento");
     if (reloj) { clearInterval(reloj); reloj = 0; }
   }
 

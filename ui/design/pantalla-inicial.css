@@ -243,3 +243,12 @@
   .bien2d-marca { font-size: 30px; }
   .bien2d-marca svg { width: 21px; height: 32px; }
 }
+
+/* Sin documento, la mesa vacía: ni la hoja del documento cerrado ni sus
+   recuadros (selección, marco, cámara, recorrido, reproducción) quedan a la vista
+   (application/pantalla-inicial.js, vaciarMesa). */
+#designView.sin-documento #dzCanvas > svg,
+#designView.sin-documento #dzSelBox, #designView.sin-documento #dzRotate, #designView.sin-documento #dzHandle,
+#designView.sin-documento #dzCam, #designView.sin-documento #dzSelMarco, #designView.sin-documento #dzCamRecorrido,
+#designView.sin-documento #dzReproFluida, #designView.sin-documento #dzPin, #designView.sin-documento #dzPivot { visibility: hidden !important; }
+/* visibility, no display: con display:none la hoja medía 0 y «ajustar a la ventana» del documento nuevo dejaba el zoom en 100 % */

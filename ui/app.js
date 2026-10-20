@@ -4345,8 +4345,8 @@ async function dzImportImage() {
   const vb = (svg.getAttribute("viewBox") || "0 0 1080 1080").split(/\s+/).map(Number);
   const el = document.createElementNS(SVGNS, "image");
   el.setAttribute("href", r.data);
-  el.setAttribute("x", vb[0] + vb[2] * 0.1); el.setAttribute("y", vb[1] + vb[3] * 0.1);
-  el.setAttribute("width", Math.round(vb[2] * 0.8));
+  const tam = await dzImagenTamano(r.data, vb);   // ui/drawing/imagenes.js: entera en la hoja, con su proporción y su ALTO
+  el.setAttribute("x", tam.x); el.setAttribute("y", tam.y); el.setAttribute("width", tam.w); el.setAttribute("height", tam.h);
   el.setAttribute("preserveAspectRatio", "xMidYMid meet");
   el.setAttribute("opacity", "0.5");                 // media transparencia: para calcar
   dzArtAppend(svg, el);
