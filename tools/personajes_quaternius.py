@@ -14,7 +14,9 @@ Escribe en ui/estudio3d/personajes/. Lo que hace:
     rugosidad y las animaciones) y achica las texturas a 1024 (JPG la piel,
     PNG con alfa las cejas): de ~25 MB a unos pocos;
   - de la biblioteca de animaciones toma UN cuadro de cada una (caminar,
-    correr, sentado…) como POSE: la rotación local de cada hueso. Hombre,
+    correr, sentado…) como POSE: la rotación local de cada hueso; y las
+    animaciones ENTERAS a 15 cuadros por segundo (animaciones.json + .bin) para
+    las actuaciones del taller. Hombre,
     mujer y maniquí tienen el mismo esqueleto (65 huesos, estilo Unreal), así
     que una pose sirve para los tres.
 """
@@ -58,7 +60,7 @@ POSES = [
 LICENCIA = """Personajes del Taller de personaje de LOW
 
 hombre.glb, mujer.glb: «Universal Base Characters» [Standard], de Quaternius.
-maniqui.glb y poses.json: «Universal Animation Library» [Standard], de Quaternius.
+maniqui.glb, poses.json y animaciones.json/.bin: «Universal Animation Library» [Standard], de Quaternius.
 https://quaternius.com
 
 Licencia de los paquetes (tal como vienen en License_Standard.txt / License.txt):
@@ -275,6 +277,90 @@ def muestrear(g, b, an, frac):
     return out
 
 
+# las ANIMACIONES enteras (para las actuaciones del taller): nombre en castellano
+ANIMACIONES = {
+    'Idle_Loop': 'Parado (respirando)', 'Idle_Talking_Loop': 'Hablar parado', 'Walk_Loop': 'Caminar',
+    'Walk_Formal_Loop': 'Caminar formal', 'Jog_Fwd_Loop': 'Trotar', 'Sprint_Loop': 'Correr',
+    'Crouch_Idle_Loop': 'Agachado (respirando)', 'Crouch_Fwd_Loop': 'Caminar agachado',
+    'Jump_Start': 'Saltar: impulso', 'Jump_Loop': 'Saltar: en el aire', 'Jump_Land': 'Saltar: caer',
+    'Sitting_Enter': 'Sentarse', 'Sitting_Idle_Loop': 'Sentado (respirando)', 'Sitting_Talking_Loop': 'Hablar sentado',
+    'Sitting_Exit': 'Levantarse', 'Interact': 'Tocar algo', 'PickUp_Table': 'Levantar de la mesa',
+    'Push_Loop': 'Empujar', 'Fixing_Kneeling': 'Arreglar algo arrodillado', 'Dance_Loop': 'Bailar',
+    'Hit_Chest': 'Golpe en el pecho', 'Hit_Head': 'Golpe en la cabeza', 'Death01': 'Caer muerto', 'Roll': 'Rodar',
+    'Punch_Jab': 'Piña rápida', 'Punch_Cross': 'Piña cruzada', 'Sword_Idle': 'Con espada', 'Sword_Attack': 'Espadazo',
+    'Spell_Simple_Enter': 'Hechizo: empezar', 'Spell_Simple_Idle_Loop': 'Hechizo: sostener',
+    'Spell_Simple_Shoot': 'Hechizo: lanzar', 'Spell_Simple_Exit': 'Hechizo: terminar',
+    'Pistol_Idle_Loop': 'Con pistola', 'Pistol_Aim_Neutral': 'Apuntar', 'Pistol_Aim_Up': 'Apuntar arriba',
+    'Pistol_Aim_Down': 'Apuntar abajo', 'Pistol_Shoot': 'Disparar', 'Pistol_Reload': 'Recargar',
+    'Idle_Torch_Loop': 'Con antorcha', 'Driving_Loop': 'Manejar', 'Swim_Fwd_Loop': 'Nadar', 'Swim_Idle_Loop': 'Flotar',
+    'A_TPose': 'Pose T',
+}
+FPS_ANIM = 15
+
+
+def canal(g, b, an, nodo, ruta):
+    for ch in an['channels']:
+        if ch['target'].get('node') == nodo and ch['target'].get('path') == ruta:
+            sm = an['samplers'][ch['sampler']]
+            ts = [x[0] for x in valores(g, b, sm['input'])]
+            vs = valores(g, b, sm['output'])
+            if sm.get('interpolation') == 'CUBICSPLINE':
+                vs = vs[1::3]
+            return ts, [list(v) for v in vs]
+    return None
+
+
+def en(ts, vs, t, girar):
+    k = 0
+    while k + 1 < len(ts) and ts[k + 1] <= t:
+        k += 1
+    if k + 1 < len(ts) and ts[k + 1] > ts[k]:
+        u = (t - ts[k]) / (ts[k + 1] - ts[k])
+        return slerp(vs[k], vs[k + 1], u) if girar else [a + (c - a) * u for a, c in zip(vs[k], vs[k + 1])]
+    return list(vs[k])
+
+
+def animaciones(g, b, salida_json, salida_bin):
+    """Cada animación muestreada a 15 cuadros por segundo: el giro LOCAL de los
+    65 huesos (Int16, ×32767) y la posición de la pelvis (Float32, metros)."""
+    huesos = g['skins'][0]['joints']
+    nombres = [g['nodes'][j]['name'] for j in huesos]
+    reposo = [g['nodes'][j].get('rotation', [0, 0, 0, 1]) for j in huesos]
+    pelvis = huesos[nombres.index('pelvis')]
+    pelvis0 = g['nodes'][pelvis].get('translation', [0, 0, 0])
+    datos = bytearray()
+    clips = []
+    for an in g['animations']:
+        if an['name'] not in ANIMACIONES:
+            continue
+        fin = max(g['accessors'][sm['input']]['max'][0] for sm in an['samplers'])
+        n = max(1, int(round(fin * FPS_ANIM)) + 1)
+        canales = [canal(g, b, an, j, 'rotation') for j in huesos]
+        tras = canal(g, b, an, pelvis, 'translation')
+        giros = bytearray()
+        pos = bytearray()
+        for k in range(n):
+            t = min(fin, k / FPS_ANIM)
+            for i, c in enumerate(canales):
+                q = en(c[0], c[1], t, True) if c else reposo[i]
+                giros += struct.pack('<4h', *[max(-32767, min(32767, int(round(v * 32767)))) for v in q])
+            p = en(tras[0], tras[1], t, False) if tras else pelvis0
+            pos += struct.pack('<3f', *p)
+        while len(datos) % 4:
+            datos.append(0)
+        ini = len(datos)
+        datos += pos + giros
+        clips.append({'id': an['name'], 'nombre': ANIMACIONES[an['name']], 'cuadros': n, 'segundos': round(fin, 3),
+                      'bucle': an['name'].endswith('_Loop'), 'desde': ini})
+    clips.sort(key=lambda c: list(ANIMACIONES).index(c['id']))
+    with open(salida_bin, 'wb') as f:
+        f.write(datos)
+    with open(salida_json, 'w', encoding='utf-8') as f:
+        json.dump({'origen': 'Quaternius · Universal Animation Library (CC0)', 'fps': FPS_ANIM, 'huesos': nombres,
+                   'pelvis': [round(v, 5) for v in pelvis0], 'clips': clips}, f, ensure_ascii=False, separators=(',', ':'))
+    return len(datos)
+
+
 def biblioteca(carpeta, salida_maniqui, salida_poses):
     g, b = leer(os.path.join(carpeta, 'Universal Animation Library[Standard]', 'Unreal-Godot', 'UAL1_Standard.glb'))
     clips = {an['name']: an for an in g['animations']}
@@ -286,6 +372,7 @@ def biblioteca(carpeta, salida_maniqui, salida_poses):
         poses.append({'id': pid, 'nombre': nombre, 'huesos': muestrear(g, b, clips[clip], frac)})
     with open(salida_poses, 'w', encoding='utf-8') as f:
         json.dump({'origen': 'Quaternius · Universal Animation Library (CC0)', 'poses': poses}, f, ensure_ascii=False, separators=(',', ':'))
+    print('animaciones.bin', animaciones(g, b, os.path.join(SALIDA, 'animaciones.json'), os.path.join(SALIDA, 'animaciones.bin')) // 1024, 'KB')
     # el maniquí, sin animaciones
     g.pop('animations', None)
     for m in g['meshes']:

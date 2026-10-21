@@ -236,6 +236,11 @@
 .taller3d-pinceles button { font-size:11px; padding:5px 2px; }
 .taller3d-modos button.on, .taller3d-pinceles button.on { border-color:#F0450E; background:rgba(240,69,14,.14); font-weight:600; }
 .taller3d-ayuda { margin-top:0; }
+.taller3d-pinceles { flex-wrap:wrap; }
+.taller3d-pinceles button { flex:1 1 30%; }
+.taller3d-claves { display:flex; flex-wrap:wrap; gap:4px; max-height:72px; overflow:auto; }
+.taller3d-claves button { min-width:30px; padding:3px 6px; border-radius:6px; border:1px solid var(--studio-line, #2c2e33); font-size:11px; font-variant-numeric:tabular-nums; }
+.taller3d-claves button.on { border-color:#F0450E; background:rgba(240,69,14,.14); }
 .taller3d-presets { grid-template-columns:1fr !important; }
 .taller3d-mios { display:flex; flex-wrap:wrap; gap:5px; margin:4px 0 10px; }
 .taller3d-mios button { padding:4px 9px; border-radius:999px; border:1px solid var(--studio-line, #2c2e33); background:transparent; color:inherit; font:inherit; cursor:pointer; }

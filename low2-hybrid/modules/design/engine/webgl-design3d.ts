@@ -21,7 +21,7 @@ import * as THREE from 'three';
 import { piezasDeCalle, pegarARed, estirarPuntas, franja, correr, MEDIDAS, type CalleRed, type TipoCalle } from './calles';
 import { ESTILO_BASE, type EstiloKit, type Pieza, type Categoria } from './biblioteca3d';
 import { Personaje3D, personajeNuevo, personajeValido, cargarCuerpo, cargarPoses, cuerpoListo, posesDeFabrica, controlDeHueso, nombreControl, ladoOpuesto,
-  CONTROLES, type BaseCuerpo, type PersonajeDatos, type Proporciones, type ModoTaller, type PincelEscultura } from './personaje3d';
+  CONTROLES, cargarAnimaciones, animacionesDeFabrica, type BaseCuerpo, type PersonajeDatos, type Proporciones, type ModoTaller, type PincelEscultura } from './personaje3d';
 import { Terreno, LADO as LADO_TERRENO, PINCEL_INICIAL, type PincelTerreno, type Parche } from './terreno3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -1117,6 +1117,7 @@ export class WebGLDesign3D {
   private avisarToma(): void { window.dispatchEvent(new Event('low3d:toma')); }
   /** Lleva la cámara de perspectiva a ese cuadro de la toma. false si no hay claves. */
   tomaIr(cuadro: number): boolean {
+    this.personajesEnCuadro(cuadro);
     const c = camaraEn(this.toma, cuadro);
     if (!c) return false;
     if (this.view !== 'persp') this.setView('persp');
@@ -1165,6 +1166,7 @@ export class WebGLDesign3D {
       if (op.formato === 'png') r.setClearColor(0x000000, 0); else r.setClearColor(0xffffff, 1);
       for (let i = 0; i < cuadros.length; i++) {
         const c = camaraEn(this.toma, cuadros[i])!;
+        this.personajesEnCuadro(cuadros[i]);
         cam.fov = fovRender(c.lente, W / H);
         cam.position.fromArray(c.pos);
         cam.up.set(0, 1, 0);
@@ -2420,7 +2422,7 @@ export class WebGLDesign3D {
     if (this.mode === 'draw' && e.pointerType === 'pen' && e.pressure === 0 && e.buttons === 0) return;
     this.updateCursor(e);
     this.setPointerFromEvent(e);
-    if (this.mode === 'taller') { this.tallerMover(); return; }
+    if (this.mode === 'taller') { this.tallerMover(e); return; }
     if (this.mode === 'idle' && this.taller && this.taller.modo !== 'dibujar') this.tallerEncima();
     if (this.cajaGesto) this.cajaMover(e);
     else if (this.calleGesto) this.calleVista();
@@ -2560,6 +2562,11 @@ export class WebGLDesign3D {
       && !(sinUndoPropio && ctrl && /^[zy]$/i.test(e.key));
     // Los campos conservan Supr, Backspace, copiar/pegar y su propio Undo.
     if(typing || e.defaultPrevented)return;
+    if (this.taller?.modo === 'esculpir' && (e.key === '[' || e.key === ']')) {
+      e.preventDefault();
+      this.setPincelEscultura({ radio: this.taller.pincel.radio * (e.key === ']' ? 1.15 : 1 / 1.15) });
+      return;
+    }
     if(e.key==='Home'){e.preventDefault();this.frameContent();return;}
     if (this.calleGesto && e.key === 'Enter') { e.preventDefault(); this.calleTerminar(); return; }
     if (this.aguaGesto && e.key === 'Enter') { e.preventDefault(); this.aguaTerminar(); return; }
@@ -4225,6 +4232,7 @@ export class WebGLDesign3D {
       if (this.taller) pieza.categoria = 'personaje';
     }
     const eraTaller = !!this.taller;
+    if (this.playTaller) { cancelAnimationFrame(this.playTaller); this.playTaller = 0; }
     this.taller = null; this.gestoTaller = null; this.cambioVivo = null;
     if (this.lineasEl) this.lineasEl.style.display = 'none';
     if (this.anilloPincel) this.anilloPincel.visible = false;
@@ -4270,11 +4278,16 @@ export class WebGLDesign3D {
   private taller: {
     rec: StrokeRecord | null; lineas: boolean; vista: number; modo: ModoTaller;
     control: string | null; encima: string | null; fantasma: boolean;
-    pincel: { tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean };
+    pincel: { tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean; dureza: number };
+    /** el cuadro de la actuación que se está viendo/posando */
+    cuadro: number; reproduciendo: boolean;
   } | null = null;
   private lineasEl: HTMLCanvasElement | null = null;
   private anilloPincel: THREE.Mesh | null = null;
   private gestoTaller: { tipo: 'posar'; control: string; plano: THREE.Plane; base: FotoHuesos; antes: PersonajeDatos }
+    | { tipo: 'extremo'; control: string; plano: THREE.Plane; base: FotoHuesos; antes: PersonajeDatos; pose: Record<string, number[]>; raiz?: number[] }
+    | { tipo: 'cadera'; plano: THREE.Plane; base: FotoHuesos; antes: PersonajeDatos; pose: Record<string, number[]>; raiz?: number[];
+        desde: THREE.Vector3; cadera: THREE.Vector3; pies: { l: THREE.Vector3; r: THREE.Vector3 } }
     | { tipo: 'esculpir'; antes: PersonajeDatos; ultimo: THREE.Vector3 | null; plano: THREE.Plane } | null = null;
   private cambioVivo: { antes: PersonajeDatos; base: FotoHuesos } | null = null;
   private cargasPersonajes = new Set<Promise<unknown>>();
@@ -4282,13 +4295,16 @@ export class WebGLDesign3D {
   /** El estado para el panel (liviano: se pide en cada cambio). */
   enTaller(): {
     lineas: boolean; vista: number; modo: ModoTaller; control: string | null; nombreControl: string; fantasma: boolean;
-    pincel: { tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean };
+    pincel: { tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean; dureza: number };
     listo: boolean; base: BaseCuerpo; prop: Proporciones; pies: boolean; color: string; alto: number;
+    cuadro: number; cuadros: number; claves: number[]; reproduciendo: boolean; definicion: number; triangulos: number;
   } | null {
     const t = this.taller; if (!t) return null;
     const inst = this.personajeDelTaller(), d = inst?.datos ?? t.rec?.personajeDatos ?? personajeNuevo();
     return { lineas: t.lineas, vista: t.vista, modo: t.modo, control: t.control, nombreControl: t.control ? nombreControl(t.control) : '',
-      fantasma: t.fantasma, pincel: { ...t.pincel }, listo: !!inst, base: d.base, prop: { ...d.prop }, pies: d.pies, color: d.color, alto: inst ? inst.alto() : 0 };
+      fantasma: t.fantasma, pincel: { ...t.pincel }, listo: !!inst, base: d.base, prop: { ...d.prop }, pies: d.pies, color: d.color, alto: inst ? inst.alto() : 0,
+      cuadro: t.cuadro, cuadros: d.actuacion?.cuadros ?? 24, claves: (d.actuacion?.claves ?? []).map((c) => c.f), reproduciendo: t.reproduciendo,
+      definicion: d.definicion ?? 0, triangulos: inst ? inst.triangulos() : 0 };
   }
   /** El personaje del taller (null mientras se carga su cuerpo). */
   personajeDelTaller(): Personaje3D | null { return this.taller?.rec?.personaje ?? null; }
@@ -4306,7 +4322,7 @@ export class WebGLDesign3D {
       if (rec) this.addStrokeRecord(rec);
     }
     this.taller = { rec, lineas: false, vista: 25, modo: 'dibujar', control: null, encima: null, fantasma: false,
-      pincel: { tipo: 'inflar', radio: 0.06, fuerza: 0.5, simetria: true } };
+      pincel: { tipo: 'inflar', radio: 0.06, fuerza: 0.5, simetria: true, dureza: 0 }, cuadro: 1, reproduciendo: false };
     this.undoStack = []; this.redoStack = [];
     this.vistaPersonaje(25);
     this.publishObjects();
@@ -4322,10 +4338,11 @@ export class WebGLDesign3D {
     if (this.anilloPincel) this.anilloPincel.visible = false;
     window.dispatchEvent(new Event('low3d:taller'));
   }
-  setPincelEscultura(p: Partial<{ tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean }>): void {
+  setPincelEscultura(p: Partial<{ tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean; dureza: number }>): void {
     const t = this.taller; if (!t) return;
     const n = { ...t.pincel, ...p };
-    n.radio = Math.max(0.005, Math.min(0.6, Number(n.radio) || t.pincel.radio));
+    n.radio = Math.max(0.002, Math.min(0.6, Number(n.radio) || t.pincel.radio));
+    n.dureza = Math.max(0, Math.min(0.95, Number(n.dureza) || 0));
     n.fuerza = Math.max(0.02, Math.min(1, Number(n.fuerza) || t.pincel.fuerza));
     t.pincel = n;
     window.dispatchEvent(new Event('low3d:taller'));
@@ -4358,10 +4375,11 @@ export class WebGLDesign3D {
     }
   }
   /** Un cambio del personaje = un paso de Ctrl+Z; los trazos pegados lo siguen. */
-  private cambiarPersonaje(hacer: (p: Personaje3D) => void): boolean {
+  private cambiarPersonaje(hacer: (p: Personaje3D) => void, esPose = false): boolean {
     const inst = this.personajeDelTaller(); if (!inst) return false;
     const antes = inst.aDatos(), foto = this.fotoHuesos();
     hacer(inst);
+    if (esPose) this.claveAutomatica(inst);
     this.seguirHuesos(foto);
     const despues = inst.aDatos();
     window.dispatchEvent(new Event('low3d:taller'));
@@ -4373,7 +4391,7 @@ export class WebGLDesign3D {
     const rec = this.taller?.rec, inst = this.personajeDelTaller();
     if (!rec || !inst) return;
     const foto = this.fotoHuesos();
-    if (d.base !== inst.datos.base) { this.reemplazarCuerpo(rec, d); }
+    if (d.base !== inst.datos.base || (d.definicion ?? 0) !== (inst.datos.definicion ?? 0)) { this.reemplazarCuerpo(rec, d); }
     else inst.ponerDatos(d);
     this.seguirHuesos(foto);
     window.dispatchEvent(new Event('low3d:taller'));
@@ -4403,12 +4421,120 @@ export class WebGLDesign3D {
   ponerPose(id: string | null): boolean {
     const p = id ? posesDeFabrica().find((x) => x.id === id) ?? null : null;
     if (id && !p) return false;
-    return this.cambiarPersonaje((x) => x.ponerPoseDeFabrica(p));
+    return this.cambiarPersonaje((x) => x.ponerPoseDeFabrica(p), true);
   }
   posesDelTaller(): { id: string; nombre: string }[] { return posesDeFabrica().map((p) => ({ id: p.id, nombre: p.nombre })); }
-  enderezarControl(): boolean { const c = this.taller?.control; return !!c && this.cambiarPersonaje((x) => x.enderezar(c)); }
-  copiarControlAlOtroLado(): boolean { const c = this.taller?.control; return !!c && this.cambiarPersonaje((x) => x.copiarAlOtroLado(c)); }
-  espejarPose(): boolean { return this.cambiarPersonaje((x) => x.espejarPose()); }
+  enderezarControl(): boolean { const c = this.taller?.control; return !!c && this.cambiarPersonaje((x) => x.enderezar(c), true); }
+  copiarControlAlOtroLado(): boolean { const c = this.taller?.control; return !!c && this.cambiarPersonaje((x) => x.copiarAlOtroLado(c), true); }
+  espejarPose(): boolean { return this.cambiarPersonaje((x) => x.espejarPose(), true); }
+
+  /* ── LA ACTUACIÓN (poses clave por cuadro) ── */
+  /** Con la actuación empezada, cada cambio de pose deja clave en el cuadro de ahora. */
+  private claveAutomatica(inst: Personaje3D): void {
+    const t = this.taller;
+    if (t && inst.datos.actuacion?.claves.length) inst.claveAqui(t.cuadro);
+  }
+  /** Ir a un cuadro: el cuerpo toma la pose de ese cuadro (y los trazos lo siguen). */
+  setCuadroTaller(f: number): void {
+    const t = this.taller, inst = this.personajeDelTaller(); if (!t) return;
+    t.cuadro = Math.max(1, Math.min(inst?.datos.actuacion?.cuadros ?? 10000, Math.round(f)));
+    if (inst) { const foto = this.fotoHuesos(); if (inst.irACuadro(t.cuadro)) this.seguirHuesos(foto); }
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  claveTaller(): boolean { const t = this.taller; return !!t && this.cambiarPersonaje((x) => x.claveAqui(t.cuadro)); }
+  quitarClaveTaller(): boolean { const t = this.taller; return !!t && this.cambiarPersonaje((x) => x.quitarClave(t.cuadro)); }
+  setCuadrosActuacion(n: number): boolean { return this.cambiarPersonaje((x) => x.ponerCuadros(n)); }
+  /** Una animación de la biblioteca en la actuación, desde el cuadro de ahora. */
+  async ponerAnimacionTaller(id: string, fps: number, vel = 1): Promise<number> {
+    await cargarAnimaciones();
+    const t = this.taller; if (!t) return 0;
+    let n = 0;
+    this.cambiarPersonaje((x) => { n = x.ponerAnimacion(id, t.cuadro, Math.max(1, fps), vel); });
+    window.dispatchEvent(new Event('low3d:taller'));
+    return n;
+  }
+  animacionesDelTaller(): { id: string; nombre: string; segundos: number; bucle: boolean }[] {
+    return animacionesDeFabrica().map((c) => ({ id: c.id, nombre: c.nombre, segundos: c.segundos, bucle: c.bucle }));
+  }
+  private playTaller = 0;
+  /** Reproducir la actuación en bucle (a los cuadros por segundo de la escena del 2D). */
+  reproducirTaller(on: boolean, fps = 24): void {
+    const t = this.taller; if (!t) return;
+    t.reproduciendo = on;
+    if (this.playTaller) { cancelAnimationFrame(this.playTaller); this.playTaller = 0; }
+    if (on) {
+      let ultimo = performance.now();
+      const paso = (ahora: number) => {
+        const tt = this.taller, inst = this.personajeDelTaller();
+        if (!tt || !tt.reproduciendo || !inst) { this.playTaller = 0; return; }
+        if (ahora - ultimo >= 1000 / Math.max(1, fps)) {
+          ultimo = ahora;
+          const n = inst.datos.actuacion?.cuadros ?? 24;
+          this.setCuadroTaller(tt.cuadro >= n ? 1 : tt.cuadro + 1);
+        }
+        this.playTaller = requestAnimationFrame(paso);
+      };
+      this.playTaller = requestAnimationFrame(paso);
+    }
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  /** LA ACTUACIÓN PARA ROTOSCOPIAR: cada cuadro, el personaje (y lo dibujado
+   *  encima) desde la cámara de ahora, con fondo transparente, del tamaño pedido. */
+  async actuacionRender(W: number, H: number, progreso?: (hechos: number, total: number) => void): Promise<{ cuadro: number; png: string }[]> {
+    const t = this.taller, inst = this.personajeDelTaller();
+    if (!t || !inst || !(W > 0) || !(H > 0)) return [];
+    this.detachRig();
+    const n = inst.datos.actuacion?.claves.length ? inst.datos.actuacion.cuadros : 1, volver = t.cuadro;
+    const src = this.camera as THREE.PerspectiveCamera & THREE.OrthographicCamera;
+    const cam = src.clone();
+    if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) (cam as THREE.PerspectiveCamera).aspect = W / H;
+    else { const o = cam as THREE.OrthographicCamera, h = (o.top - o.bottom) / 2, c = (o.left + o.right) / 2; o.left = c - h * W / H; o.right = c + h * W / H; }
+    cam.updateProjectionMatrix();
+    const antes = new Map<THREE.Object3D, boolean>();
+    for (const o of this.scene.children) { antes.set(o, o.visible); o.visible = o === this.strokesGroup || (o as THREE.Light).isLight === true; }
+    const fondo = this.scene.background, niebla = this.scene.fog;
+    this.scene.background = null; this.scene.fog = null;
+    const lineas = this.lineasEl?.style.display;
+    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    const out: { cuadro: number; png: string }[] = [];
+    try {
+      r.setPixelRatio(1); r.setSize(W, H, false); r.setClearColor(0x000000, 0);
+      r.outputColorSpace = this.renderer.outputColorSpace; r.toneMapping = this.renderer.toneMapping; r.toneMappingExposure = this.renderer.toneMappingExposure;
+      for (let f = 1; f <= n; f++) {
+        const foto = this.fotoHuesos();
+        if (inst.irACuadro(f)) this.seguirHuesos(foto);
+        r.render(this.scene, cam);
+        out.push({ cuadro: f, png: r.domElement.toDataURL('image/png') });
+        progreso?.(f, n);
+        if (f % 2 === 0) await new Promise((ok) => setTimeout(ok, 0));
+      }
+    } finally {
+      r.dispose(); r.forceContextLoss();
+      for (const [o, v] of antes) o.visible = v;
+      this.scene.background = fondo; this.scene.fog = niebla;
+      if (lineas !== undefined && this.lineasEl) this.lineasEl.style.display = lineas;
+      this.setCuadroTaller(volver);
+    }
+    return out;
+  }
+  /** Los personajes de la ESCENA con actuación, en ese cuadro (la toma los muestra y los manda así). */
+  private personajesEnCuadro(f: number): void {
+    for (const r of this.strokes) if (r.personaje?.datos.actuacion?.claves.length) r.personaje.irACuadro(f);
+  }
+
+  /* ── LA DEFINICIÓN: más malla para esculpir ── */
+  /** Cambiar la definición de la piel (0 la que viene, 1 ×4, 2 ×16). La
+   *  escultura pasa; un paso de Ctrl+Z. La primera vez tarda (se subdivide). */
+  setDefinicionTaller(nivel: number): boolean {
+    const rec = this.taller?.rec, inst = this.personajeDelTaller();
+    if (!rec || !inst || (inst.datos.definicion ?? 0) === nivel) return false;
+    const antes = inst.aDatos(), despues = inst.conDefinicion(nivel), foto = this.fotoHuesos();
+    this.reemplazarCuerpo(rec, despues);
+    this.seguirHuesos(foto);
+    this.pushCmd({ undo: () => this.volverPersonaje(antes), redo: () => this.volverPersonaje(despues) });
+    window.dispatchEvent(new Event('low3d:taller'));
+    return true;
+  }
   setPiesEnElPiso(on: boolean): boolean { return this.cambiarPersonaje((x) => x.ponerPies(on)); }
   setColorPersonaje(c: string): boolean { return this.cambiarPersonaje((x) => x.ponerColor(c)); }
   sinEscultura(): boolean { return this.cambiarPersonaje((x) => x.sinEscultura()); }
@@ -4468,9 +4594,49 @@ export class WebGLDesign3D {
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
     return this.raycaster.intersectObjects(inst.mallas, false)[0] ?? null;
   }
+  /** Los agarres de la marioneta en pantalla: manos, pies y la cadera. */
+  private agarresMarioneta(inst: Personaje3D): { c: string; x: number; y: number; p: THREE.Vector3 }[] {
+    const out: { c: string; x: number; y: number; p: THREE.Vector3 }[] = [];
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight, cam = this.camera as THREE.Camera;
+    for (const c of [...Object.keys(Personaje3D.EXTREMOS), 'cadera']) {
+      const p = c === 'cadera' ? inst.cadera() : inst.articulacion(c);
+      if (!p) continue;
+      const v = p.clone().project(cam);
+      if (v.z > 1) continue;
+      out.push({ c, x: ((v.x + 1) / 2) * W, y: ((1 - v.y) / 2) * H, p });
+    }
+    return out;
+  }
+  private agarreBajo(e: PointerEvent, inst: Personaje3D): { c: string; p: THREE.Vector3 } | null {
+    const r = this.canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    let mejor: { c: string; p: THREE.Vector3 } | null = null, md = 11 * 11;
+    for (const a of this.agarresMarioneta(inst)) { const d = (a.x - x) ** 2 + (a.y - y) ** 2; if (d < md) { md = d; mejor = a; } }
+    return mejor;
+  }
   private tallerApretar(e: PointerEvent): void {
     const t = this.taller, inst = this.personajeDelTaller();
     if (!t || !inst) return;
+    if (t.reproduciendo) this.reproducirTaller(false);
+    // la MARIONETA: los agarres de manos, pies y cadera ganan sobre la piel
+    const ag = t.modo === 'posar' ? this.agarreBajo(e, inst) : null;
+    if (ag) {
+      const haciaCam0 = (this.camera as THREE.Camera).getWorldDirection(new THREE.Vector3()).negate();
+      const plano = new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam0, ag.p);
+      const comun = { plano, base: this.fotoHuesos(), antes: inst.aDatos(), pose: JSON.parse(JSON.stringify(inst.datos.pose)), raiz: inst.datos.raiz?.slice() };
+      t.control = ag.c === 'cadera' ? 'pelvis' : ag.c;
+      if (ag.c === 'cadera') {
+        this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+        const desde = new THREE.Vector3();
+        if (!this.raycaster.ray.intersectPlane(plano, desde)) return;
+        this.gestoTaller = { tipo: 'cadera', ...comun, desde, cadera: ag.p.clone(), pies: { l: inst.articulacion('foot_l')!, r: inst.articulacion('foot_r')! } };
+      } else this.gestoTaller = { tipo: 'extremo', control: ag.c, ...comun };
+      this.activePointerId = e.pointerId;
+      this.mode = 'taller';
+      this.controls.enabled = false;
+      try { this.canvas.setPointerCapture(e.pointerId); } catch { /* noop */ }
+      window.dispatchEvent(new Event('low3d:taller'));
+      return;
+    }
     const h = this.tocarPersonaje();
     if (!h) { if (t.modo === 'posar' && t.control) { t.control = null; window.dispatchEvent(new Event('low3d:taller')); } return; }
     const haciaCam = (this.camera as THREE.Camera).getWorldDirection(new THREE.Vector3()).negate();
@@ -4481,7 +4647,9 @@ export class WebGLDesign3D {
       this.gestoTaller = { tipo: 'posar', control: c, plano: new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam, tip), base: this.fotoHuesos(), antes: inst.aDatos() };
     } else {
       this.gestoTaller = { tipo: 'esculpir', antes: inst.aDatos(), ultimo: h.point.clone(), plano: new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam, h.point) };
-      if (t.pincel.tipo === 'tirar') inst.empezarTirar(h.point, t.pincel.radio);
+      this.leerToque(e);
+      inst.dureza = t.pincel.dureza;
+      if (t.pincel.tipo === 'tirar' && !this.toqueMods.shift) inst.empezarTirar(h.point, t.pincel.radio);
       else this.toquePincel(inst, h);
     }
     this.activePointerId = e.pointerId;
@@ -4490,18 +4658,40 @@ export class WebGLDesign3D {
     try { this.canvas.setPointerCapture(e.pointerId); } catch { /* noop */ }
     window.dispatchEvent(new Event('low3d:taller'));
   }
+  /** Lo que acompaña al gesto del pincel: la presión de la lapicera y las teclas
+   *  (Shift suaviza, Ctrl invierte: inflar ↔ desinflar, surco ↔ cresta). */
+  private toqueMods = { presion: 1, shift: false, ctrl: false };
+  private leerToque(e: PointerEvent): void {
+    this.toqueMods = { presion: e.pointerType === 'pen' && e.pressure > 0 ? Math.max(0.05, e.pressure) : 1, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey };
+  }
   private toquePincel(inst: Personaje3D, h: THREE.Intersection): void {
-    const p = this.taller!.pincel;
+    const p = this.taller!.pincel, m = this.toqueMods;
     const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize() : new THREE.Vector3(0, 0, 1);
-    if (p.tipo === 'inflar' || p.tipo === 'desinflar') inst.inflar(h.point, p.radio, p.fuerza, p.tipo === 'inflar' ? 1 : -1, p.simetria);
-    else if (p.tipo === 'suavizar') inst.suavizar(h.point, p.radio, p.fuerza, p.simetria);
-    else if (p.tipo === 'aplanar') inst.aplanar(h.point, n, p.radio, p.fuerza, p.simetria);
+    const fuerza = p.fuerza * m.presion, tipo = m.shift ? 'suavizar' : p.tipo, signo = m.ctrl ? -1 : 1;
+    inst.dureza = p.dureza;
+    if (tipo === 'inflar' || tipo === 'desinflar') inst.inflar(h.point, p.radio, fuerza, (tipo === 'inflar' ? 1 : -1) * signo, p.simetria);
+    else if (tipo === 'suavizar') inst.suavizar(h.point, p.radio, fuerza, p.simetria);
+    else if (tipo === 'aplanar') inst.aplanar(h.point, n, p.radio, fuerza, p.simetria);
+    else if (tipo === 'pellizcar') inst.pellizcar(h.point, p.radio, fuerza, p.simetria);
+    else if (tipo === 'surco') inst.pellizcar(h.point, p.radio, fuerza, p.simetria, signo);
     this.moverAnillo(h);
   }
-  private tallerMover(): void {
+  private tallerMover(e?: PointerEvent): void {
     const g = this.gestoTaller, inst = this.personajeDelTaller(), t = this.taller;
     if (!g || !inst || !t) return;
+    if (e) this.leerToque(e);
     this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    if (g.tipo === 'extremo' || g.tipo === 'cadera') {
+      const p = new THREE.Vector3();
+      if (!this.raycaster.ray.intersectPlane(g.plano, p)) return;
+      // desde la pose del principio del gesto: sin acumular error
+      inst.datos.pose = JSON.parse(JSON.stringify(g.pose)); inst.datos.raiz = g.raiz?.slice();
+      if (g.tipo === 'extremo') { inst.aplicar(); inst.moverExtremo(g.control, p); }
+      else { inst.aplicar(); inst.moverCadera(g.cadera.clone().add(p.sub(g.desde)), g.pies); }
+      this.seguirHuesos(g.base);
+      window.dispatchEvent(new Event('low3d:taller'));
+      return;
+    }
     if (g.tipo === 'posar') {
       const p = new THREE.Vector3();
       if (!this.raycaster.ray.intersectPlane(g.plano, p)) return;
@@ -4510,7 +4700,7 @@ export class WebGLDesign3D {
       window.dispatchEvent(new Event('low3d:taller'));
       return;
     }
-    if (t.pincel.tipo === 'tirar') {
+    if (t.pincel.tipo === 'tirar' && !this.toqueMods.shift) {
       const p = new THREE.Vector3();
       if (!this.raycaster.ray.intersectPlane(g.plano, p) || !g.ultimo) return;
       const d = p.clone().sub(g.ultimo);
@@ -4521,7 +4711,7 @@ export class WebGLDesign3D {
     }
     const h = this.tocarPersonaje();
     if (!h) return;
-    if (g.ultimo && h.point.distanceTo(g.ultimo) < t.pincel.radio * 0.3) { this.moverAnillo(h); return; }
+    if (g.ultimo && h.point.distanceTo(g.ultimo) < t.pincel.radio * 0.2) { this.moverAnillo(h); return; }
     g.ultimo = h.point.clone();
     this.toquePincel(inst, h);
   }
@@ -4530,6 +4720,7 @@ export class WebGLDesign3D {
     this.gestoTaller = null;
     if (!g || !inst) return;
     if (g.tipo === 'esculpir') inst.terminarTirar();
+    else this.claveAutomatica(inst);
     const antes = g.antes, despues = inst.aDatos();
     if (JSON.stringify(antes) !== JSON.stringify(despues)) this.pushCmd({ undo: () => this.volverPersonaje(antes), redo: () => this.volverPersonaje(despues) });
     window.dispatchEvent(new Event('low3d:taller'));
@@ -4655,6 +4846,16 @@ export class WebGLDesign3D {
         g.fillStyle = elegido ? '#f0450e' : encima ? '#ffd166' : '#ffffff';
         g.strokeStyle = 'rgba(20,20,22,.8)'; g.lineWidth = 1.5;
         g.beginPath(); g.arc(pa.x, pa.y, elegido ? 6.5 : encima ? 6 : 4.5, 0, Math.PI * 2); g.fill(); g.stroke();
+      }
+      // la MARIONETA: anillos en manos y pies (arrastrar mueve el brazo o la pierna
+      // entera) y el cuadrado de la cadera (mueve el cuerpo con los pies quietos)
+      for (const a of this.agarresMarioneta(inst!)) {
+        const on = (a.c === 'cadera' ? 'pelvis' : a.c) === t!.control;
+        g.lineWidth = 3; g.strokeStyle = on ? '#f0450e' : 'rgba(51,181,232,.95)';
+        g.fillStyle = 'rgba(255,255,255,.18)';
+        g.beginPath();
+        if (a.c === 'cadera') g.rect(a.x - 9, a.y - 9, 18, 18); else g.arc(a.x, a.y, 10, 0, Math.PI * 2);
+        g.fill(); g.stroke();
       }
     }
   }

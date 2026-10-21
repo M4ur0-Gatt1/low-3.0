@@ -140,11 +140,16 @@
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
     if (typeof global.dzDocCommit === "function") global.dzDocCommit();
     let ly, texto;
-    if (m.modo === "giro") {
+    if (m.modo === "giro" || m.modo === "actuacion") {
+      // el GIRO (una vista por cuadro) o la ACTUACIÓN para rotoscopiar (un
+      // cuadro de la actuación por cuadro de la escena, desde la cámara del estudio)
+      const act = m.modo === "actuacion";
       const items = vistas.map((v, i) => ({ cuadro: i + 1,
         content: `<image data-low="toma-3d" href="${v.png}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid meet"/>` }));
-      ly = DZ.doc.setToma3D("giro:" + nombre, items, { hasta: vistas.length, titulo: "Giro · " + nombre });
-      texto = "El giro de «" + nombre + "»: " + vistas.length + " vistas, una por cuadro, en la capa «" + (ly && ly.name) + "» (al fondo) · Ctrl+Z la saca";
+      ly = DZ.doc.setToma3D((act ? "actuacion:" : "giro:") + nombre, items, { hasta: vistas.length, titulo: (act ? "Actuación · " : "Giro · ") + nombre });
+      texto = act
+        ? "La actuación de «" + nombre + "»: " + vistas.length + " cuadros en la capa «" + (ly && ly.name) + "» (al fondo, para rotoscopiar) · Ctrl+Z la saca"
+        : "El giro de «" + nombre + "»: " + vistas.length + " vistas, una por cuadro, en la capa «" + (ly && ly.name) + "» (al fondo) · Ctrl+Z la saca";
     } else {
       // a la izquierda, un margen para los rótulos de las líneas (no tapan la primera vista)
       const n = vistas.length, margen = Math.round(W * 0.08), anchoVista = (W - margen) / n, altoImg = Math.round(H * 0.9);

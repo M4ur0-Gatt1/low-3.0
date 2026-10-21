@@ -1659,5 +1659,7 @@ LOW_I18N.registrar("en", "English", {
  "Guías borradas · Ctrl+Z las vuelve": "Guides cleared · Ctrl+Z brings them back",
  "Posición de la guía (y, px)": "Guide position (y, px)",
  "Posición de la guía (x, px)": "Guide position (x, px)",
- "Reglas activas — arrastrá desde una regla para crear una guía (Ctrl+R oculta)": "Rulers on — drag from a ruler to create a guide (Ctrl+R hides them)"
+ "Reglas activas — arrastrá desde una regla para crear una guía (Ctrl+R oculta)": "Rulers on — drag from a ruler to create a guide (Ctrl+R hides them)",
+ "Actuación · {}": "Performance · {}",
+ "La actuación de «{}»: {} cuadros en la capa «{}» (al fondo, para rotoscopiar) · Ctrl+Z la saca": "The performance of «{}»: {} frames in layer «{}» (at the bottom, for rotoscoping) · Ctrl+Z removes it"
 });

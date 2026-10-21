@@ -160,8 +160,10 @@ async function main() {
     const z = await ev(`(()=>{ const inst = __low3d.personajeDelTaller(), p = inst.posicionesMundo(); let z = -Infinity; for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i] - 0.06) < 0.02 && Math.abs(p[i + 1] - ${panza[1]}) < 0.02) z = Math.max(z, p[i + 2]); return z; })()`);
     const ip = await aPantalla([0.06, panza[1], z]);
     await arrastrarPx(ip, { x: ip.x + 4, y: ip.y + 10 }, 8);
-    const esc = await ev(`(()=>{ const inst = __low3d.personajeDelTaller(), d = inst.aDatos().escultura || [], pos = inst.cuerpo.geometry.attributes.position.array;
-      let izq = 0, der = 0; for (let k = 0; k < d.length; k += 4) { const x0 = pos[d[k] * 3] - d[k + 1]; if (x0 > 0.01) izq++; else if (x0 < -0.01) der++; } return { n: d.length / 4, izq, der }; })()`);
+    // la escultura se guarda compacta («e1:…»): se cuentan los puntos movidos contra la piel original
+    const esc = await ev(`(()=>{ const inst = __low3d.personajeDelTaller(), pos = inst.cuerpo.geometry.attributes.position.array, o = inst.original;
+      let n = 0, izq = 0, der = 0; for (let i = 0; i < pos.length; i += 3) { if (Math.hypot(pos[i] - o[i], pos[i + 1] - o[i + 1], pos[i + 2] - o[i + 2]) < 1e-5) continue; n++; if (o[i] > 0.01) izq++; else if (o[i] < -0.01) der++; }
+      return { n, izq, der }; })()`);
     if (esc.n < 10) mal("inflar no modeló la piel", esc);
     if (esc.izq < 5 || esc.der < 5 || Math.abs(esc.izq - esc.der) > Math.max(esc.izq, esc.der) * 0.35) mal("con simetría la escultura no quedó de los dos lados", esc);
     await tecla("z", "KeyZ", 90, 2);

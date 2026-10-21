@@ -1636,5 +1636,7 @@ LOW_I18N.registrar("pt", "Português", {
  "Guías borradas · Ctrl+Z las vuelve": "Guias apagadas · Ctrl+Z as traz de volta",
  "Posición de la guía (y, px)": "Posição da guia (y, px)",
  "Posición de la guía (x, px)": "Posição da guia (x, px)",
- "Reglas activas — arrastrá desde una regla para crear una guía (Ctrl+R oculta)": "Réguas ativas — arraste de uma régua para criar uma guia (Ctrl+R oculta)"
+ "Reglas activas — arrastrá desde una regla para crear una guía (Ctrl+R oculta)": "Réguas ativas — arraste de uma régua para criar uma guia (Ctrl+R oculta)",
+ "Actuación · {}": "Atuação · {}",
+ "La actuación de «{}»: {} cuadros en la capa «{}» (al fondo, para rotoscopiar) · Ctrl+Z la saca": "A atuação de «{}»: {} quadros na camada «{}» (no fundo, para rotoscopia) · Ctrl+Z a remove"
 });

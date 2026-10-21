@@ -137,10 +137,24 @@ async function main() {
   r = await capas();
   if (r.length !== doc.capas) mal("Ctrl+Z no sacó la capa de la hoja", r);
 
+  // 5. la ACTUACIÓN para rotoscopiar (v3.39): «Caminar» en el taller y «Mandar la
+  //    actuación al 2D» → una capa «Actuación · Personaje» con un cuadro por cuadro
+  await alEstudio();
+  await evIframe(`document.querySelector('[data-modo="posar"]').click(); true`); await w(300);
+  const nAct = await evIframe(`__low3d.setCuadroTaller(1), __low3d.ponerAnimacionTaller("Walk_Loop", 24, 1)`);
+  await w(300);
+  await evIframe(`document.querySelector(".taller3d-actuacion").click(); true`);
+  r = await esperar((cs) => cs.some((c) => /^Actuación/.test(c.nombre || "")));
+  const act = r.find((c) => /^Actuación/.test(c.nombre || ""));
+  if (!act || act.nombre !== "Actuación · Personaje" || act.tipo !== "reference") mal("no llegó la capa «Actuación · Personaje» al 2D", r);
+  const actCeldas = await evHost(`(()=>{ const sc = DZ.doc.scene, ly = sc.layers.find(l => /^Actuación/.test(l.name)), lv = sc.level(ly.levelId);
+    return { dibujos: lv.drawings.length, celdas: Array.from({ length: ${nAct} }, (_, k) => ly.cellAt(k + 1)), distintos: new Set(lv.drawings.map(d => d.content)).size }; })()`);
+  if (actCeldas.dibujos !== nAct || actCeldas.celdas.some((c, k) => c !== k + 1) || actCeldas.distintos < nAct - 2) mal("la actuación no trae un dibujo distinto por cuadro", { nAct, actCeldas });
+
   const graves = pag.errores.filter((e) => !/ResizeObserver/.test(String(e)));
   await pag.cerrar();
   if (graves.length) mal("hubo excepciones en LOW", graves.slice(0, 3));
-  console.log("OK check_taller_hoja_2d_ui: " + JSON.stringify({ nombres, mesa, giro: giro.celdas, tam }));
+  console.log("OK check_taller_hoja_2d_ui: " + JSON.stringify({ nombres, mesa, giro: giro.celdas, tam, actuacion: nAct }));
 }
 
 main().catch((e) => { console.error(e.stack || String(e)); process.exit(1); });
