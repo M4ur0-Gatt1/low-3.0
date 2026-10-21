@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { lowStore, useLowStore } from '../../../store/low-store';
 import type { WebGLDesign3D } from '../engine/webgl-design3d';
-import { CUERPOS, PROP_RANGOS, cargarPoses, cargarAnimaciones, type BaseCuerpo, type ModoTaller, type PincelEscultura, type Proporciones } from '../engine/personaje3d';
+import { CUERPOS, PROP_RANGOS, PARTES_GROSOR, cargarPoses, cargarAnimaciones, type BaseCuerpo, type ModoTaller, type PincelEscultura, type Proporciones } from '../engine/personaje3d';
 import { cargarKitsPropios, guardarKitsPropios, kitsDeFabrica, type Kit, type Pieza } from '../engine/biblioteca3d';
 
 /* Panel «Personaje»: el TALLER DE PERSONAJE (ver engine/personaje3d.ts).
@@ -23,7 +23,7 @@ export const destinoTaller: { kitId: string | null; piezaId: string | null } = {
 const VISTAS: [number, string][] = [[0, 'Frente'], [45, '3/4'], [90, 'Perfil'], [135, '3/4 espalda'], [180, 'Espalda']];
 const MODOS: [ModoTaller, string, string][] = [
   ['dibujar', 'Dibujar', 'Dibujá sobre el cuerpo con todas las herramientas: cada trazo se pega a la parte que toca y la sigue'],
-  ['posar', 'Posar', 'La marioneta: arrastrá los anillos de manos y pies (se mueve el brazo o la pierna entera) o el cuadrado de la cadera (el cuerpo, con los pies quietos). Tocando una parte del cuerpo, gira desde su articulación'],
+  ['posar', 'Posar', 'Como un armazón de stop motion: arrastrar una parte la gira de a poco (Shift: más fino · Alt: sobre su largo · flechas: de a 2°). Anillos de manos y pies: el brazo o la pierna entera; rombos: los hombros; cuadrado: la cadera con los pies quietos'],
   ['esculpir', 'Esculpir', 'Modelá la piel con pinceles · Shift: suavizar · Ctrl: invertir · [ y ]: tamaño · la presión de la lapicera dosifica'],
 ];
 const PINCELES: [PincelEscultura, string, string][] = [
@@ -45,8 +45,17 @@ const DESLIZADORES: { k: keyof Proporciones; nombre: string; ayuda: string }[] =
   { k: 'caderas', nombre: 'Caderas', ayuda: 'El ancho de caderas' },
   { k: 'brazos', nombre: 'Brazos', ayuda: 'El largo de los brazos' },
   { k: 'piernas', nombre: 'Piernas', ayuda: 'El largo de las piernas' },
+  { k: 'manos', nombre: 'Manos (tamaño)', ayuda: 'El tamaño de las manos, con los dedos' },
+  { k: 'pies', nombre: 'Pies (tamaño)', ayuda: 'El tamaño de los pies' },
 ];
+const DEDOS_PANEL: [('cerrar' | 'indice' | 'pulgar'), string][] = [['cerrar', 'Cerrar los dedos'], ['indice', 'Índice'], ['pulgar', 'Pulgar']];
 const fmt = (v: number, d = 2) => v.toFixed(d).replace('.', ',');
+/** Los diales de la cara: [clave, nombre, mín, máx] */
+const DIALES_CARA: [string, string, number, number][] = [
+  ['ojos', 'Párpados (abiertos ↔ cerrados)', -0.4, 1], ['miraX', 'Mirada (izquierda ↔ derecha)', -1, 1], ['miraY', 'Mirada (abajo ↔ arriba)', -1, 1],
+  ['boca', 'Boca (cerrada ↔ abierta)', 0, 1], ['sonrisa', 'Comisuras (triste ↔ sonrisa)', -1, 1], ['ancho', 'Ancho (fruncida ↔ estirada)', -1, 1],
+  ['cejas', 'Cejas (abajo ↔ arriba)', -1, 1], ['fruncir', 'Fruncir el ceño', 0, 1],
+];
 
 /** Mis personajes: lo guardado en las colecciones propias como personaje. */
 function misPersonajes(): { kit: Kit; p: Pieza }[] {
@@ -59,6 +68,7 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
   const [base, setBase] = useState<BaseCuerpo>('hombre');
   const [vista, setVista] = useState(25);
   const [poses, setPoses] = useState(() => engine.current?.posesDelTaller() ?? []);
+  const listas = engine.current?.expresionesTaller() ?? { expresiones: [], visemas: [], contexturas: [] };
   const [vistasHoja, setVistasHoja] = useState<number[]>([0, 45, 90, 135, 180]);
   const [conCuerpo, setConCuerpo] = useState(true);
   const [marco, setMarco] = useState({ w: 1920, h: 1080, fps: 24, cuadros: 24 });
@@ -188,6 +198,47 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
         <button className="persp3d-boton taller3d-espejar" onClick={() => e?.espejarPose()} title="Toda la pose al revés: lo de la izquierda a la derecha">Espejar la pose</button>
       </div>
       <label className="taller3d-ver"><span><input type="checkbox" checked={t.pies} onChange={(ev) => e?.setPiesEnElPiso(ev.target.checked)}/> Pies en el piso</span></label>
+      <label className="taller3d-ver" title="Al levantar el brazo por encima del hombro, la clavícula sube con él (como un hombro de verdad)"><span><input type="checkbox" checked={t.hombrosAuto} onChange={(ev) => e?.setHombrosAuto(ev.target.checked)}/> Hombros automáticos</span></label>
+      {t.diales.length > 0 && <>
+        <h3>Ajuste fino · {t.nombreControl}</h3>
+        {t.diales.map((d) => <label key={d.eje} className="toma3d-fila taller3d-desl">{d.nombre}
+          <input type="range" aria-label={'Ajuste fino: ' + d.nombre} data-dial={d.eje} min={d.min} max={d.max} step={0.5} value={d.valor}
+            onChange={(ev) => e?.verDialTaller(d.eje, Number(ev.target.value))}
+            onPointerUp={() => e?.confirmarVivo()} onKeyUp={() => e?.confirmarVivo()} onBlur={() => e?.confirmarVivo()}/>
+          <output>{fmt(d.valor, 1)}°</output></label>)}
+      </>}
+
+      <h3>Manos</h3>
+      {(['l', 'r'] as const).map((lado) => <div key={lado} className="taller3d-mano">
+        <p className="persp3d-nota">{lado === 'l' ? 'Mano izquierda' : 'Mano derecha'}</p>
+        <div className="taller3d-claves" aria-label={lado === 'l' ? 'Mano izquierda' : 'Mano derecha'}>
+          {(e?.manosDeFabrica() ?? []).map((x) => <button key={x.id} data-mano={lado + ':' + x.id} onClick={() => e?.manoTaller(lado, x.id)}>{x.nombre}</button>)}
+        </div>
+        {DEDOS_PANEL.map(([k, n]) => <label key={k} className="toma3d-fila taller3d-desl">{n}
+          <input type="range" aria-label={(lado === 'l' ? 'Mano izquierda: ' : 'Mano derecha: ') + n} data-dedo={lado + ':' + k} min={0} max={1} step={0.02} value={t.manos[lado][k]}
+            onChange={(ev) => e?.verManoTaller(lado, { [k]: Number(ev.target.value) })}
+            onPointerUp={() => e?.confirmarVivo()} onKeyUp={() => e?.confirmarVivo()} onBlur={() => e?.confirmarVivo()}/>
+          <output>{fmt(t.manos[lado][k])}</output></label>)}
+      </div>)}
+
+      {t.tieneCara && <>
+        <h3>Cara</h3>
+        <div className="taller3d-claves" aria-label="Expresiones">
+          {listas.expresiones.map((x) => <button key={x.id} data-expresion={x.id} onClick={() => e?.expresionTaller(x.id)}>{x.nombre}</button>)}
+        </div>
+        <p className="persp3d-nota">Para hablar (visemas): una clave por sílaba</p>
+        <div className="taller3d-claves" aria-label="Visemas">
+          {listas.visemas.map((x) => <button key={x.id} data-visema={x.id} onClick={() => e?.expresionTaller(x.id)}>{x.nombre}</button>)}
+        </div>
+        {DIALES_CARA.map(([k, n, mn, mx]) => {
+          const v = k === 'ojos' ? (t.cara.ojoI + t.cara.ojoD) / 2 : (t.cara as unknown as Record<string, number>)[k];
+          return <label key={k} className="toma3d-fila taller3d-desl">{n}
+            <input type="range" aria-label={'Cara: ' + n} data-cara={k} min={mn} max={mx} step={0.02} value={v}
+              onChange={(ev) => { const x = Number(ev.target.value); e?.verCaraTaller(k === 'ojos' ? { ojoI: x, ojoD: x } : { [k]: x }); }}
+              onPointerUp={() => e?.confirmarVivo()} onKeyUp={() => e?.confirmarVivo()} onBlur={() => e?.confirmarVivo()}/>
+            <output>{fmt(v)}</output></label>;
+        })}
+      </>}
 
       <h3>Actuación</h3>
       <p className="persp3d-nota">Poses clave por cuadro: el cuerpo pasa de una a otra solo. Con la primera clave puesta, cada cambio de pose deja clave en el cuadro de ahora.</p>
@@ -264,6 +315,23 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
     <h3>Cuerpo y proporciones</h3>
     <label className="toma3d-fila">Cuerpo<select aria-label="Cuerpo" value={t.base} onChange={(ev) => e?.cambiarCuerpo(ev.target.value as BaseCuerpo)}>
       {CUERPOS.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select></label>
+    {t.aceptaContextura && <><p className="persp3d-nota">Contextura</p>
+    <div className="taller3d-claves" aria-label="Contextura">
+      {listas.contexturas.map((x) => <button key={x.id} data-contextura={x.id} onClick={() => e?.contexturaTaller(x.id)}>{x.nombre}</button>)}
+    </div></>}
+    {t.aceptaContextura && ([['peso', 'Peso (flaco ↔ gordo)', -1, 1.5], ['musculo', 'Músculo (blando ↔ marcado)', -1, 1]] as [string, string, number, number][]).map(([k, n, mn, mx]) =>
+      <label key={k} className="toma3d-fila taller3d-desl">{n}
+        <input type="range" aria-label={n} data-forma={k} min={mn} max={mx} step={0.05} value={(t.forma as unknown as Record<string, number>)[k]}
+          onChange={(ev) => e?.verFormaTaller({ [k]: Number(ev.target.value) })}
+          onPointerUp={() => e?.confirmarVivo(false)} onKeyUp={() => e?.confirmarVivo(false)} onBlur={() => e?.confirmarVivo(false)}/>
+        <output>{fmt((t.forma as unknown as Record<string, number>)[k])}</output></label>)}
+    <p className="persp3d-nota">Grosor de cada parte (el diámetro, sin cambiar el largo)</p>
+    {PARTES_GROSOR.map(({ id, nombre: n }) => { const v = t.forma.grosor?.[id] ?? 1; return <label key={id} className="toma3d-fila taller3d-desl">{n}
+      <input type="range" aria-label={'Grosor: ' + n} data-grosor={id} min={0.5} max={1.8} step={0.02} value={v}
+        onChange={(ev) => e?.verFormaTaller({ grosor: { [id]: Number(ev.target.value) } })}
+        onPointerUp={() => e?.confirmarVivo(false)} onKeyUp={() => e?.confirmarVivo(false)} onBlur={() => e?.confirmarVivo(false)}/>
+      <output>{fmt(v)}</output></label>; })}
+    <p className="persp3d-nota">Largo de cada parte</p>
     {DESLIZADORES.map((d) => <label key={d.k} className="toma3d-fila taller3d-desl" title={d.ayuda}>{d.nombre}
       <input type="range" aria-label={d.nombre} data-prop={d.k} min={PROP_RANGOS[d.k][0]} max={PROP_RANGOS[d.k][1]} step={0.02} value={t.prop[d.k]}
         onPointerUp={() => e?.confirmarProporciones()} onKeyUp={() => e?.confirmarProporciones()} onBlur={() => e?.confirmarProporciones()}

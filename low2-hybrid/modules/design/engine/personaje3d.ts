@@ -48,11 +48,13 @@ export interface Proporciones {
   /** el tamaño entero (el alto en metros sale de acá) */
   escala: number;
   cabeza: number; cuello: number; torso: number; hombros: number; caderas: number; brazos: number; piernas: number;
+  /** el tamaño de las manos y de los pies */
+  manos: number; pies: number;
 }
-export const PROP_NEUTRA: Proporciones = { escala: 1, cabeza: 1, cuello: 1, torso: 1, hombros: 1, caderas: 1, brazos: 1, piernas: 1 };
+export const PROP_NEUTRA: Proporciones = { escala: 1, cabeza: 1, cuello: 1, torso: 1, hombros: 1, caderas: 1, brazos: 1, piernas: 1, manos: 1, pies: 1 };
 export const PROP_RANGOS: Record<keyof Proporciones, [number, number]> = {
   escala: [0.2, 5], cabeza: [0.6, 2], cuello: [0.4, 2.2], torso: [0.7, 1.5], hombros: [0.6, 1.7],
-  caderas: [0.6, 1.6], brazos: [0.7, 1.5], piernas: [0.55, 1.6],
+  caderas: [0.6, 1.6], brazos: [0.7, 1.5], piernas: [0.55, 1.6], manos: [0.6, 1.7], pies: [0.6, 1.7],
 };
 
 /** Lo que se guarda (en el proyecto y en la biblioteca). */
@@ -73,6 +75,10 @@ export interface PersonajeDatos {
   raiz?: number[];
   /** la actuación: poses clave por cuadro */
   actuacion?: Actuacion;
+  /** la contextura: peso y músculo (flaco, gordo, atlético…) */
+  forma?: Forma;
+  /** los gestos de la cara (ojos, boca, cejas) */
+  cara?: Cara;
   /** una pose de fábrica por nombre (los de la biblioteca): se resuelve al crearlo */
   poseFabrica?: string;
 }
@@ -90,13 +96,14 @@ export function personajeValido(x: unknown): PersonajeDatos {
   const escultura = typeof e === 'string' ? (/^e1:[A-Za-z0-9+/=]*$/.test(e) && e.length <= 16e6 ? e : undefined)
     : Array.isArray(e) && e.length % 4 === 0 && e.length <= 4 * 400000 && e.every((n) => Number.isFinite(Number(n))) ? e.map(Number) : undefined;
   const definicion = Math.round(lim(o.definicion, 0, 0, 2));
-  const raiz = raizValida(o.raiz), actuacion = actuacionValida(o.actuacion);
+  const raiz = raizValida(o.raiz), actuacion = actuacionValida(o.actuacion), forma = formaValida(o.forma), cara = caraValida(o.cara);
   return { base, prop, pose, pies: o.pies !== false, color: typeof o.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.color) ? o.color : COLOR_ARCILLA, ...(escultura?.length ? { escultura } : {}),
-    ...(definicion ? { definicion } : {}), ...(raiz ? { raiz } : {}), ...(actuacion ? { actuacion } : {}),
+    ...(definicion ? { definicion } : {}), ...(raiz ? { raiz } : {}), ...(actuacion ? { actuacion } : {}), ...(forma ? { forma } : {}), ...(cara ? { cara } : {}),
     ...(typeof o.poseFabrica === 'string' && /^[a-z0-9-]{1,30}$/.test(o.poseFabrica) ? { poseFabrica: o.poseFabrica } : {}) };
 }
 export function personajeNuevo(base: BaseCuerpo = 'hombre'): PersonajeDatos {
-  return { base, prop: { ...PROP_NEUTRA }, pose: {}, pies: true, color: COLOR_ARCILLA };
+  // con definición Alta de entrada: la piel de fábrica (12 mil triángulos) se veía tosca
+  return { base, prop: { ...PROP_NEUTRA }, pose: {}, pies: true, color: COLOR_ARCILLA, definicion: 1 };
 }
 
 /* ── LAS ARTICULACIONES QUE SE AGARRAN ─────────────────────────────────────── */
@@ -105,29 +112,91 @@ export function personajeNuevo(base: BaseCuerpo = 'hombre'): PersonajeDatos {
 export function controlDeHueso(n: string): string {
   if (/^(index|middle|pinky|ring|thumb)_/.test(n)) return 'hand_' + n.slice(-1);
   if (/^ball/.test(n)) return 'foot_' + n.slice(-1);
-  if (/^clavicle_/.test(n)) return 'upperarm_' + n.slice(-1);
   if (n === 'root') return 'pelvis';
   if (/^spine_0[123]$/.test(n)) return 'tronco';
   return n;
 }
 const TRONCO = ['spine_01', 'spine_02', 'spine_03'];
-/** Los huesos que mueve un control (el tronco reparte el giro en las tres vértebras). */
-export function huesosDeControl(c: string): string[] { return c === 'tronco' ? TRONCO : [c]; }
+/** Los huesos que mueve un control y cuánto del giro se lleva cada uno: el
+ *  tronco lo reparte en las tres vértebras; la CABEZA, entre el cuello y ella
+ *  (girar la cabeza sola, desde la base del cráneo, la quebraba). */
+export function huesosDeControl(c: string): string[] { return c === 'tronco' ? TRONCO : c === 'Head' ? ['neck_01', 'Head'] : [c]; }
+function pesosDeControl(c: string): number[] { return c === 'tronco' ? [1 / 3, 1 / 3, 1 / 3] : c === 'Head' ? [0.45, 0.55] : [1]; }
+/** LÍMITES ANATÓMICOS POR EJE (grados, en los ejes del mundo en reposo: x
+ *  adelante/atrás, y girar, z inclinar al costado). Sumados cuello + cabeza,
+ *  los de un cuello de verdad: agachar 50° (el mentón al pecho), levantar la
+ *  cara 55°, inclinar 34°, girar 76°; cada vértebra un poco. Medido: con sólo
+ *  un tope del ángulo total, o con 75° adelante, la cabeza quedaba quebrada
+ *  contra el hombro. */
+const EJES: Record<string, [[number, number], [number, number], [number, number]]> = {
+  neck_01: [[-30, 26], [-36, 36], [-18, 18]],
+  Head: [[-25, 24], [-40, 40], [-16, 16]],
+  spine_01: [[-12, 30], [-15, 15], [-12, 12]],
+  spine_02: [[-12, 30], [-15, 15], [-12, 12]],
+  spine_03: [[-12, 25], [-15, 15], [-12, 12]],
+  // EL HOMBRO (desde la T: el brazo izquierdo apunta a +x; el derecho, espejado).
+  // z: subir (hasta vertical; la clavícula suma el resto) o bajar al costado;
+  // y: adelante cruzando el pecho / un poco atrás; x: rotar sobre su largo.
+  // Medido: sin topes, el brazo pasaba por encima de la cabeza al otro lado. Sólo al
+  // GIRARLO (arrastre, flechas, diales): la IK del anillo de la mano rota el húmero
+  // sobre su largo para orientar el codo y una caja de ejes la dejaba sin llegar.
+  upperarm_l: [[-85, 85], [-135, 45], [-100, 92]],
+  upperarm_r: [[-85, 85], [-45, 135], [-92, 100]],
+};
+const SOLO_AL_GIRAR = new Set(['upperarm_l', 'upperarm_r']);
+/** los que se topan en elipse (agachar + inclinar): la columna y el cuello */
+const ELIPSE = new Set(['neck_01', 'Head', 'spine_01', 'spine_02', 'spine_03']);
+function limitarEjes(n: string, q: THREE.Quaternion, girando = false): THREE.Quaternion {
+  const L = EJES[n]; if (!L || (!girando && SOLO_AL_GIRAR.has(n))) return q;
+  const e = new THREE.Euler().setFromQuaternion(q, 'YXZ'), R = Math.PI / 180;
+  e.y = Math.max(L[1][0] * R, Math.min(L[1][1] * R, e.y));
+  // agachar e inclinar juntos: un tope ELÍPTICO (con dos topes sueltos, en la
+  // diagonal se sumaban y la cabeza caía sobre el hombro)
+  if (ELIPSE.has(n)) {
+    const mx = (e.x >= 0 ? L[0][1] : -L[0][0]) * R, mz = (e.z >= 0 ? L[2][1] : -L[2][0]) * R;
+    const k = Math.hypot(e.x / Math.max(1e-6, mx), e.z / Math.max(1e-6, mz));
+    if (k > 1) { e.x /= k; e.z /= k; }
+  } else {
+    e.x = Math.max(L[0][0] * R, Math.min(L[0][1] * R, e.x));
+    e.z = Math.max(L[2][0] * R, Math.min(L[2][1] * R, e.z));
+  }
+  return new THREE.Quaternion().setFromEuler(e);
+}
+/** Los diales del AJUSTE FINO de cada control: qué hace cada eje y su tope. */
+export interface Dial { eje: 'x' | 'y' | 'z' | 'doblar' | 'rotar'; nombre: string; min: number; max: number }
+export function dialesDe(c: string): Dial[] {
+  const b = c.replace(/_[lr]$/, '');
+  const D = (eje: Dial['eje'], nombre: string, min: number, max: number): Dial => ({ eje, nombre, min, max });
+  switch (b) {
+    case 'pelvis': return [D('x', 'Inclinar adelante', -60, 90), D('y', 'Girar', -180, 180), D('z', 'Inclinar al costado', -45, 45)];
+    case 'tronco': return [D('x', 'Agacharse / arquearse', -36, 85), D('y', 'Girar', -45, 45), D('z', 'Inclinar al costado', -36, 36)];
+    case 'neck_01': return [D('x', 'Agachar / levantar', -30, 26), D('y', 'Girar', -36, 36), D('z', 'Ladear', -18, 18)];
+    case 'Head': return [D('x', 'Asentir', -55, 50), D('y', 'Mirar al costado', -76, 76), D('z', 'Ladear', -34, 34)];
+    case 'clavicle': return [D('z', 'Subir / bajar el hombro', -20, 35), D('y', 'Adelantar / atrasar', -30, 30)];
+    case 'upperarm': return [D('z', 'Subir / bajar el brazo', -100, 100), D('y', 'Adelante / atrás', -120, 120), D('x', 'Rotar el brazo', -90, 90)];
+    case 'lowerarm': case 'calf': return [D('doblar', 'Doblar', 0, 150), D('rotar', 'Rotar', -90, 90)];
+    case 'hand': return [D('z', 'Doblar la muñeca', -80, 80), D('y', 'De costado', -40, 40), D('x', 'Girar', -80, 80)];
+    case 'thigh': return [D('x', 'Adelante / atrás', -120, 45), D('z', 'Abrir / cerrar', -45, 80), D('y', 'Rotar la pierna', -45, 45)];
+    case 'foot': return [D('x', 'Punta arriba / abajo', -45, 45), D('y', 'Punta adentro / afuera', -30, 30), D('z', 'Torcer', -25, 25)];
+    default: return [];
+  }
+}
 /** Hacia dónde apunta cada control: la punta que se arrastra. */
 const PUNTA: Record<string, string> = {
+  clavicle_l: 'upperarm_l', clavicle_r: 'upperarm_r',
   upperarm_l: 'lowerarm_l', lowerarm_l: 'hand_l', hand_l: 'middle_02_l',
   upperarm_r: 'lowerarm_r', lowerarm_r: 'hand_r', hand_r: 'middle_02_r',
   thigh_l: 'calf_l', calf_l: 'foot_l', foot_l: 'ball_l',
   thigh_r: 'calf_r', calf_r: 'foot_r', foot_r: 'ball_r',
   neck_01: 'Head', tronco: 'neck_01', pelvis: 'spine_03',
 };
-export const CONTROLES = ['pelvis', 'tronco', 'neck_01', 'Head', 'upperarm_l', 'lowerarm_l', 'hand_l', 'upperarm_r', 'lowerarm_r', 'hand_r',
+export const CONTROLES = ['pelvis', 'tronco', 'neck_01', 'Head', 'clavicle_l', 'clavicle_r', 'upperarm_l', 'lowerarm_l', 'hand_l', 'upperarm_r', 'lowerarm_r', 'hand_r',
   'thigh_l', 'calf_l', 'foot_l', 'thigh_r', 'calf_r', 'foot_r'];
 export function nombreControl(c: string): string {
   const lado = c.endsWith('_l') ? 'izquierd' : c.endsWith('_r') ? 'derech' : '';
   const base: Record<string, [string, 'o' | 'a']> = {
     pelvis: ['Cuerpo entero', 'o'], tronco: ['Tronco', 'o'], neck_01: ['Cuello', 'o'], Head: ['Cabeza', 'a'],
-    upperarm: ['Hombro', 'o'], lowerarm: ['Codo', 'o'], hand: ['Muñeca', 'a'], thigh: ['Cadera', 'a'], calf: ['Rodilla', 'a'], foot: ['Tobillo', 'o'],
+    clavicle: ['Clavícula', 'a'], upperarm: ['Hombro', 'o'], lowerarm: ['Codo', 'o'], hand: ['Muñeca', 'a'], thigh: ['Cadera', 'a'], calf: ['Rodilla', 'a'], foot: ['Tobillo', 'o'],
   };
   const b = base[c.replace(/_[lr]$/, '')];
   return b ? b[0] + (lado ? ' ' + lado + b[1] : '') : c;
@@ -212,11 +281,15 @@ function materialArcilla(m0: THREE.MeshStandardMaterial, color: THREE.Color): TH
   m.name = m0.name;
   if (m0.map && !pelo) {
     m.userData.claro = color;
+    // la piel con boca (atributo `adentro`) oscurece el interior: se ve al abrirla
+    m.customProgramCacheKey = () => (m.userData.conBoca ? 'arcilla-boca' : 'arcilla');
     m.onBeforeCompile = (sh) => {
       sh.uniforms.claro = { value: m.userData.claro };
-      sh.fragmentShader = 'uniform vec3 claro;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      const boca = !!m.userData.conBoca;
+      if (boca) sh.vertexShader = 'attribute float adentro;\nvarying float vAdentro;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vAdentro = adentro;');
+      sh.fragmentShader = (boca ? 'varying float vAdentro;\n' : '') + 'uniform vec3 claro;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
         float lumArcilla = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-        diffuseColor.rgb = mix(claro * 0.2, claro, smoothstep(0.02, 0.32, lumArcilla));`);
+        diffuseColor.rgb = mix(claro * 0.2, claro, smoothstep(0.02, 0.32, lumArcilla));` + (boca ? '\n        diffuseColor.rgb *= mix(1.0, 0.16, vAdentro);' : ''));
     };
   }
   return m;
@@ -262,7 +335,7 @@ function muestraDeClip(a: Animaciones, c: ClipAnimacion, k: number): { giros: Ma
 
 /* ── LA ACTUACIÓN: poses clave por cuadro ──────────────────────────────────── */
 /** Una clave: la pose (y dónde va la cadera) en un cuadro. */
-export interface ClaveActuacion { f: number; pose: Record<string, number[]>; raiz?: number[] }
+export interface ClaveActuacion { f: number; pose: Record<string, number[]>; raiz?: number[]; cara?: Cara }
 export interface Actuacion { cuadros: number; claves: ClaveActuacion[] }
 function poseValida(o: unknown): Record<string, number[]> {
   const pose: Record<string, number[]> = {};
@@ -288,20 +361,22 @@ function actuacionValida(x: unknown): Actuacion | undefined {
     const f = Math.round(Number(c?.f));
     if (!(f >= 1 && f <= cuadros) || vistas.has(f)) return null;
     vistas.add(f);
-    const r = raizValida(c.raiz);
-    return { f, pose: poseValida(c.pose), ...(r ? { raiz: r } : {}) } as ClaveActuacion;
+    const r = raizValida(c.raiz), ca = caraValida(c.cara);
+    return { f, pose: poseValida(c.pose), ...(r ? { raiz: r } : {}), ...(ca ? { cara: ca } : {}) } as ClaveActuacion;
   }).filter((c): c is ClaveActuacion => !!c).sort((a, b) => a.f - b.f);
   return { cuadros, claves };
 }
 /** La pose entre dos claves: cada hueso gira de una a la otra (slerp). */
-export function poseEnCuadro(a: Actuacion | undefined, f: number): { pose: Record<string, number[]>; raiz?: number[] } | null {
+export function poseEnCuadro(a: Actuacion | undefined, f: number): { pose: Record<string, number[]>; raiz?: number[]; cara?: Cara } | null {
   if (!a || !a.claves.length) return null;
   let k0: ClaveActuacion | null = null, k1: ClaveActuacion | null = null;
   for (const c of a.claves) { if (c.f <= f) k0 = c; else { k1 = c; break; } }
-  const copia = (c: ClaveActuacion) => ({ pose: JSON.parse(JSON.stringify(c.pose)), ...(c.raiz ? { raiz: c.raiz.slice() } : {}) });
+  const copia = (c: ClaveActuacion) => ({ pose: JSON.parse(JSON.stringify(c.pose)), ...(c.raiz ? { raiz: c.raiz.slice() } : {}), ...(c.cara ? { cara: { ...c.cara } } : {}) });
   if (!k0) return copia(k1!);
   if (!k1 || k0.f === f) return copia(k0);
-  const t = (f - k0.f) / (k1.f - k0.f);
+  // de una pose a la otra ARRANCA Y FRENA SUAVE (ease in/out), no a velocidad pareja;
+  // las claves de una animación de la biblioteca (una por cuadro) no lo notan
+  const u = (f - k0.f) / (k1.f - k0.f), t = k1.f - k0.f > 1 ? u * u * (3 - 2 * u) : u;
   const pose: Record<string, number[]> = {};
   const q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion();
   for (const n of new Set([...Object.keys(k0.pose), ...Object.keys(k1.pose)])) {
@@ -311,7 +386,14 @@ export function poseEnCuadro(a: Actuacion | undefined, f: number): { pose: Recor
   }
   const r0 = k0.raiz ?? [0, 0, 0], r1 = k1.raiz ?? [0, 0, 0];
   const raiz = r0.map((v, i) => Math.round((v + (r1[i] - v) * t) * 1e5) / 1e5);
-  return { pose, ...(raiz.some((v) => v !== 0) ? { raiz } : {}) };
+  // la cara pasa de un gesto al otro (para hablar: una clave por sílaba)
+  let cara: Cara | undefined;
+  if (k0.cara || k1.cara) {
+    const c0 = { ...CARA_NEUTRA, ...k0.cara }, c1 = { ...CARA_NEUTRA, ...k1.cara }, c = { ...CARA_NEUTRA };
+    for (const k of Object.keys(c) as (keyof Cara)[]) c[k] = c0[k] + (c1[k] - c0[k]) * t;
+    cara = caraValida(c);
+  }
+  return { pose, ...(raiz.some((v) => v !== 0) ? { raiz } : {}), ...(cara ? { cara } : {}) };
 }
 
 /* ── LA DEFINICIÓN: más malla para esculpir ────────────────────────────────── */
@@ -380,6 +462,14 @@ function subdividir(g: THREE.BufferGeometry, pos: ArrayLike<number> = g.attribut
     top.forEach(([h, w], k) => { SIa[j * 4 + k] = h; SWa[j * 4 + k] = w / tot; });
   }
   const out = new THREE.BufferGeometry();
+  for (const nombre of ['labio', 'adentro']) {
+    const LB = g.attributes[nombre] as THREE.BufferAttribute | undefined;
+    if (!LB) continue;
+    const la = new Float32Array(m); la.set(LB.array as Float32Array);
+    for (let e = 0; e < ea.length; e++) la[n + e] = (LB.getX(ea[e]) + LB.getX(eb[e])) / 2;
+    out.setAttribute(nombre, new THREE.BufferAttribute(la, 1));
+  }
+  out.userData = { ...g.userData };
   out.setAttribute('position', new THREE.BufferAttribute(P, 3));
   out.setAttribute('normal', new THREE.BufferAttribute(NN, 3));
   if (U) out.setAttribute('uv', new THREE.BufferAttribute(U, 2));
@@ -522,6 +612,205 @@ class RejillaPiel {
   }
 }
 
+/* ── LA CARA: abrir la boca, cerrar los ojos, mirar, cejas, sonrisa ───────── */
+/** Los gestos de la cara (0 = como viene el cuerpo). Van en las claves de la actuación. */
+export interface Cara {
+  /** párpados: 0 abiertos, 1 cerrados (negativo: muy abiertos, sorpresa) */
+  ojoI: number; ojoD: number;
+  /** hacia dónde miran los ojos: −1…1 (izquierda/derecha del personaje, abajo/arriba) */
+  miraX: number; miraY: number;
+  /** la mandíbula: 0 cerrada, 1 abierta del todo */
+  boca: number;
+  /** las comisuras: −1 triste, 1 sonrisa */
+  sonrisa: number;
+  /** el ancho de la boca: −1 fruncida (O, U), 1 estirada (E, I) */
+  ancho: number;
+  /** las cejas: −1 abajo, 1 arriba; fruncir (enojo): 0…1 */
+  cejas: number; fruncir: number;
+}
+export const CARA_NEUTRA: Cara = { ojoI: 0, ojoD: 0, miraX: 0, miraY: 0, boca: 0, sonrisa: 0, ancho: 0, cejas: 0, fruncir: 0 };
+const CARA_RANGOS: Record<keyof Cara, [number, number]> = {
+  ojoI: [-0.4, 1], ojoD: [-0.4, 1], miraX: [-1, 1], miraY: [-1, 1], boca: [0, 1], sonrisa: [-1, 1], ancho: [-1, 1], cejas: [-1, 1], fruncir: [0, 1],
+};
+function caraValida(x: unknown): Cara | undefined {
+  if (!x || typeof x !== 'object') return undefined;
+  const o = x as Partial<Cara>, c = { ...CARA_NEUTRA };
+  for (const k of Object.keys(CARA_RANGOS) as (keyof Cara)[]) c[k] = Math.round(lim(o[k], 0, CARA_RANGOS[k][0], CARA_RANGOS[k][1]) * 1000) / 1000;
+  return Object.values(c).some((v) => v !== 0) ? c : undefined;
+}
+/** Expresiones y posiciones de la boca para hablar (los visemas), listas para usar. */
+export const EXPRESIONES: { id: string; nombre: string; cara: Partial<Cara> }[] = [
+  { id: 'neutral', nombre: 'Neutral', cara: {} },
+  { id: 'sonrisa', nombre: 'Sonrisa', cara: { sonrisa: 0.8, ancho: 0.3, ojoI: 0.12, ojoD: 0.12 } },
+  { id: 'risa', nombre: 'Risa', cara: { sonrisa: 1, boca: 0.55, ancho: 0.4, ojoI: 0.35, ojoD: 0.35, cejas: 0.2 } },
+  { id: 'sorpresa', nombre: 'Sorpresa', cara: { boca: 0.6, ancho: -0.4, ojoI: -0.35, ojoD: -0.35, cejas: 1 } },
+  { id: 'enojo', nombre: 'Enojo', cara: { cejas: -0.6, fruncir: 1, sonrisa: -0.4, ojoI: 0.2, ojoD: 0.2 } },
+  { id: 'tristeza', nombre: 'Tristeza', cara: { sonrisa: -0.9, cejas: 0.4, fruncir: 0.5, ojoI: 0.25, ojoD: 0.25, miraY: -0.4 } },
+  { id: 'miedo', nombre: 'Miedo', cara: { boca: 0.3, ancho: 0.5, ojoI: -0.3, ojoD: -0.3, cejas: 0.9, fruncir: 0.5 } },
+  { id: 'dormido', nombre: 'Dormido', cara: { ojoI: 1, ojoD: 1, boca: 0.08 } },
+  { id: 'guino', nombre: 'Guiño', cara: { ojoI: 1, sonrisa: 0.6, cejas: -0.1 } },
+];
+export const VISEMAS: { id: string; nombre: string; cara: Partial<Cara> }[] = [
+  { id: 'A', nombre: 'A', cara: { boca: 0.75, ancho: 0.1 } },
+  { id: 'E', nombre: 'E', cara: { boca: 0.35, ancho: 0.7 } },
+  { id: 'I', nombre: 'I', cara: { boca: 0.18, ancho: 0.9 } },
+  { id: 'O', nombre: 'O', cara: { boca: 0.5, ancho: -0.8 } },
+  { id: 'U', nombre: 'U', cara: { boca: 0.18, ancho: -1 } },
+  { id: 'M', nombre: 'M B P', cara: { boca: 0, ancho: -0.1 } },
+  { id: 'F', nombre: 'F V', cara: { boca: 0.1, ancho: 0.2 } },
+];
+
+/* ── LA CONTEXTURA: flaco, gordo, con más o menos músculo ──────────────────── */
+/** El peso y el músculo (0 = el cuerpo como viene: culturista). */
+export interface Forma { peso: number; musculo: number; grosor?: Partial<Record<ParteGrosor, number>> }
+/** El DIÁMETRO de cada parte (1 = como viene): crece o se afina alrededor de su hueso, sin cambiar el largo. */
+export type ParteGrosor = 'cabeza' | 'cuello' | 'torso' | 'brazo' | 'antebrazo' | 'muslo' | 'pierna';
+export const PARTES_GROSOR: { id: ParteGrosor; nombre: string }[] = [
+  { id: 'cabeza', nombre: 'Cabeza (ancho)' }, { id: 'cuello', nombre: 'Cuello' }, { id: 'torso', nombre: 'Torso' },
+  { id: 'brazo', nombre: 'Brazos' }, { id: 'antebrazo', nombre: 'Antebrazos' }, { id: 'muslo', nombre: 'Muslos' }, { id: 'pierna', nombre: 'Pantorrillas' },
+];
+/** Qué hueso es de qué parte, y de qué hueso a qué hueso va su eje. */
+const PARTE_DE_HUESO: Record<string, ParteGrosor> = { Head: 'cabeza', neck_01: 'cuello', pelvis: 'torso', spine_01: 'torso', spine_02: 'torso', spine_03: 'torso',
+  upperarm: 'brazo', lowerarm: 'antebrazo', thigh: 'muslo', calf: 'pierna' };
+export const FORMA_RANGOS: Record<'peso' | 'musculo', [number, number]> = { peso: [-1, 1.5], musculo: [-1, 1] };
+function formaValida(x: unknown): Forma | undefined {
+  if (!x || typeof x !== 'object') return undefined;
+  const o = x as Partial<Forma>;
+  const f: Forma = { peso: Math.round(lim(o.peso, 0, -1, 1.5) * 1000) / 1000, musculo: Math.round(lim(o.musculo, 0, -1, 1) * 1000) / 1000 };
+  const gr: Partial<Record<ParteGrosor, number>> = {};
+  if (o.grosor && typeof o.grosor === 'object') for (const { id } of PARTES_GROSOR) {
+    const v = Math.round(lim((o.grosor as Record<string, unknown>)[id], 1, 0.5, 1.8) * 1000) / 1000;
+    if (v !== 1) gr[id] = v;
+  }
+  if (Object.keys(gr).length) f.grosor = gr;
+  return f.peso || f.musculo || f.grosor ? f : undefined;
+}
+export const CONTEXTURAS: { id: string; nombre: string; forma: Forma }[] = [
+  { id: 'musculoso', nombre: 'Musculoso', forma: { peso: 0, musculo: 0 } },
+  { id: 'atletico', nombre: 'Atlético', forma: { peso: 0, musculo: -0.45 } },
+  { id: 'normal', nombre: 'Normal', forma: { peso: 0.15, musculo: -0.85 } },
+  { id: 'flaco', nombre: 'Flaco', forma: { peso: -0.85, musculo: -0.75 } },
+  { id: 'rellenito', nombre: 'Rellenito', forma: { peso: 0.45, musculo: -0.85 } },
+  { id: 'gordo', nombre: 'Gordo', forma: { peso: 0.85, musculo: -1 } },
+  { id: 'muygordo', nombre: 'Muy gordo', forma: { peso: 1.4, musculo: -1 } },
+];
+/** Cuánto engorda, adelgaza o pierde músculo la piel que mueve cada hueso (metros, por la normal). */
+const ENGORDAR: Record<string, number> = { pelvis: 0.055, spine_01: 0.085, spine_02: 0.06, spine_03: 0.035, neck_01: 0.03, Head: 0.006, clavicle: 0.02,
+  upperarm: 0.028, lowerarm: 0.013, hand: 0.003, thigh: 0.05, calf: 0.02, foot: 0.003 };
+const ADELGAZAR: Record<string, number> = { pelvis: -0.015, spine_01: -0.02, spine_02: -0.014, spine_03: -0.012, neck_01: -0.006, Head: -0.002, clavicle: -0.008,
+  upperarm: -0.012, lowerarm: -0.006, thigh: -0.018, calf: -0.01 };
+const DESMUSCULAR: Record<string, number> = { spine_01: -0.004, spine_02: -0.006, spine_03: -0.012, neck_01: -0.01, clavicle: -0.012,
+  upperarm: -0.01, lowerarm: -0.005, thigh: -0.008, calf: -0.005 };
+const regionDeHueso = (n: string) => (/^(index|middle|pinky|ring|thumb)_/.test(n) ? 'hand' : /^ball/.test(n) ? 'foot' : n.replace(/_[lr]$/, ''));
+
+/* ── la boca: partir los labios ── */
+/** Los labios de estos cuerpos están unidos en una fila de puntos, y detrás hay
+ *  una bolsa (el interior de la boca, con su propia isla de textura). Se le da al
+ *  labio de abajo su PROPIA copia de esa fila: al bajar la mandíbula la boca se
+ *  abre y se ve el interior. Los puntos nuevos van al final (la numeración de los
+ *  de antes no cambia). Atributo `labio`: 1 lo de abajo (va con la mandíbula). */
+function partirLabios(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const P = g.attributes.position as THREE.BufferAttribute, UV = g.attributes.uv as THREE.BufferAttribute | undefined;
+  if (!UV || !g.index) return g;
+  const n = P.count, bolsa: number[] = [];
+  let alto = -Infinity; for (let i = 0; i < n; i++) alto = Math.max(alto, P.getY(i));
+  // la bolsa: esa isla de textura, pero SÓLO en la cara (arriba del 85% del alto, en el
+  // medio): medido, sin esto la isla se mezclaba con otras partes y la boca quedaba a 1,50 m
+  for (let i = 0; i < n; i++) {
+    const u = UV.getX(i), v = UV.getY(i);
+    if (u > 0.08 && u < 0.2 && v > 0.58 && v < 0.76 && P.getZ(i) > 0.03 && P.getY(i) > alto * 0.85 && Math.abs(P.getX(i)) < 0.045) bolsa.push(i);
+  }
+  if (bolsa.length < 20) return g;   // sin boca (el maniquí)
+  let bx = 0, y0 = Infinity, y1 = -Infinity, zMax = -Infinity;
+  for (const i of bolsa) { bx = Math.max(bx, Math.abs(P.getX(i))); y0 = Math.min(y0, P.getY(i)); y1 = Math.max(y1, P.getY(i)); zMax = Math.max(zMax, P.getZ(i)); }
+  const labioY = (y0 + y1) / 2;
+  // la LÍNEA donde se tocan los labios no es recta (sube y baja hacia las comisuras):
+  // es el borde de adelante de la bolsa. Con una altura fija quedaban triángulos sin
+  // cortar que, al abrir, se estiraban como colmillos.
+  const frente = bolsa.filter((i) => P.getZ(i) > zMax - 0.0015).map((i) => [P.getX(i), P.getY(i), P.getZ(i)]).sort((a, b) => a[0] - b[0]);
+  const yLinea = (x: number) => {
+    if (!frente.length) return labioY;
+    if (x <= frente[0][0]) return frente[0][1];
+    for (let k = 1; k < frente.length; k++) if (x <= frente[k][0]) {
+      const a = frente[k - 1], b = frente[k], u = b[0] - a[0] > 1e-9 ? (x - a[0]) / (b[0] - a[0]) : 0;
+      return a[1] + (b[1] - a[1]) * u;
+    }
+    return frente[frente.length - 1][1];
+  };
+  // la fila: todos los puntos (de la piel y de la bolsa) que están SOBRE esa línea
+  const fila = new Set<number>();
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(P.getX(i)) > bx * 0.92 || P.getZ(i) < zMax - 0.0025) continue;
+    for (const f of frente) if (Math.abs(P.getX(i) - f[0]) < 0.0008 && Math.abs(P.getY(i) - f[1]) < 0.0008 && Math.abs(P.getZ(i) - f[2]) < 0.0008) { fila.add(i); break; }
+  }
+  const idx = g.index.array, nuevoIdx = new Uint32Array(idx.length), copia = new Map<number, number>();
+  const enArriba = new Uint16Array(n), enAbajo = new Uint16Array(n);
+  for (let t = 0; t < idx.length; t += 3) {
+    const cx = (P.getX(idx[t]) + P.getX(idx[t + 1]) + P.getX(idx[t + 2])) / 3;
+    const cy = (P.getY(idx[t]) + P.getY(idx[t + 1]) + P.getY(idx[t + 2])) / 3;
+    const abajo = cy < yLinea(cx) - 1e-5;
+    for (let c = 0; c < 3; c++) {
+      let v = idx[t + c];
+      if (abajo && fila.has(v)) { let d = copia.get(v); if (d === undefined) { d = n + copia.size; copia.set(v, d); } v = d; }
+      else if (abajo) enAbajo[v]++; else enArriba[v]++;
+      nuevoIdx[t + c] = v;
+    }
+  }
+  const m = n + copia.size, out = new THREE.BufferGeometry();
+  for (const [nombre, a0] of Object.entries(g.attributes)) {
+    const a = a0 as THREE.BufferAttribute, k = a.itemSize, arr = new (a.array.constructor as { new (n: number): Float32Array })(m * k);
+    arr.set(a.array as Float32Array);
+    for (const [v, d] of copia) for (let c = 0; c < k; c++) arr[d * k + c] = (a.array as Float32Array)[v * k + c];
+    out.setAttribute(nombre, new THREE.BufferAttribute(arr, k, a.normalized));
+  }
+  const labio = new Float32Array(m);
+  // de qué lado está cada punto: el de los triángulos que lo usan (por la altura sola,
+  // el labio de arriba que se curva por debajo de la línea quedaba atado a la mandíbula)
+  for (let i = 0; i < n; i++) {
+    const k = enArriba[i] + enAbajo[i];
+    labio[i] = k ? enAbajo[i] / k : P.getY(i) < yLinea(P.getX(i)) - 1e-5 ? 1 : 0;
+  }
+  // el FONDO de la bolsa une lo de arriba con lo de abajo: con 0/1 esos triángulos se
+  // estiraban 3 cm de golpe y asomaban por la boca abierta como colmillos (medido).
+  // Cuanto más adentro, más pareja la transición: el fondo se estira como una pared.
+  for (const i of bolsa) {
+    if (fila.has(i)) continue;
+    // (sólo el fondo: el techo y el piso, cerca de los labios, van enteros con su lado;
+    // graduados, colgaban de adentro del labio de arriba como paneles)
+    const hondo = zMax - P.getZ(i) - 0.008;
+    if (hondo <= 0) continue;
+    const banda = hondo * 1.2, u = (yLinea(P.getX(i)) - P.getY(i)) / (2 * banda) + 0.5;
+    labio[i] = Math.max(0, Math.min(1, u));
+  }
+  // lo mismo en la mejilla, pasando las comisuras (ahí la piel no está cortada): la
+  // transición se abre a medida que se aleja de la comisura, sin pliegue
+  const esBolsa = new Set(bolsa);
+  for (let i = 0; i < n; i++) {
+    const lejos = Math.abs(P.getX(i)) - bx * 0.92;
+    if (lejos <= 0 || esBolsa.has(i) || fila.has(i)) continue;
+    const banda = 0.0025 + lejos * 1.5, u = (yLinea(P.getX(i)) - P.getY(i)) / (2 * banda) + 0.5;
+    labio[i] = Math.max(0, Math.min(1, u));
+  }
+  for (const d of copia.values()) labio[d] = 1;
+  out.setAttribute('labio', new THREE.BufferAttribute(labio, 1));
+  // cuánto adentro de la boca está cada punto (el interior se pinta oscuro; también
+  // las comisuras por dentro, que al abrir se estiran y quedaban como paneles claros)
+  const adentro = new Float32Array(m);
+  for (const i of bolsa) { const h = zMax - P.getZ(i); adentro[i] = Math.max(0, Math.min(1, Math.max((h - 0.0005) / 0.003, (Math.abs(P.getX(i)) / bx - 0.7) / 0.2))); }
+  for (const [v, d] of copia) adentro[d] = adentro[v];
+  out.setAttribute('adentro', new THREE.BufferAttribute(adentro, 1));
+  out.setIndex(new THREE.BufferAttribute(nuevoIdx, 1));
+  for (const gr of g.groups) out.addGroup(gr.start, gr.count, gr.materialIndex);
+  out.userData = { ...g.userData, boca: { labioY, ancho: bx, zFrente: zMax } };
+  return out;
+}
+const pielesPartidas = new Map<BaseCuerpo, THREE.BufferGeometry>();
+function pielPartida(base: BaseCuerpo, g0: THREE.BufferGeometry): THREE.BufferGeometry {
+  let p = pielesPartidas.get(base);
+  if (!p) { p = partirLabios(g0); pielesPartidas.set(base, p); }
+  return p;
+}
+
 /* ── UN PERSONAJE ──────────────────────────────────────────────────────────── */
 export class Personaje3D {
   /** lo que se pone en la escena */
@@ -559,8 +848,25 @@ export class Personaje3D {
       }
     });
     this.cuerpo = this.mallas.reduce((a, b) => (b.geometry.attributes.position.count > a.geometry.attributes.position.count ? b : a));
-    if (this.datos.definicion) { const g0 = this.cuerpo.geometry; this.cuerpo.geometry = pielEnNivel(this.datos.base, g0, this.datos.definicion); g0.dispose(); }
+    { const g0 = this.cuerpo.geometry; this.cuerpo.geometry = pielEnNivel(this.datos.base, pielPartida(this.datos.base, g0), this.datos.definicion ?? 0); g0.dispose(); }
+    if (this.cuerpo.geometry.attributes.adentro) (this.cuerpo.material as THREE.Material).userData.conBoca = true;
     this.original = new Float32Array(this.cuerpo.geometry.attributes.position.array as Float32Array);
+    this.normalesOriginales = new Float32Array(this.cuerpo.geometry.attributes.normal.array as Float32Array);
+    // los ojos (dos globos en una malla) y las cejas (otra malla), para los gestos
+    const ojos = this.mallas.find((m) => (m.material as THREE.Material).name === 'MI_Eyes');
+    if (ojos) {
+      const pos = new Float32Array(ojos.geometry.attributes.position.array as Float32Array);
+      const centros = [1, -1].map((s) => {
+        const c = new THREE.Vector3(); let k = 0, r = 0;
+        for (let i = 0; i < pos.length; i += 3) if (Math.sign(pos[i]) === s) { c.x += pos[i]; c.y += pos[i + 1]; c.z += pos[i + 2]; k++; }
+        c.divideScalar(Math.max(1, k));
+        for (let i = 0; i < pos.length; i += 3) if (Math.sign(pos[i]) === s) r = Math.max(r, Math.hypot(pos[i] - c.x, pos[i + 1] - c.y, pos[i + 2] - c.z));
+        return { c, r };
+      });
+      this.ojos = { malla: ojos, pos, nrm: new Float32Array(ojos.geometry.attributes.normal.array as Float32Array), centros };
+    }
+    const cejas = this.mallas.find((m) => /^MI_Hair/.test((m.material as THREE.Material).name));
+    if (cejas) this.cejasMalla = { malla: cejas, pos: new Float32Array(cejas.geometry.attributes.position.array as Float32Array) };
     // tocar la piel (dibujar, esculpir, posar) va por la rejilla: con mucha malla el rayo de three tardaba décimas
     const cuerpo = this.cuerpo;
     cuerpo.raycast = (raycaster: THREE.Raycaster, intersects: THREE.Intersection[]) => {
@@ -579,6 +885,8 @@ export class Personaje3D {
     const caja = new THREE.Box3();
     for (const m of this.mallas) { m.skeleton.update(); caja.expandByObject(m, true); }
     this.altoNatural = Math.max(0.1, caja.max.y - caja.min.y);
+    if (this.datos.forma) this.ponerForma(this.datos.forma);
+    if (this.datos.cara) this.ponerCara(this.datos.cara);
     if (this.datos.escultura) this.ponerEscultura(this.datos.escultura);
     const fab = this.datos.poseFabrica && !Object.keys(this.datos.pose).length ? posesListas.find((x) => x.id === this.datos.poseFabrica) : null;
     delete this.datos.poseFabrica;
@@ -627,6 +935,8 @@ export class Personaje3D {
       }
       b.scale.copy(r.s);
       if (n === 'Head') b.scale.multiplyScalar(d.prop.cabeza);
+      else if (n === 'hand_l' || n === 'hand_r') b.scale.multiplyScalar(d.prop.manos ?? 1);
+      else if (n === 'foot_l' || n === 'foot_r') b.scale.multiplyScalar(d.prop.pies ?? 1);
       if (n === 'pelvis' && d.raiz) b.position.add(_v.fromArray(d.raiz));
     }
     this.modelo.position.set(0, 0, 0);
@@ -701,6 +1011,79 @@ export class Personaje3D {
     }
     return null;
   }
+  /** POSAR COMO UN ARMAZÓN DE STOP MOTION: el control gira `grados` alrededor
+   *  de `eje` (en el mundo), repartido en sus huesos y dentro de sus límites. El
+   *  motor da el eje y los grados según lo que se arrastró: el giro es
+   *  PROPORCIONAL al arrastre (como girar una rótula con la mano), no «apuntar al
+   *  cursor», que con palancas cortas (la cabeza) daba saltos enormes. */
+  girarPor(c: string, eje: THREE.Vector3, grados: number): void {
+    const huesos = huesosDeControl(c), pesos = pesosDeControl(c);
+    if (eje.lengthSq() < 1e-12 || !grados) return;
+    const u = eje.clone().normalize();
+    // de a 10° como mucho, topando en cada paso: de un saque, un arrastre largo (más de
+    // 180°) daba la vuelta y el tope lo convertía en otro giro (medido: arrastrar la
+    // cabeza hacia abajo la terminaba girando al costado)
+    const pasos = Math.max(1, Math.ceil(Math.abs(grados) / 10));
+    for (let s = 0; s < pasos; s++) huesos.forEach((n, k) => this.girarEnMundo(n, new THREE.Quaternion().setFromAxisAngle(u, (grados / pasos * pesos[k] * Math.PI) / 180), true));
+    if (this.hombrosAuto && /^upperarm_/.test(c)) {
+      const ua = this.huesos.get(c)!, q = ua.getWorldQuaternion(new THREE.Quaternion());
+      if (this.acomodarClavicula(c.slice(-1))) this.girarEnMundo(c, q.multiply(ua.getWorldQuaternion(new THREE.Quaternion()).invert()), true);
+    }
+    this.aplicar();
+  }
+  /** Girar sobre su largo (Alt al arrastrar): la cabeza mira al costado, el brazo rota. */
+  girarSobreSi(c: string, grados: number): void {
+    const piv = this.articulacion(c), tip = this.punta(c);
+    if (piv && tip) this.girarPor(c, tip.sub(piv), grados);
+  }
+  /** Una bisagra: más o menos doblez (el giro a lo largo se conserva). */
+  doblarPor(c: string, grados: number): void {
+    const b = BISAGRAS[c]; if (!b) return;
+    this.ponerDial(c, 'doblar', this.doblez(c) + grados);
+  }
+  /** Los diales del ajuste fino: cuánto vale cada uno ahora (grados). */
+  dialesValores(c: string): Record<string, number> {
+    const out: Record<string, number> = {};
+    if (BISAGRAS[c]) {
+      const b = BISAGRAS[c], q = new THREE.Quaternion().fromArray(this.datos.pose[c] ?? [0, 0, 0, 1]), largo = new THREE.Vector3().fromArray(b.largo);
+      const p = q.x * largo.x + q.y * largo.y + q.z * largo.z;
+      out.doblar = Math.round(this.doblez(c) * 10) / 10;
+      out.rotar = Math.round((2 * Math.atan2(p, q.w) * 180) / Math.PI * 10) / 10;
+      return out;
+    }
+    const huesos = huesosDeControl(c), R = 180 / Math.PI;
+    let x = 0, y = 0, z = 0;
+    for (const n of huesos) {
+      const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().fromArray(this.datos.pose[n] ?? [0, 0, 0, 1]), 'YXZ');
+      x += e.x * R; y += e.y * R; z += e.z * R;
+    }
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, z: Math.round(z * 10) / 10 };
+  }
+  /** Poner un dial del ajuste fino (grados): se reparte en los huesos del control. */
+  ponerDial(c: string, eje: string, grados: number): void {
+    const b = BISAGRAS[c];
+    if (b) {
+      const v = this.dialesValores(c), R = Math.PI / 180;
+      const doblar = Math.max(0, Math.min(b.max, eje === 'doblar' ? grados : v.doblar)), rotar = Math.max(-b.giro, Math.min(b.giro, eje === 'rotar' ? grados : v.rotar));
+      this.ponerGiro(c, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3().fromArray(b.doblar), doblar * R)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3().fromArray(b.largo), rotar * R)));
+      this.aplicar();
+      return;
+    }
+    const huesos = huesosDeControl(c), pesos = pesosDeControl(c), R = Math.PI / 180;
+    const v = { ...this.dialesValores(c), [eje]: grados };
+    huesos.forEach((n, k) => {
+      let q = new THREE.Quaternion().setFromEuler(new THREE.Euler(v.x * pesos[k] * R, v.y * pesos[k] * R, v.z * pesos[k] * R, 'YXZ'));
+      q = limitarEjes(n, q, true);
+      const max = Personaje3D.LIMITES[n];
+      if (max) { const ang = 2 * Math.acos(Math.min(1, Math.abs(q.w))), tope = max * R; if (ang > tope) q = new THREE.Quaternion().slerp(q, tope / ang); }
+      this.ponerGiro(n, q);
+    });
+    this.aplicar();
+  }
+  /** El eje de una bisagra en el mundo (para que el motor sepa hacia dónde se dobla en pantalla). */
+  ejeDeBisagra(c: string): THREE.Vector3 | null { return BISAGRAS[c] ? this.ejeBisagra(c) : null; }
+  esBisagra(c: string): boolean { return !!BISAGRAS[c]; }
   /** Gira un control para que su punta vaya hacia `destino` (en el mundo).
    *  Con el tronco el giro se reparte en las tres vértebras. El codo y la
    *  rodilla (bisagras) buscan el doblez que deja la punta más cerca del rayo
@@ -714,6 +1097,11 @@ export class Personaje3D {
     const total = new THREE.Quaternion().setFromUnitVectors(a.normalize(), b.normalize());
     const paso = new THREE.Quaternion().slerp(total, 1 / huesos.length);
     for (const n of huesos) this.girarEnMundo(n, paso);
+    if (this.hombrosAuto && /^upperarm_/.test(c)) {
+      // la clavícula acompaña y el brazo conserva su dirección
+      const ua = this.huesos.get(c)!, q = ua.getWorldQuaternion(new THREE.Quaternion());
+      if (this.acomodarClavicula(c.slice(-1))) this.girarEnMundo(c, q.multiply(ua.getWorldQuaternion(new THREE.Quaternion()).invert()));
+    }
     this.aplicar();
   }
   /** Una bisagra: de 0 al máximo, el doblez cuya punta queda más cerca del rayo
@@ -766,7 +1154,7 @@ export class Personaje3D {
     return (2 * Math.atan2(sw.x * eje.x + sw.y * eje.y + sw.z * eje.z, sw.w) * 180) / Math.PI;
   }
   /** Suma un giro (en el mundo) a un hueso, respetando sus límites. */
-  private girarEnMundo(n: string, giro: THREE.Quaternion): void {
+  private girarEnMundo(n: string, giro: THREE.Quaternion, girando = false): void {
     const b = this.huesos.get(n); if (!b) return;
     this.raiz.updateMatrixWorld(true);
     const qw = b.getWorldQuaternion(new THREE.Quaternion());
@@ -774,7 +1162,12 @@ export class Personaje3D {
     const local = qp.invert().multiply(giro).multiply(qw);
     const r = this.reposo.get(n)!, w = this.enReposo.get(n)!;
     const dl = r.q.clone().invert().multiply(local);
-    const enMundo = limitarGiro(n, w.clone().multiply(dl).multiply(w.clone().invert()).normalize());
+    let enMundo = limitarEjes(n, limitarGiro(n, w.clone().multiply(dl).multiply(w.clone().invert()).normalize()), girando);
+    const max = Personaje3D.LIMITES[n];
+    if (max) {
+      const ang = 2 * Math.acos(Math.min(1, Math.abs(enMundo.w))), tope = (max * Math.PI) / 180;
+      if (ang > tope) enMundo = new THREE.Quaternion().slerp(enMundo, tope / ang);
+    }
     this.datos.pose[n] = enMundo.toArray().map((v) => Math.round(v * 1e5) / 1e5);
     b.quaternion.copy(r.q).multiply(w.clone().invert().multiply(enMundo).multiply(w));
     b.updateMatrixWorld(true);
@@ -871,8 +1264,8 @@ export class Personaje3D {
   dureza = 0;
   private preparar(): void {
     if (this.soldado) return;
-    const pos = this.original, n = pos.length / 3;
-    const clave = (i: number) => Math.round(pos[i * 3] * 2000) + ',' + Math.round(pos[i * 3 + 1] * 2000) + ',' + Math.round(pos[i * 3 + 2] * 2000);
+    const pos = this.original, n = pos.length / 3, lab = this.cuerpo.geometry.attributes.labio?.array as Float32Array | undefined;
+    const clave = (i: number) => Math.round(pos[i * 3] * 2000) + ',' + Math.round(pos[i * 3 + 1] * 2000) + ',' + Math.round(pos[i * 3 + 2] * 2000) + (lab && lab[i] > 0.5 ? 'b' : '');
     const porClave = new Map<string, number>();
     this.soldado = new Int32Array(n);
     for (let i = 0; i < n; i++) {
@@ -1112,27 +1505,29 @@ export class Personaje3D {
     this.recalcularNormales(); this.actualizar();
   }
   /** Vuelve la piel a como vino. */
-  sinEscultura(): void { this.ponerPiel(this.original); }
+  sinEscultura(): void { this.ponerPiel(this.base()); }
   esculpido(): boolean {
-    const a = this.cuerpo.geometry.attributes.position.array as Float32Array;
-    for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - this.original[i]) > 1e-6) return true;
+    const a = this.cuerpo.geometry.attributes.position.array as Float32Array, b = this.base();
+    for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 1e-6) return true;
     return false;
   }
   private ponerEscultura(e: number[] | string): void {
     const attr = this.cuerpo.geometry.attributes.position as THREE.BufferAttribute, arr = attr.array as Float32Array, n = arr.length / 3;
+    const b = this.base();
     for (const { i, d } of esculturaDeDatos(e)) {
       if (!(i >= 0 && i < n)) continue;
-      arr[i * 3] = this.original[i * 3] + d[0]; arr[i * 3 + 1] = this.original[i * 3 + 1] + d[1]; arr[i * 3 + 2] = this.original[i * 3 + 2] + d[2];
+      arr[i * 3] = b[i * 3] + d[0]; arr[i * 3 + 1] = b[i * 3 + 1] + d[1]; arr[i * 3 + 2] = b[i * 3 + 2] + d[2];
     }
     attr.needsUpdate = true; this.versionPiel++;
     this.recalcularNormales();
   }
   /** Los datos para guardar (con la escultura como lista de corrimientos). */
   aDatos(): PersonajeDatos {
-    const escultura = esculturaATexto(this.original, this.cuerpo.geometry.attributes.position.array as Float32Array);
+    const escultura = esculturaATexto(this.base(), this.cuerpo.geometry.attributes.position.array as Float32Array);
     const d = this.datos;
     return { base: d.base, prop: { ...d.prop }, pose: JSON.parse(JSON.stringify(d.pose)), pies: d.pies, color: d.color,
-      ...(escultura ? { escultura } : {}), ...(d.definicion ? { definicion: d.definicion } : {}),
+      ...(escultura ? { escultura } : {}), ...(d.definicion !== undefined ? { definicion: d.definicion } : {}),
+      ...(d.forma ? { forma: { ...d.forma } } : {}), ...(d.cara ? { cara: { ...d.cara } } : {}),
       ...(d.raiz ? { raiz: d.raiz.slice() } : {}), ...(d.actuacion ? { actuacion: JSON.parse(JSON.stringify(d.actuacion)) } : {}) };
   }
   /** Vuelve a unos datos (deshacer, abrir) sin cambiar de cuerpo. */
@@ -1140,8 +1535,10 @@ export class Personaje3D {
     const d = personajeValido(x);
     this.datos.prop = d.prop; this.datos.pose = d.pose; this.datos.pies = d.pies; this.datos.raiz = d.raiz; this.datos.actuacion = d.actuacion;
     this.ponerColor(d.color);
+    if (JSON.stringify(d.forma) !== JSON.stringify(this.datos.forma)) this.ponerForma(d.forma);
+    if (JSON.stringify(d.cara) !== JSON.stringify(this.datos.cara)) this.ponerCara(d.cara);
     const attr = this.cuerpo.geometry.attributes.position as THREE.BufferAttribute;
-    (attr.array as Float32Array).set(this.original); this.versionPiel++;
+    (attr.array as Float32Array).set(this.base()); this.versionPiel++;
     if (d.escultura) this.ponerEscultura(d.escultura); else { attr.needsUpdate = true; this.recalcularNormales(); }
     this.aplicar();
   }
@@ -1168,6 +1565,7 @@ export class Personaje3D {
     this.raiz.updateMatrixWorld(true);
     const qFin = fin.getWorldQuaternion(new THREE.Quaternion());
     this.resolverIK(cad[0], cad[1], cad[2], destino);
+    if (this.hombrosAuto && /^hand_/.test(c) && this.acomodarClavicula(c.slice(-1))) this.resolverIK(cad[0], cad[1], cad[2], destino);
     const qAhora = fin.getWorldQuaternion(new THREE.Quaternion());
     this.girarEnMundo(cad[2], qFin.multiply(qAhora.invert()));
     this.aplicar();
@@ -1279,6 +1677,7 @@ export class Personaje3D {
     const p = poseEnCuadro(this.datos.actuacion, f);
     if (!p) return false;
     this.datos.pose = p.pose; this.datos.raiz = p.raiz;
+    if (this.tieneCara() && JSON.stringify(p.cara) !== JSON.stringify(this.datos.cara)) this.ponerCara(p.cara);
     this.aplicar();
     return true;
   }
@@ -1286,7 +1685,8 @@ export class Personaje3D {
   claveAqui(f: number): void {
     const a = this.datos.actuacion ?? (this.datos.actuacion = { cuadros: Math.max(24, f), claves: [] });
     a.cuadros = Math.max(a.cuadros, f);
-    const c: ClaveActuacion = { f, pose: JSON.parse(JSON.stringify(this.datos.pose)), ...(this.datos.raiz ? { raiz: this.datos.raiz.slice() } : {}) };
+    const c: ClaveActuacion = { f, pose: JSON.parse(JSON.stringify(this.datos.pose)), ...(this.datos.raiz ? { raiz: this.datos.raiz.slice() } : {}),
+      ...(this.datos.cara ? { cara: { ...this.datos.cara } } : {}) };
     a.claves = [...a.claves.filter((k) => k.f !== f), c].sort((x, y) => x.f - y.f);
   }
   quitarClave(f: number): void {
@@ -1349,17 +1749,20 @@ export class Personaje3D {
     const arr = this.cuerpo.geometry.attributes.position.array as Float32Array;
     let escultura: string | undefined;
     if (nivel > actual) {
+      // lo esculpido sin la contextura ni la cara (la otra piel las recalcula)
+      const b = this.base(), esculpida = this.original.slice();
+      for (let i = 0; i < arr.length; i++) esculpida[i] += arr[i] - b[i];
       let g = this.cuerpo.geometry, original = pielEnNivel(this.datos.base, this.cuerpo.geometry, 0);
       original.setAttribute('position', new THREE.BufferAttribute(this.original.slice(), 3));
-      for (let k = actual; k < nivel; k++) { g = subdividir(g, g === this.cuerpo.geometry ? arr : g.attributes.position.array as Float32Array); original = subdividir(original); }
+      for (let k = actual; k < nivel; k++) { g = subdividir(g, g === this.cuerpo.geometry ? esculpida : g.attributes.position.array as Float32Array); original = subdividir(original); }
       escultura = esculturaATexto(original.attributes.position.array as Float32Array, g.attributes.position.array as Float32Array);
       g.dispose(); original.dispose();
     } else {
       const base = cuerpos.get(this.datos.base)!;
       let g0: THREE.BufferGeometry | null = null;
       base.scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (!g0 || m.geometry.attributes.position.count > g0.attributes.position.count)) g0 = m.geometry; });
-      const nAbajo = pielEnNivel(this.datos.base, g0!, nivel).attributes.position.count;
-      escultura = esculturaATexto(this.original.subarray(0, nAbajo * 3), arr.subarray(0, nAbajo * 3));
+      const nAbajo = pielEnNivel(this.datos.base, pielPartida(this.datos.base, g0!), nivel).attributes.position.count;
+      escultura = esculturaATexto(this.base().subarray(0, nAbajo * 3), arr.subarray(0, nAbajo * 3));
     }
     return { ...d, definicion: nivel, escultura };
   }
@@ -1379,6 +1782,420 @@ export class Personaje3D {
     const normal = B.sub(A).cross(C.sub(A)).normalize();
     if (normal.dot(rayo.direction) > 0) normal.negate();
     return { punto: rayo.origin.clone().addScaledVector(rayo.direction, h.t), distancia: h.t, tri: h.tri, a, b, c, normal };
+  }
+  /* ── LOS HOMBROS: la clavícula ── */
+  /** Cuánto se puede girar cada hueso sin bisagra (grados): la clavícula sube y
+   *  se adelanta poco; sin esto, arrastrarla daba hombros imposibles. */
+  static readonly LIMITES: Record<string, number> = { clavicle_l: 35, clavicle_r: 35, hand_l: 85, hand_r: 85, foot_l: 50, foot_r: 50 };
+  /** HOMBROS AUTOMÁTICOS: al levantar el brazo por encima del hombro, la
+   *  clavícula sube con él (como un hombro de verdad: el brazo solo no pasa de
+   *  la horizontal sin que acompañe el omóplato). */
+  hombrosAuto = true;
+  private ponerGiro(n: string, q: THREE.Quaternion): void {
+    const b = this.huesos.get(n); if (!b) return;
+    const r = this.reposo.get(n)!, w = this.enReposo.get(n)!;
+    if (1 - Math.abs(q.w) < 1e-7) delete this.datos.pose[n];
+    else this.datos.pose[n] = q.toArray().map((v) => Math.round(v * 1e5) / 1e5);
+    b.quaternion.copy(r.q).multiply(w.clone().invert().multiply(q).multiply(w));
+    b.updateMatrixWorld(true);
+  }
+  /** La clavícula según cuánto está levantado el brazo (0 colgando, 180 arriba). */
+  private acomodarClavicula(lado: string): boolean {
+    const cl = 'clavicle_' + lado, S = this.articulacion('upperarm_' + lado), E = this.articulacion('lowerarm_' + lado), t = this.huesos.get('spine_03');
+    if (!S || !E || !t || !this.huesos.has(cl)) return false;
+    const arriba = new THREE.Vector3(0, 1, 0).applyQuaternion(t.getWorldQuaternion(new THREE.Quaternion()).multiply(this.enReposo.get('spine_03')!.clone().invert()));
+    const elev = (Math.acos(Math.max(-1, Math.min(1, -E.sub(S).normalize().dot(arriba)))) * 180) / Math.PI;
+    const ang = Math.max(0, Math.min(1, (elev - 75) / 105)) * 28;
+    this.ponerGiro(cl, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, lado === 'l' ? 1 : -1), (ang * Math.PI) / 180));
+    this.raiz.updateMatrixWorld(true);
+    return true;
+  }
+
+  /* ── LAS MANOS: abrir, cerrar, señalar ──
+     El puño de verdad sale de la biblioteca de animaciones (la pose «golpe»: las
+     dos manos cerradas); cada dedo va del reposo (mano abierta) a ese puño. */
+  static readonly MANOS: { id: string; nombre: string; m: { cerrar: number; indice: number; pulgar: number } }[] = [
+    { id: 'abierta', nombre: 'Abierta', m: { cerrar: 0, indice: 0, pulgar: 0 } },
+    { id: 'relajada', nombre: 'Relajada', m: { cerrar: 0.35, indice: 0.3, pulgar: 0.25 } },
+    { id: 'agarrar', nombre: 'Agarrar', m: { cerrar: 0.65, indice: 0.6, pulgar: 0.75 } },
+    { id: 'puno', nombre: 'Puño', m: { cerrar: 1, indice: 1, pulgar: 1 } },
+    { id: 'senalar', nombre: 'Señalar', m: { cerrar: 1, indice: 0, pulgar: 0.9 } },
+  ];
+  private puno: Record<string, number[]> | null = null;
+  private punoDeReferencia(): Record<string, number[]> | null {
+    if (this.puno) return this.puno;
+    const g = posesListas.find((x) => x.id === 'golpe');
+    if (!g) return null;
+    const pose = this.poseDeLocales(g.huesos), out: Record<string, number[]> = {};
+    for (const [n, q] of Object.entries(pose)) if (/^(index|middle|ring|pinky|thumb)_0[123]_[lr]$/.test(n)) out[n] = q;
+    return (this.puno = out);
+  }
+  /** Cuánto está cerrada cada parte de la mano (0 abierta, 1 puño), leído de la pose. */
+  mano(lado: string): { cerrar: number; indice: number; pulgar: number } {
+    const P = this.punoDeReferencia(), ang = (q?: number[]) => (q ? 2 * Math.acos(Math.min(1, Math.abs(q[3]))) : 0);
+    const r = (n: string) => { const ref = P?.[n]; return ref && ang(ref) > 1e-3 ? Math.round((ang(this.datos.pose[n]) / ang(ref)) * 100) / 100 : 0; };
+    return { cerrar: r('middle_02_' + lado), indice: r('index_02_' + lado), pulgar: r('thumb_02_' + lado) };
+  }
+  /** Abre o cierra la mano: cada falange va del reposo al puño de referencia. */
+  ponerMano(lado: string, m: Partial<{ cerrar: number; indice: number; pulgar: number }>): void {
+    const P = this.punoDeReferencia(); if (!P) return;
+    const v = { ...this.mano(lado), ...m };
+    const id = new THREE.Quaternion();
+    for (const [n, ref] of Object.entries(P)) {
+      if (!n.endsWith('_' + lado)) continue;
+      const k = /^thumb/.test(n) ? v.pulgar : /^index/.test(n) ? v.indice : v.cerrar;
+      const q = id.clone().slerp(new THREE.Quaternion().fromArray(ref), Math.max(0, Math.min(1.1, k)));
+      if (1 - Math.abs(q.w) < 1e-6) delete this.datos.pose[n]; else this.datos.pose[n] = q.toArray().map((x) => Math.round(x * 1e5) / 1e5);
+    }
+    this.aplicar();
+  }
+
+  /* ── LA CONTEXTURA y LA CARA: capas sobre la piel en reposo ──
+     La piel = la de fábrica + la contextura + la cara + la escultura. Cambiar la
+     contextura o la cara corre la piel por la diferencia: lo esculpido queda. */
+  private formaCapa: Float32Array | null = null;
+  private caraCapa = new Map<number, [number, number, number]>();
+  private baseCache: Float32Array | null = null;
+  private normalesOriginales: Float32Array | null = null;
+  /** La piel sin esculpir (la de fábrica + la contextura + la cara). */
+  private base(): Float32Array {
+    if (this.baseCache) return this.baseCache;
+    const b = this.original.slice();
+    if (this.formaCapa) for (let i = 0; i < b.length; i++) b[i] += this.formaCapa[i];
+    for (const [i, d] of this.caraCapa) { b[i * 3] += d[0]; b[i * 3 + 1] += d[1]; b[i * 3 + 2] += d[2]; }
+    return (this.baseCache = b);
+  }
+  /** Normales por grupo soldado (las costuras no se abren al inflar). */
+  private normalesSoldadas(): Float32Array {
+    this.preparar();
+    const N = this.normalesOriginales!, out = new Float32Array(N.length);
+    for (const l of this.grupos) {
+      let x = 0, y = 0, z = 0;
+      for (const i of l) { x += N[i * 3]; y += N[i * 3 + 1]; z += N[i * 3 + 2]; }
+      const m = Math.hypot(x, y, z) || 1;
+      for (const i of l) { out[i * 3] = x / m; out[i * 3 + 1] = y / m; out[i * 3 + 2] = z / m; }
+    }
+    return out;
+  }
+  /** Promedio con los vecinos, `veces` veces (por grupo soldado). */
+  private suavizarCampo(v: Float32Array, k: number, veces: number): void {
+    this.preparar();
+    const G = this.grupos, porG = new Float32Array(G.length * k), aux = new Float32Array(G.length * k);
+    G.forEach((l, g) => { for (let c = 0; c < k; c++) porG[g * k + c] = v[l[0] * k + c]; });
+    for (let it = 0; it < veces; it++) {
+      for (let g = 0; g < G.length; g++) {
+        const vs = this.vecinos[g];
+        for (let c = 0; c < k; c++) {
+          let s = 0; for (const h of vs) s += porG[h * k + c];
+          aux[g * k + c] = vs.length ? porG[g * k + c] * 0.5 + (s / vs.length) * 0.5 : porG[g * k + c];
+        }
+      }
+      porG.set(aux);
+    }
+    G.forEach((l, g) => { for (const i of l) for (let c = 0; c < k; c++) v[i * k + c] = porG[g * k + c]; });
+  }
+  /** El corrimiento de la piel para una contextura (en reposo). */
+  private campoForma(f: Forma): Float32Array {
+    const g = this.cuerpo.geometry, n = g.attributes.position.count, bones = this.cuerpo.skeleton.bones;
+    const si = g.attributes.skinIndex as THREE.BufferAttribute, sw = g.attributes.skinWeight as THREE.BufferAttribute;
+    // se infla por las normales de la piel SUAVIZADA: con las del cuerpo musculoso, cada
+    // surco de los abdominales torcía la dirección y la panza salía en escalones
+    const N = this.normalesSoldadas(), esc = new Float32Array(n * 3);   // [engordar, adelgazar, desmuscular]
+    this.suavizarCampo(N, 3, 12);
+    for (let i = 0; i < n; i++) { const m = Math.hypot(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]) || 1; N[i * 3] /= m; N[i * 3 + 1] /= m; N[i * 3 + 2] /= m; }
+    for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) {
+      const w = sw.getComponent(i, k); if (!w) continue;
+      const r = regionDeHueso(bones[si.getComponent(i, k)]?.name ?? '');
+      // la panza sale para adelante
+      const panza = (r === 'spine_01' || r === 'pelvis' || r === 'spine_02') && N[i * 3 + 2] > 0 ? 1 + 1.2 * N[i * 3 + 2] : 1;
+      esc[i * 3] += w * (ENGORDAR[r] || 0) * panza; esc[i * 3 + 1] += w * (ADELGAZAR[r] || 0); esc[i * 3 + 2] += w * (DESMUSCULAR[r] || 0);
+    }
+    // sin escalones donde cambia el hueso: con más malla, más pasadas (cubren la misma distancia)
+    this.suavizarCampo(esc, 3, 25 * (1 + (this.datos.definicion ?? 0)));
+    // lo «blando»: la piel suavizada, sin el detalle de los músculos
+    const liso = this.original.slice();
+    this.suavizarCampo(liso, 3, 6);
+    const out = new Float32Array(n * 3), p = f.peso, m = f.musculo;
+    // el DIÁMETRO de cada parte: la piel se aleja o se acerca al eje de su hueso
+    // (el segmento en reposo, de la articulación a la siguiente)
+    const gr = f.grosor ?? {};
+    if (Object.keys(gr).length) {
+      const enReposo = (nombre: string) => { const k = bones.findIndex((b) => b.name === nombre); return k < 0 ? null : new THREE.Vector3().setFromMatrixPosition(this.cuerpo.skeleton.boneInverses[k].clone().invert()); };
+      const sig: Record<string, string> = { Head: 'Head', neck_01: 'Head', pelvis: 'neck_01', spine_01: 'neck_01', spine_02: 'neck_01', spine_03: 'neck_01',
+        upperarm: 'lowerarm', lowerarm: 'hand', thigh: 'calf', calf: 'foot' };
+      const segmentos = new Map<number, { a: THREE.Vector3; b: THREE.Vector3; k: number }>();
+      bones.forEach((b, k) => {
+        const lado = /_[lr]$/.test(b.name) ? b.name.slice(-2) : '', r = b.name.replace(/_[lr]$/, ''), parte = PARTE_DE_HUESO[r], f2 = parte ? gr[parte] : undefined;
+        if (!parte || f2 === undefined) return;
+        const a = enReposo(r === 'pelvis' || /^spine/.test(r) ? 'pelvis' : b.name);
+        let fin = enReposo(sig[r] + (sig[r] === 'Head' || sig[r] === 'neck_01' ? '' : lado));
+        if (!a || !fin) return;
+        if (r === 'Head') fin = a.clone().add(new THREE.Vector3(0, 0.22, 0));   // la cabeza: hacia la coronilla
+        segmentos.set(k, { a, b: fin, k: f2 });
+      });
+      const P = new THREE.Vector3(), q = new THREE.Vector3(), ab = new THREE.Vector3();
+      for (let i = 0; i < n; i++) for (let j = 0; j < 4; j++) {
+        const w = sw.getComponent(i, j), s = w ? segmentos.get(si.getComponent(i, j)) : undefined;
+        if (!s) continue;
+        P.fromArray(this.original, i * 3); ab.subVectors(s.b, s.a);
+        const tt = Math.max(0, Math.min(1, P.clone().sub(s.a).dot(ab) / Math.max(1e-9, ab.lengthSq())));
+        q.copy(s.a).addScaledVector(ab, tt);
+        const radial = P.sub(q).multiplyScalar((s.k - 1) * w);
+        out[i * 3] += radial.x; out[i * 3 + 1] += radial.y; out[i * 3 + 2] += radial.z;
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      const s = (p > 0 ? p * esc[i * 3] : -p * esc[i * 3 + 1]) + (m < 0 ? -m * esc[i * 3 + 2] : 0);
+      const blando = Math.min(1.2, (m < 0 ? -m * 0.8 : -m * 0.5) + Math.max(0, p) * 0.7);
+      for (let c = 0; c < 3; c++) out[i * 3 + c] += N[i * 3 + c] * s + blando * (liso[i * 3 + c] - this.original[i * 3 + c]);
+    }
+    // los dos labios comparten la fila donde se tocan (cada uno con su copia): la
+    // contextura los tiene que mover JUNTOS. Suavizados por separado, cada copia iba
+    // a otro lado y la boca cerrada quedaba en serrucho (medido en «Muy gordo»)
+    // la CARA no se infla: los ojos, las cejas y las pestañas son mallas aparte que no
+    // engordan, y la piel los tapaba (medido: «Muy gordo» quedaba sin cejas y con los
+    // ojos hundidos). Sólo donde la cabeza pesa poco (papada, cuello) sigue engordando.
+    const kHead = bones.findIndex((b) => b.name === 'Head');
+    if (kHead >= 0) for (let i = 0; i < n; i++) {
+      let wh = 0; for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === kHead) wh += sw.getComponent(i, k);
+      if (wh <= 0.3) continue;
+      const u = Math.min(1, (wh - 0.3) / 0.6), f = 1 - u * u * (3 - 2 * u);
+      out[i * 3] *= f; out[i * 3 + 1] *= f; out[i * 3 + 2] *= f;
+    }
+    const O = this.original, juntos = new Map<string, number[]>();
+    for (let i = 0; i < n; i++) {
+      const k = Math.round(O[i * 3] * 20000) + ',' + Math.round(O[i * 3 + 1] * 20000) + ',' + Math.round(O[i * 3 + 2] * 20000);
+      const l = juntos.get(k); if (l) l.push(i); else juntos.set(k, [i]);
+    }
+    for (const l of juntos.values()) {
+      if (l.length < 2) continue;
+      for (let c = 0; c < 3; c++) { let s = 0; for (const i of l) s += out[i * 3 + c]; s /= l.length; for (const i of l) out[i * 3 + c] = s; }
+    }
+    return out;
+  }
+  /** La contextura (un paso de Ctrl+Z lo arma el motor). */
+  ponerForma(f: Forma | undefined): void {
+    const fv = formaValida(f && !this.aceptaContextura() ? { peso: 0, musculo: 0, grosor: f.grosor } : f);
+    const nueva = fv ? this.campoForma(fv) : null;
+    const attr = this.cuerpo.geometry.attributes.position as THREE.BufferAttribute, arr = attr.array as Float32Array;
+    for (let i = 0; i < arr.length; i++) arr[i] += (nueva ? nueva[i] : 0) - (this.formaCapa ? this.formaCapa[i] : 0);
+    this.formaCapa = nueva; this.baseCache = null; this.datos.forma = fv;
+    attr.needsUpdate = true; this.versionPiel++;
+    this.recalcularNormales();
+    // el relieve de los músculos (la textura de normales) acompaña: menos músculo, menos relieve
+    const k = Math.max(0.12, Math.min(1.8, 1 + (fv?.musculo ?? 0) * 0.85 - 0.5 * Math.max(0, fv?.peso ?? 0)));
+    for (const m of this.mallas) { const mat = m.material as THREE.MeshStandardMaterial; if (mat.normalMap && mat === (this.cuerpo.material as THREE.Material)) mat.normalScale.set(k, k); }
+    this.aplicar();
+  }
+
+  /* la cara */
+  private ojos: { malla: THREE.SkinnedMesh; pos: Float32Array; nrm: Float32Array; centros: { c: THREE.Vector3; r: number }[] } | null = null;
+  private cejasMalla: { malla: THREE.SkinnedMesh; pos: Float32Array } | null = null;
+  private rasgos: {
+    parpados: { c: THREE.Vector3; r: number; i: Int32Array; w: Float32Array }[];
+    mandibula: { piv: THREE.Vector3; i: Int32Array; w: Float32Array };
+    comisuras: { s: number; i: Int32Array; w: Float32Array }[];
+    labios: { i: Int32Array; w: Float32Array };
+    cejas: { i: Int32Array; w: Float32Array; adentro: Float32Array }[];
+    cejasMalla: { w: Float32Array; adentro: Float32Array; lado: Int8Array; cerca: Int32Array } | null;
+  } | null = null;
+  /** ¿Tiene cara este cuerpo? (el maniquí no: no tiene boca ni ojos). */
+  tieneCara(): boolean { return !!this.cuerpo.geometry.userData.boca && !!this.ojos; }
+  /** El maniquí es de piezas rígidas: engordarlo las desarmaba; sólo cambia el grosor de cada pieza. */
+  aceptaContextura(): boolean { return this.datos.base !== 'maniqui'; }
+  private prepararRasgos(): NonNullable<Personaje3D['rasgos']> {
+    if (this.rasgos) return this.rasgos;
+    const O = this.original, n = O.length / 3, g = this.cuerpo.geometry, L = g.attributes.labio?.array as Float32Array | undefined;
+    const boca = g.userData.boca as { labioY: number; ancho: number; zFrente: number };
+    const ss = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const lista = (f: (i: number, x: number, y: number, z: number) => number) => {
+      const ii: number[] = [], ww: number[] = [];
+      for (let i = 0; i < n; i++) { const w = f(i, O[i * 3], O[i * 3 + 1], O[i * 3 + 2]); if (w > 1e-4) { ii.push(i); ww.push(w); } }
+      return { i: Int32Array.from(ii), w: Float32Array.from(ww) };
+    };
+    const ojos = this.ojos!.centros;
+    // la malla de «pelo» trae las cejas Y LAS PESTAÑAS, en piezas sueltas: las piezas
+    // a la altura del ojo son pestañas (siguen al párpado), las de arriba, cejas.
+    // Medido: tomadas todas como ceja, la ceja «bajaba» al ojo y el párpado la arrastraba.
+    const pestana = new Uint8Array(this.cejasMalla ? this.cejasMalla.pos.length / 3 : 0);
+    if (this.cejasMalla) {
+      const Pm = this.cejasMalla.pos, I = this.cejasMalla.malla.geometry.index?.array, m = Pm.length / 3;
+      const pa = Int32Array.from({ length: m }, (_, i) => i), raiz = (i: number): number => { while (pa[i] !== i) { pa[i] = pa[pa[i]]; i = pa[i]; } return i; };
+      const unir = (a: number, b: number) => { pa[raiz(a)] = raiz(b); };
+      const lugar = new Map<string, number>();
+      for (let i = 0; i < m; i++) { const k = Math.round(Pm[i * 3] * 5000) + ',' + Math.round(Pm[i * 3 + 1] * 5000) + ',' + Math.round(Pm[i * 3 + 2] * 5000); const j = lugar.get(k); if (j === undefined) lugar.set(k, i); else unir(i, j); }
+      if (I) for (let q = 0; q < I.length; q += 3) { unir(I[q], I[q + 1]); unir(I[q], I[q + 2]); }
+      const suma = new Map<number, [number, number]>();
+      for (let i = 0; i < m; i++) { const r = raiz(i), s = suma.get(r) ?? [0, 0]; s[0] += Pm[i * 3 + 1]; s[1]++; suma.set(r, s); }
+      for (let i = 0; i < m; i++) {
+        const s = suma.get(raiz(i))!, o = ojos[Pm[i * 3] >= 0 ? 0 : 1];
+        pestana[i] = s[0] / s[1] - o.c.y < o.r * 0.4 ? 1 : 0;
+      }
+    }
+    // la altura de las cejas: la de su malla (estaban más cerca del ojo de lo supuesto)
+    let cejaY = (o: { c: THREE.Vector3; r: number }) => o.c.y + o.r * 0.8;
+    if (this.cejasMalla) {
+      const Pm = this.cejasMalla.pos, ys: number[][] = [[], []];
+      for (let i = 0; i < Pm.length; i += 3) if (!pestana[i / 3]) ys[Pm[i] >= 0 ? 0 : 1].push(Pm[i + 1]);
+      const med = ys.map((l) => (l.length ? l.reduce((s, v) => s + v, 0) / l.length : NaN));
+      cejaY = (o) => { const k = o.c.x >= 0 ? 0 : 1; return Number.isFinite(med[k]) ? med[k] : o.c.y + o.r * 0.8; };
+    }
+    // el borde de abajo de la ceja en cada x (las puntas bajan: con la altura media,
+    // la punta de afuera quedaba dentro del párpado y se arrastraba 7 mm)
+    const bajoCeja = (o: { c: THREE.Vector3; r: number }, x: number) => {
+      let y = Infinity;
+      if (this.cejasMalla) { const Pm = this.cejasMalla.pos; for (let i = 0; i < Pm.length; i += 3) if (!pestana[i / 3] && Math.sign(Pm[i]) === Math.sign(o.c.x) && Math.abs(Pm[i] - x) < 0.004) y = Math.min(y, Pm[i + 1]); }
+      return Number.isFinite(y) ? y : cejaY(o);
+    };
+    // (el párpado se apaga antes de la ceja: si no, al cerrar el ojo la arrastraba y se arrugaba)
+    const parpados = ojos.map((o) => { const { c, r } = o; return { c, r, ...lista((_i, x, y, z) => {
+      const d = Math.hypot(x - c.x, y - c.y, z - c.z);
+      if (d < r * 0.2 || d > r * 2.3 || z < c.z - r * 0.1 || Math.abs(x - c.x) > r * 2.2) return 0;
+      const cy = bajoCeja(o, x);
+      return (1 - ss(r * 1.3, r * 2.2, d)) * (1 - ss(c.y + (cy - c.y) * 0.4, c.y + (cy - c.y) * 0.85, y));
+    }) }; });
+    const ey = (ojos[0].c.y + ojos[1].c.y) / 2, ez = (ojos[0].c.z + ojos[1].c.z) / 2;
+    const piv = new THREE.Vector3(0, (ey + boca.labioY) / 2 - 0.01, ez - 0.065);
+    const mandibula = { piv, ...lista((i, x, y, z) => {
+      const lab = L ? L[i] : (y < boca.labioY ? 1 : 0);
+      // (sin corte por altura: el atributo ya es gradual en el fondo y en las mejillas)
+      if (!lab || y < boca.labioY - 0.12) return 0;
+      return lab * ss(piv.z, piv.z + 0.04, z) * (1 - ss(boca.labioY - 0.075, boca.labioY - 0.11, y)) * (1 - ss(0.055, 0.075, Math.abs(x)));
+    }) };
+    const comisuras = [1, -1].map((s) => {
+      let kz = -Infinity;
+      for (let i = 0; i < n; i++) if (Math.hypot(O[i * 3] - s * boca.ancho, O[i * 3 + 1] - boca.labioY) < 0.006) kz = Math.max(kz, O[i * 3 + 2]);
+      const K = new THREE.Vector3(s * boca.ancho, boca.labioY, kz);
+      return { s, ...lista((_i, x, y, z) => { const d = Math.hypot(x - K.x, y - K.y, z - K.z); return d < 0.022 ? (1 - d / 0.022) ** 2 : 0; }) };
+    });
+    const labios = lista((_i, x, y, z) => (Math.abs(x) < boca.ancho * 1.4 && Math.abs(y - boca.labioY) < 0.014 && z > boca.zFrente - 0.012
+      ? (1 - ss(boca.ancho * 0.9, boca.ancho * 1.4, Math.abs(x))) * (1 - ss(0.008, 0.014, Math.abs(y - boca.labioY))) : 0));
+    const cejaDe = (o: { c: THREE.Vector3; r: number }, x: number, y: number, z: number) => {
+      const { c, r } = o;
+      if (z < c.z - r * 0.2) return 0;
+      const e = ((x - c.x) / (r * 2.2)) ** 2 + ((y - cejaY(o)) / (r * 1.1)) ** 2;
+      return e < 1 ? (1 - e) ** 0.7 : 0;
+    };
+    const adentroDe = (c: THREE.Vector3, r: number, x: number) => 1 - ss(Math.abs(c.x) - r * 1.2, Math.abs(c.x) + r * 0.8, Math.abs(x));
+    const cejas = ojos.map((o) => {
+      const l = lista((_i, x, y, z) => cejaDe(o, x, y, z));
+      return { ...l, adentro: Float32Array.from(l.i, (i) => adentroDe(o.c, o.r, O[i * 3])) };
+    });
+    let cejasMalla = null;
+    if (this.cejasMalla) {
+      const P = this.cejasMalla.pos, m = P.length / 3, w = new Float32Array(m), adentro = new Float32Array(m), lado = new Int8Array(m);
+      for (let i = 0; i < m; i++) {
+        const k = P[i * 3] >= 0 ? 0 : 1, o = ojos[k];
+        // la ceja entera, pareja (con pesos distintos los pelos se despegaban a pedazos)
+        lado[i] = k; w[i] = 1; adentro[i] = adentroDe(o.c, o.r, P[i * 3]);
+      }
+      // cada pelo sigue a los 4 puntos de piel más cercanos (con pesos propios los pelos
+      // quedaban flotando como granos): la ceja, a la piel de la ceja (el párpado no
+      // llega); las pestañas, a la del párpado (al cerrar el ojo bajan con él)
+      const candCeja = [...new Set(cejas.flatMap((x) => [...x.i]))];
+      const candPestana = parpados.map((x) => [...x.i]);
+      const cerca = new Int32Array(m * 4).fill(-1);
+      for (let i = 0; i < m; i++) {
+        const mej: [number, number][] = [];
+        for (const j of pestana[i] ? candPestana[lado[i]] : candCeja) {
+          const d = (O[j * 3] - P[i * 3]) ** 2 + (O[j * 3 + 1] - P[i * 3 + 1]) ** 2 + (O[j * 3 + 2] - P[i * 3 + 2]) ** 2;
+          if (mej.length < 4 || d < mej[3][0]) { mej.push([d, j]); mej.sort((a, b) => a[0] - b[0]); if (mej.length > 4) mej.pop(); }
+        }
+        mej.forEach(([, j], q) => { cerca[i * 4 + q] = j; });
+      }
+      cejasMalla = { w, adentro, lado, cerca };
+    }
+    return (this.rasgos = { parpados, mandibula, comisuras, labios, cejas, cejasMalla });
+  }
+  /** Los gestos de la cara: corre la piel (párpados, mandíbula, comisuras, cejas)
+   *  y gira los ojos. Todo en reposo: sirve en cualquier pose y definición. */
+  ponerCara(c0: Cara | undefined): void {
+    if (!this.tieneCara()) { this.datos.cara = undefined; return; }
+    const c = { ...CARA_NEUTRA, ...(caraValida(c0) ?? {}) }, R = this.prepararRasgos(), O = this.original;
+    const nuevo = new Map<number, [number, number, number]>();
+    const sumar = (i: number, x: number, y: number, z: number) => { const d = nuevo.get(i); if (d) { d[0] += x; d[1] += y; d[2] += z; } else nuevo.set(i, [x, y, z]); };
+    // PÁRPADOS: la piel alrededor del ojo gira sobre el centro del globo (como un
+    // párpado de verdad, que se desliza sobre el ojo); el de arriba baja hasta un
+    // poco debajo del medio, el de abajo sube un cuarto
+    const ALFA_CIERRE = -0.12;
+    R.parpados.forEach((P, k) => {
+      const cierre = k === 0 ? c.ojoI : c.ojoD;
+      if (!cierre) return;
+      for (let q = 0; q < P.i.length; q++) {
+        const i = P.i[q], vy = O[i * 3 + 1] - P.c.y, vz = O[i * 3 + 2] - P.c.z, a = Math.atan2(vy, vz);
+        const arribaW = 1 - Math.max(0, Math.min(1, (a - 0.9) / 0.5));
+        let th: number;
+        // (la rotación de abajo resta el ángulo: th positivo baja el párpado de arriba)
+        if (cierre >= 0) th = a > ALFA_CIERRE ? (a - ALFA_CIERRE) * cierre * P.w[q] * arribaW : -(ALFA_CIERRE - a) * cierre * P.w[q] * 0.25;
+        else th = a > ALFA_CIERRE ? cierre * 0.3 * P.w[q] * arribaW : -cierre * 0.1 * P.w[q];
+        // por AFUERA del globo: hay piel del párpado a menos que el radio del ojo y,
+        // girada adentro, el globo la tapaba (medido: «dormido» no cerraba nada)
+        const d = Math.hypot(vy, vz, O[i * 3] - P.c.x), afuera = Math.max(1, (P.r * 1.12) / Math.max(1e-6, d));
+        const s = 1 + (afuera - 1 + 0.03) * Math.max(0, cierre) * P.w[q] * (a > ALFA_CIERRE ? 1 : 0.5), co = Math.cos(th), si = Math.sin(th);
+        sumar(i, 0, (vy * co - vz * si) * s - vy, (vy * si + vz * co) * s - vz);
+      }
+    });
+    // MANDÍBULA: lo de abajo de la boca gira hacia abajo desde cerca de las orejas
+    if (c.boca) {
+      const M = R.mandibula, th = c.boca * 0.38;
+      for (let q = 0; q < M.i.length; q++) {
+        const i = M.i[q], t = th * M.w[q], vy = O[i * 3 + 1] - M.piv.y, vz = O[i * 3 + 2] - M.piv.z, co = Math.cos(t), si = Math.sin(t);
+        sumar(i, 0, vy * co - vz * si - vy, vy * si + vz * co - vz);
+      }
+    }
+    // COMISURAS: sonrisa (arriba y afuera) o tristeza (abajo); el ancho las estira o las junta
+    for (const K of R.comisuras) for (let q = 0; q < K.i.length; q++) {
+      const w = K.w[q];
+      sumar(K.i[q], K.s * (0.0015 * Math.abs(c.sonrisa) + 0.004 * Math.max(0, c.ancho)) * w, 0.0045 * c.sonrisa * w, -0.0015 * Math.abs(c.sonrisa) * w);
+    }
+    if (c.ancho < 0) for (let q = 0; q < R.labios.i.length; q++) {
+      const i = R.labios.i[q], w = R.labios.w[q] * -c.ancho;
+      sumar(i, -O[i * 3] * 0.35 * w, 0, 0.004 * w);
+    }
+    // CEJAS: suben o bajan; fruncir baja y junta la parte de adentro
+    for (const C of R.cejas) for (let q = 0; q < C.i.length; q++) {
+      const i = C.i[q], w = C.w[q], ad = C.adentro[q];
+      sumar(i, -Math.sign(O[i * 3]) * 0.003 * c.fruncir * w * ad, (0.0075 * c.cejas - 0.005 * c.fruncir * ad) * w, 0);
+    }
+    // aplicar la diferencia con lo que había
+    const attr = this.cuerpo.geometry.attributes.position as THREE.BufferAttribute, arr = attr.array as Float32Array;
+    const tocados = new Set<number>([...this.caraCapa.keys(), ...nuevo.keys()]);
+    for (const i of tocados) {
+      const a = this.caraCapa.get(i) ?? [0, 0, 0], b = nuevo.get(i) ?? [0, 0, 0];
+      arr[i * 3] += b[0] - a[0]; arr[i * 3 + 1] += b[1] - a[1]; arr[i * 3 + 2] += b[2] - a[2];
+    }
+    this.caraCapa = nuevo; this.baseCache = null;
+    attr.needsUpdate = true; this.versionPiel++;
+    this.preparar();
+    this.normalesLocales(new Set([...tocados].map((i) => this.soldado![i])));
+    // los OJOS miran (giran sobre su centro) y las CEJAS (su malla) siguen a la piel
+    const ojos = this.ojos!, P = ojos.malla.geometry.attributes.position as THREE.BufferAttribute, Nn = ojos.malla.geometry.attributes.normal as THREE.BufferAttribute;
+    const giro = new THREE.Quaternion().setFromEuler(new THREE.Euler(-c.miraY * 0.35, c.miraX * 0.45, 0, 'YXZ'));
+    const v = new THREE.Vector3();
+    for (let i = 0; i < P.count; i++) {
+      const o = ojos.centros[ojos.pos[i * 3] >= 0 ? 0 : 1];
+      v.set(ojos.pos[i * 3], ojos.pos[i * 3 + 1], ojos.pos[i * 3 + 2]).sub(o.c).applyQuaternion(giro).add(o.c);
+      P.setXYZ(i, v.x, v.y, v.z);
+      v.set(ojos.nrm[i * 3], ojos.nrm[i * 3 + 1], ojos.nrm[i * 3 + 2]).applyQuaternion(giro);
+      Nn.setXYZ(i, v.x, v.y, v.z);
+    }
+    P.needsUpdate = true; Nn.needsUpdate = true;
+    if (this.cejasMalla && R.cejasMalla) {
+      const B = this.cejasMalla.malla.geometry.attributes.position as THREE.BufferAttribute, b0 = this.cejasMalla.pos, cm = R.cejasMalla;
+      for (let i = 0; i < B.count; i++) {
+        let dx = 0, dy = 0, dz = 0, k = 0;
+        for (let q = 0; q < 4; q++) { const j = cm.cerca[i * 4 + q]; if (j < 0) continue; const d = nuevo.get(j); k++; if (d) { dx += d[0]; dy += d[1]; dz += d[2]; } }
+        k = Math.max(1, k);
+        B.setXYZ(i, b0[i * 3] + dx / k, b0[i * 3 + 1] + dy / k, b0[i * 3 + 2] + dz / k);
+      }
+      B.needsUpdate = true;
+    }
+    for (const m of this.mallas) {
+      (m as unknown as { boundingBox: THREE.Box3 | null }).boundingBox = null;
+      (m as unknown as { boundingSphere: THREE.Sphere | null }).boundingSphere = null;
+    }
+    this.mundoCache = null; this.rejilla = null;
+    this.datos.cara = caraValida(c);
   }
   liberar(): void {
     for (const m of this.mallas) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }

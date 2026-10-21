@@ -110,7 +110,9 @@ async function main() {
     await arrastrarPx(desde, hacia, 20);
     const t3 = await ev(`(()=>{ const inst = __low3d.personajeDelTaller(); return { control: __low3d.enTaller().control, codo: inst.doblez("lowerarm_l") }; })()`);
     if (t3.control !== "lowerarm_l") mal("agarrar el antebrazo no eligió el codo", t3);
-    if (!(t3.codo > antesCodo + 25)) mal("subir el antebrazo de frente no dobló el codo", { antesCodo, t3 });
+    // (v3.40: el giro es PROPORCIONAL al arrastre, como un armazón de stop motion:
+    // ~0,45° por píxel; 110 px suben el codo unos 20-25°, no «apuntan» al cursor)
+    if (!(t3.codo > antesCodo + 15)) mal("subir el antebrazo de frente no dobló el codo", { antesCodo, t3 });
     const t3b = await pegados();
     const izq3 = t3b.find((s) => s.parte === "lowerarm_l"), der3 = t3b.find((s) => s.parte === "lowerarm_r");
     if (izq3.lejos > 0.07) mal("el trazo del antebrazo no siguió al codo doblado", t3b);
