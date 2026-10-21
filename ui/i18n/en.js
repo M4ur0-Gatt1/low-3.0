@@ -942,7 +942,7 @@ LOW_I18N.registrar("en", "English", {
   "Movimiento": "Motion",
   "Movimientos": "Motions",
   "Multiplicar": "Multiply",
-  "Más herramientas: vectores, esculpir trazos, pivote, espejo, imagen, cámara, esqueleto y escenario": "More tools: vectors, stroke sculpting, pivot, mirror, image, camera, rig and stage",
+  "Más herramientas: vectores, esculpir trazos, pivote, espejo, paralelas, imagen, cámara, esqueleto y escenario": "More tools: vectors, stroke sculpting, pivot, mirror, parallels, image, camera, rig and stage",
   "Más opaco cerca del actual y más tenue lejos": "More opaque near the current one and fainter farther away",
   "Más: variaciones, animación, documento, giro de vista, reglas, guías, preferencias, código y ventana": "More: variations, animation, document, view rotation, rulers, guides, preferences, code and window",
   "Neutra": "Neutral",
@@ -1661,5 +1661,13 @@ LOW_I18N.registrar("en", "English", {
  "Posición de la guía (x, px)": "Guide position (x, px)",
  "Reglas activas — arrastrá desde una regla para crear una guía (Ctrl+R oculta)": "Rulers on — drag from a ruler to create a guide (Ctrl+R hides them)",
  "Actuación · {}": "Performance · {}",
- "La actuación de «{}»: {} cuadros en la capa «{}» (al fondo, para rotoscopiar) · Ctrl+Z la saca": "The performance of «{}»: {} frames in layer «{}» (at the bottom, for rotoscoping) · Ctrl+Z removes it"
+ "La actuación de «{}»: {} cuadros en la capa «{}» (al fondo, para rotoscopiar) · Ctrl+Z la saca": "The performance of «{}»: {} frames in layer «{}» (at the bottom, for rotoscoping) · Ctrl+Z removes it",
+ "Paralelas (Shift+M): el lápiz y el pincel dibujan dos líneas a la vez, a la separación elegida; lo que dibujás es el centro (los dos lados de un brazo, una pierna, el torso)": "Parallels (Shift+M): the pencil and the brush draw two lines at once, at the chosen spacing; what you draw is the center (both sides of an arm, a leg, the torso)",
+ "Paralelas (dos líneas a la vez)": "Parallels (two lines at once)",
+ "‖ Paralelas": "‖ Parallels",
+ "La distancia entre las dos líneas, en milímetros del dibujo (la misma a cualquier zoom)": "The distance between the two lines, in drawing millimeters (the same at any zoom)",
+ "Separación de las paralelas en milímetros": "Parallels spacing in millimeters",
+ "‖ Paralelas: cada trazo deja dos líneas a {} mm (lo que dibujás es el centro)": "‖ Parallels: each stroke leaves two lines {} mm apart (what you draw is the center)",
+ "‖ Paralelas apagadas: cada trazo deja una línea": "‖ Parallels off: each stroke leaves one line",
+ "Apagar las paralelas (Shift+M)": "Turn parallels off (Shift+M)"
 });

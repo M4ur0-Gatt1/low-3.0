@@ -93,6 +93,8 @@
     ["rotr", "Girar la mesa a la derecha", "Vista", "]", null],
     ["enderezar", "Enderezar la mesa", "Vista", "shift+f", null],
     ["mirror", "Modo espejo", "Vista", "m", "#dzMirror"],
+    // v3.42: dos líneas a la vez (drawing/paralelas.js)
+    ["paralelas", "Paralelas (dos líneas a la vez)", "Vista", "shift+m", "#dzParalelas"],
     ["zen", "Modo dibujo (esconder paneles)", "Vista", "tab", null],
     ["capas", "Mostrar u ocultar capas", "Vista", "f7", null],
     ["vista3d", "Espacio 3D", "Vista", "3", null],
@@ -238,6 +240,7 @@
     rig: clic("#dzRigBtn"),
     espejarh: () => typeof global.dzEspejar === "function" && global.dzEspejar("h"),
     espejarv: () => typeof global.dzEspejar === "function" && global.dzEspejar("v"),
+    paralelas: () => typeof global.dzParalelasToggle === "function" && global.dzParalelasToggle(),
   };
   for (const id of ["drawing", "animation", "cleanup", "color", "composite", "camera", "3d"])
     ACCIONES["ws-" + id] = () => cambiarEspacio(id);

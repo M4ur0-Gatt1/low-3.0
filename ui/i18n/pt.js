@@ -956,7 +956,7 @@ LOW_I18N.registrar("pt", "Português", {
   "Movimiento": "Movimento",
   "Movimientos": "Movimentos",
   "Multiplicar": "Multiplicação",
-  "Más herramientas: vectores, esculpir trazos, pivote, espejo, imagen, cámara, esqueleto y escenario": "Mais ferramentas: vetores, esculpir traços, pivô, espelho, imagem, câmera, esqueleto e cenário",
+  "Más herramientas: vectores, esculpir trazos, pivote, espejo, paralelas, imagen, cámara, esqueleto y escenario": "Mais ferramentas: vetores, esculpir traços, pivô, espelho, paralelas, imagem, câmera, esqueleto e cenário",
   "Más opaco cerca del actual y más tenue lejos": "Mais opaco perto do atual e mais tênue longe",
   "Más: variaciones, animación, documento, giro de vista, reglas, guías, preferencias, código y ventana": "Mais: variações, animação, documento, giro da vista, réguas, guias, preferências, código e janela",
   "Neón": "Neon",
@@ -1638,5 +1638,13 @@ LOW_I18N.registrar("pt", "Português", {
  "Posición de la guía (x, px)": "Posição da guia (x, px)",
  "Reglas activas — arrastrá desde una regla para crear una guía (Ctrl+R oculta)": "Réguas ativas — arraste de uma régua para criar uma guia (Ctrl+R oculta)",
  "Actuación · {}": "Atuação · {}",
- "La actuación de «{}»: {} cuadros en la capa «{}» (al fondo, para rotoscopiar) · Ctrl+Z la saca": "A atuação de «{}»: {} quadros na camada «{}» (no fundo, para rotoscopia) · Ctrl+Z a remove"
+ "La actuación de «{}»: {} cuadros en la capa «{}» (al fondo, para rotoscopiar) · Ctrl+Z la saca": "A atuação de «{}»: {} quadros na camada «{}» (no fundo, para rotoscopia) · Ctrl+Z a remove",
+ "Paralelas (Shift+M): el lápiz y el pincel dibujan dos líneas a la vez, a la separación elegida; lo que dibujás es el centro (los dos lados de un brazo, una pierna, el torso)": "Paralelas (Shift+M): o lápis e o pincel desenham duas linhas ao mesmo tempo, com a separação escolhida; o que você desenha é o centro (os dois lados de um braço, uma perna, o tronco)",
+ "Paralelas (dos líneas a la vez)": "Paralelas (duas linhas ao mesmo tempo)",
+ "‖ Paralelas": "‖ Paralelas",
+ "La distancia entre las dos líneas, en milímetros del dibujo (la misma a cualquier zoom)": "A distância entre as duas linhas, em milímetros do desenho (a mesma em qualquer zoom)",
+ "Separación de las paralelas en milímetros": "Separação das paralelas em milímetros",
+ "‖ Paralelas: cada trazo deja dos líneas a {} mm (lo que dibujás es el centro)": "‖ Paralelas: cada traço deixa duas linhas a {} mm (o que você desenha é o centro)",
+ "‖ Paralelas apagadas: cada trazo deja una línea": "‖ Paralelas desligadas: cada traço deixa uma linha",
+ "Apagar las paralelas (Shift+M)": "Desligar as paralelas (Shift+M)"
 });

@@ -238,6 +238,7 @@ jobs:
           node tools/check_capa_bitmap_ui.js
           node tools/check_pulsacion_larga_ui.js
           node tools/check_unir_puntas_ui.js
+          node tools/check_paralelas_ui.js
           node tools/check_pincel_rapido_ui.js
           node tools/check_imagen_importada_ui.js
           node tools/check_espejar_2d_ui.js
