@@ -140,7 +140,7 @@ async function main() {
   // 5. la ACTUACIÓN para rotoscopiar (v3.39): «Caminar» en el taller y «Mandar la
   //    actuación al 2D» → una capa «Actuación · Personaje» con un cuadro por cuadro
   await alEstudio();
-  await evIframe(`document.querySelector('[data-modo="posar"]').click(); true`); await w(300);
+  await evIframe(`document.querySelector('[data-modo="animar"]').click(); true`); await w(300);
   const nAct = await evIframe(`__low3d.setCuadroTaller(1), __low3d.ponerAnimacionTaller("Walk_Loop", 24, 1)`);
   await w(300);
   await evIframe(`document.querySelector(".taller3d-actuacion").click(); true`);

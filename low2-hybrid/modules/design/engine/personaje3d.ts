@@ -32,11 +32,28 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as clonarEsqueleto } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { capasValidas, piezasValidas, levantarPieza, mascaraATexto, mascaraDeTexto, curvaCaida, idNuevo, CAPA_FUERZA, PIEZA_GROSOR,
+  type CapaEscultura, type Pieza, type CaidaPincel } from './modelado3d';
 
 export type BaseCuerpo = 'hombre' | 'mujer' | 'maniqui';
 /** Qué hace el mouse sobre el personaje en el taller. */
-export type ModoTaller = 'dibujar' | 'posar' | 'esculpir';
-export type PincelEscultura = 'tirar' | 'inflar' | 'desinflar' | 'suavizar' | 'aplanar' | 'pellizcar' | 'surco';
+export type ModoTaller = 'dibujar' | 'posar' | 'animar' | 'esculpir';
+export type PincelEscultura = 'dibujar' | 'arcilla' | 'capa' | 'inflar' | 'desinflar' | 'surco' | 'pellizcar' | 'suavizar' | 'aplanar' | 'raspar'
+  | 'tirar' | 'gancho' | 'empujar' | 'mascara';
+/** Las partes del cuerpo para enmascarar de un clic (los «polygroups» que ya trae el esqueleto). */
+export const PARTES_MASCARA: { id: string; nombre: string; huesos: RegExp }[] = [
+  { id: 'cabeza', nombre: 'Cabeza', huesos: /^Head$/ },
+  { id: 'cuello', nombre: 'Cuello', huesos: /^neck_01$/ },
+  { id: 'torso', nombre: 'Torso', huesos: /^(spine_0[123]|clavicle_[lr])$/ },
+  { id: 'cadera', nombre: 'Cadera', huesos: /^pelvis$/ },
+  { id: 'brazos', nombre: 'Brazos', huesos: /^upperarm_[lr]$/ },
+  { id: 'antebrazos', nombre: 'Antebrazos', huesos: /^lowerarm_[lr]$/ },
+  { id: 'manos', nombre: 'Manos', huesos: /^(hand_[lr]|(index|middle|ring|pinky|thumb)_0[123]_[lr])$/ },
+  { id: 'muslos', nombre: 'Muslos', huesos: /^thigh_[lr]$/ },
+  { id: 'piernas', nombre: 'Piernas', huesos: /^calf_[lr]$/ },
+  { id: 'pies', nombre: 'Pies', huesos: /^(foot_[lr]|ball_[lr])$/ },
+];
+export type FiltroEscultura = 'suavizar' | 'inflar' | 'desinflar' | 'afilar';
 export const CUERPOS: { id: BaseCuerpo; nombre: string; descripcion: string }[] = [
   { id: 'hombre', nombre: 'Hombre', descripcion: 'Anatomía realista, estilizada (8 cabezas)' },
   { id: 'mujer', nombre: 'Mujer', descripcion: 'Anatomía realista, estilizada (8 cabezas)' },
@@ -81,6 +98,10 @@ export interface PersonajeDatos {
   cara?: Cara;
   /** una pose de fábrica por nombre (los de la biblioteca): se resuelve al crearlo */
   poseFabrica?: string;
+  /** las capas de escultura, cada una con su dial (v3.41) */
+  capas?: CapaEscultura[];
+  /** las piezas: ropa, pelo, accesorios levantados de la piel (v3.41) */
+  piezas?: Pieza[];
 }
 
 const lim = (v: unknown, d: number, a: number, b: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(a, Math.min(b, v)) : d);
@@ -97,8 +118,10 @@ export function personajeValido(x: unknown): PersonajeDatos {
     : Array.isArray(e) && e.length % 4 === 0 && e.length <= 4 * 400000 && e.every((n) => Number.isFinite(Number(n))) ? e.map(Number) : undefined;
   const definicion = Math.round(lim(o.definicion, 0, 0, 2));
   const raiz = raizValida(o.raiz), actuacion = actuacionValida(o.actuacion), forma = formaValida(o.forma), cara = caraValida(o.cara);
+  const capas = capasValidas(o.capas), piezas = piezasValidas(o.piezas);
   return { base, prop, pose, pies: o.pies !== false, color: typeof o.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.color) ? o.color : COLOR_ARCILLA, ...(escultura?.length ? { escultura } : {}),
     ...(definicion ? { definicion } : {}), ...(raiz ? { raiz } : {}), ...(actuacion ? { actuacion } : {}), ...(forma ? { forma } : {}), ...(cara ? { cara } : {}),
+    ...(capas ? { capas } : {}), ...(piezas ? { piezas } : {}),
     ...(typeof o.poseFabrica === 'string' && /^[a-z0-9-]{1,30}$/.test(o.poseFabrica) ? { poseFabrica: o.poseFabrica } : {}) };
 }
 export function personajeNuevo(base: BaseCuerpo = 'hombre'): PersonajeDatos {
@@ -109,7 +132,10 @@ export function personajeNuevo(base: BaseCuerpo = 'hombre'): PersonajeDatos {
 /* ── LAS ARTICULACIONES QUE SE AGARRAN ─────────────────────────────────────── */
 /** Qué se mueve al tocar un hueso: los dedos mueven la muñeca; el talón, el
  *  tobillo; la clavícula, el hombro; la columna entera es «el tronco». */
+/** Los huesos de giro del antebrazo («giro_lowerarm_l») son parte de su hueso. */
+export const nombreReal = (n: string): string => n.replace(/^giro_/, '');
 export function controlDeHueso(n: string): string {
+  n = nombreReal(n);
   if (/^(index|middle|pinky|ring|thumb)_/.test(n)) return 'hand_' + n.slice(-1);
   if (/^ball/.test(n)) return 'foot_' + n.slice(-1);
   if (n === 'root') return 'pelvis';
@@ -141,9 +167,26 @@ const EJES: Record<string, [[number, number], [number, number], [number, number]
   // GIRARLO (arrastre, flechas, diales): la IK del anillo de la mano rota el húmero
   // sobre su largo para orientar el codo y una caja de ejes la dejaba sin llegar.
   upperarm_l: [[-85, 85], [-135, 45], [-100, 92]],
-  upperarm_r: [[-85, 85], [-45, 135], [-92, 100]],
+  // LA CADERA (medido: x+ lleva la pierna atrás; z+ la abre, en la izquierda):
+  // adelante 125°, atrás 30°, abrir 50°, cruzar 30°, rotar 40°
+  thigh_l: [[-125, 30], [-40, 45], [-30, 50]],
+  // LA MUÑECA (z+ levanta los dedos con la palma abajo; y+ los lleva al meñique):
+  // doblar 80°, levantar 70°, hacia el meñique 35°, hacia el pulgar 20°; girar
+  // casi nada (la mano gira con el antebrazo: radio y cúbito)
+  hand_l: [[-25, 25], [-20, 35], [-80, 70]],
+  // EL TOBILLO (x+ levanta la punta): abajo 50°, arriba 25°, de costado y torcer 25°
+  foot_l: [[-50, 25], [-25, 25], [-25, 25]],
+  // LA CLAVÍCULA: subir 40°, bajar 15°, adelantar 30°, atrasar 25°
+  clavicle_l: [[-15, 15], [-30, 25], [-15, 40]],
 };
-const SOLO_AL_GIRAR = new Set(['upperarm_l', 'upperarm_r']);
+// el lado derecho: el espejo del izquierdo (x queda; y y z cambian de signo)
+for (const n of ['upperarm', 'thigh', 'hand', 'foot', 'clavicle']) {
+  const L = EJES[n + '_l'];
+  EJES[n + '_r'] = [[L[0][0], L[0][1]], [-L[1][1], -L[1][0]], [-L[2][1], -L[2][0]]];
+}
+// los que la IK de anillos y la cadera con los pies quietos necesitan libres (el
+// tope va al girarlos a mano: arrastre, flechas, diales)
+const SOLO_AL_GIRAR = new Set(['upperarm_l', 'upperarm_r', 'thigh_l', 'thigh_r', 'hand_l', 'hand_r', 'foot_l', 'foot_r']);
 /** los que se topan en elipse (agachar + inclinar): la columna y el cuello */
 const ELIPSE = new Set(['neck_01', 'Head', 'spine_01', 'spine_02', 'spine_03']);
 function limitarEjes(n: string, q: THREE.Quaternion, girando = false): THREE.Quaternion {
@@ -164,6 +207,10 @@ function limitarEjes(n: string, q: THREE.Quaternion, girando = false): THREE.Qua
 }
 /** Los diales del AJUSTE FINO de cada control: qué hace cada eje y su tope. */
 export interface Dial { eje: 'x' | 'y' | 'z' | 'doblar' | 'rotar'; nombre: string; min: number; max: number }
+/** Los diales del lado derecho valen ESPEJADOS (y y z cambian de signo): así
+ *  «abrir» abre las dos piernas hacia su lado. Medido: con el mismo signo, abrir
+ *  la pierna derecha la cruzaba. */
+const espejado = (c: string) => /_r$/.test(c);
 export function dialesDe(c: string): Dial[] {
   const b = c.replace(/_[lr]$/, '');
   const D = (eje: Dial['eje'], nombre: string, min: number, max: number): Dial => ({ eje, nombre, min, max });
@@ -172,12 +219,12 @@ export function dialesDe(c: string): Dial[] {
     case 'tronco': return [D('x', 'Agacharse / arquearse', -36, 85), D('y', 'Girar', -45, 45), D('z', 'Inclinar al costado', -36, 36)];
     case 'neck_01': return [D('x', 'Agachar / levantar', -30, 26), D('y', 'Girar', -36, 36), D('z', 'Ladear', -18, 18)];
     case 'Head': return [D('x', 'Asentir', -55, 50), D('y', 'Mirar al costado', -76, 76), D('z', 'Ladear', -34, 34)];
-    case 'clavicle': return [D('z', 'Subir / bajar el hombro', -20, 35), D('y', 'Adelantar / atrasar', -30, 30)];
+    case 'clavicle': return [D('z', 'Bajar / subir el hombro', -15, 40), D('y', 'Adelantar / atrasar', -30, 25)];
     case 'upperarm': return [D('z', 'Subir / bajar el brazo', -100, 100), D('y', 'Adelante / atrás', -120, 120), D('x', 'Rotar el brazo', -90, 90)];
     case 'lowerarm': case 'calf': return [D('doblar', 'Doblar', 0, 150), D('rotar', 'Rotar', -90, 90)];
-    case 'hand': return [D('z', 'Doblar la muñeca', -80, 80), D('y', 'De costado', -40, 40), D('x', 'Girar', -80, 80)];
-    case 'thigh': return [D('x', 'Adelante / atrás', -120, 45), D('z', 'Abrir / cerrar', -45, 80), D('y', 'Rotar la pierna', -45, 45)];
-    case 'foot': return [D('x', 'Punta arriba / abajo', -45, 45), D('y', 'Punta adentro / afuera', -30, 30), D('z', 'Torcer', -25, 25)];
+    case 'hand': return [D('z', 'Doblar / levantar la muñeca', -80, 70), D('y', 'Al pulgar / al meñique', -20, 35), D('x', 'Girar (poco: gira el antebrazo)', -25, 25)];
+    case 'thigh': return [D('x', 'Adelante / atrás', -125, 30), D('z', 'Cruzar / abrir', -30, 50), D('y', 'Rotar la pierna', -40, 45)];
+    case 'foot': return [D('x', 'Punta abajo / arriba', -50, 25), D('y', 'Punta adentro / afuera', -25, 25), D('z', 'Torcer', -25, 25)];
     default: return [];
   }
 }
@@ -281,18 +328,32 @@ function materialArcilla(m0: THREE.MeshStandardMaterial, color: THREE.Color): TH
   m.name = m0.name;
   if (m0.map && !pelo) {
     m.userData.claro = color;
-    // la piel con boca (atributo `adentro`) oscurece el interior: se ve al abrirla
-    m.customProgramCacheKey = () => (m.userData.conBoca ? 'arcilla-boca' : 'arcilla');
     m.onBeforeCompile = (sh) => {
       sh.uniforms.claro = { value: m.userData.claro };
-      const boca = !!m.userData.conBoca;
-      if (boca) sh.vertexShader = 'attribute float adentro;\nvarying float vAdentro;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vAdentro = adentro;');
-      sh.fragmentShader = (boca ? 'varying float vAdentro;\n' : '') + 'uniform vec3 claro;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      sh.fragmentShader = 'uniform vec3 claro;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
         float lumArcilla = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-        diffuseColor.rgb = mix(claro * 0.2, claro, smoothstep(0.02, 0.32, lumArcilla));` + (boca ? '\n        diffuseColor.rgb *= mix(1.0, 0.16, vAdentro);' : ''));
+        diffuseColor.rgb = mix(claro * 0.2, claro, smoothstep(0.02, 0.32, lumArcilla));`);
     };
   }
   return m;
+}
+
+/** El material de la PIEL que se esculpe: además de la arcilla, oscurece el
+ *  interior de la boca (atributo `adentro`: se ve al abrirla) y muestra la
+ *  MÁSCARA (atributo `mascara`) en gris oscuro, como Blender y ZBrush. */
+function materialDelCuerpo(m: THREE.MeshStandardMaterial): void {
+  const previo = m.onBeforeCompile;
+  m.customProgramCacheKey = () => 'arcilla-cuerpo' + (m.map ? '-tex' : '');
+  m.onBeforeCompile = (sh, r) => {
+    if (m.map) previo.call(m, sh, r);
+    skinningConVolumen(sh);
+    sh.vertexShader = 'attribute float adentro;\nattribute float mascara;\nvarying float vAdentro;\nvarying float vMascara;\n'
+      + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vAdentro = adentro; vMascara = mascara;');
+    sh.fragmentShader = 'varying float vAdentro;\nvarying float vMascara;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+        diffuseColor.rgb *= mix(1.0, 0.16, vAdentro);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.3 + vec3(0.03, 0.045, 0.08), clamp(vMascara, 0.0, 1.0) * 0.85);`);
+  };
+  m.needsUpdate = true;
 }
 
 /* ── LAS ANIMACIONES DE LA BIBLIOTECA (para las actuaciones) ───────────────── */
@@ -462,7 +523,7 @@ function subdividir(g: THREE.BufferGeometry, pos: ArrayLike<number> = g.attribut
     top.forEach(([h, w], k) => { SIa[j * 4 + k] = h; SWa[j * 4 + k] = w / tot; });
   }
   const out = new THREE.BufferGeometry();
-  for (const nombre of ['labio', 'adentro']) {
+  for (const nombre of ['labio', 'adentro', 'mascara']) {
     const LB = g.attributes[nombre] as THREE.BufferAttribute | undefined;
     if (!LB) continue;
     const la = new Float32Array(m); la.set(LB.array as Float32Array);
@@ -701,7 +762,7 @@ const ADELGAZAR: Record<string, number> = { pelvis: -0.015, spine_01: -0.02, spi
   upperarm: -0.012, lowerarm: -0.006, thigh: -0.018, calf: -0.01 };
 const DESMUSCULAR: Record<string, number> = { spine_01: -0.004, spine_02: -0.006, spine_03: -0.012, neck_01: -0.01, clavicle: -0.012,
   upperarm: -0.01, lowerarm: -0.005, thigh: -0.008, calf: -0.005 };
-const regionDeHueso = (n: string) => (/^(index|middle|pinky|ring|thumb)_/.test(n) ? 'hand' : /^ball/.test(n) ? 'foot' : n.replace(/_[lr]$/, ''));
+const regionDeHueso = (n0: string) => { const n = nombreReal(n0); return /^(index|middle|pinky|ring|thumb)_/.test(n) ? 'hand' : /^ball/.test(n) ? 'foot' : n.replace(/_[lr]$/, ''); };
 
 /* ── la boca: partir los labios ── */
 /** Los labios de estos cuerpos están unidos en una fila de puntos, y detrás hay
@@ -805,10 +866,143 @@ function partirLabios(g: THREE.BufferGeometry): THREE.BufferGeometry {
   return out;
 }
 const pielesPartidas = new Map<BaseCuerpo, THREE.BufferGeometry>();
-function pielPartida(base: BaseCuerpo, g0: THREE.BufferGeometry): THREE.BufferGeometry {
+function pielPartida(base: BaseCuerpo, g0: THREE.BufferGeometry, malla?: THREE.SkinnedMesh): THREE.BufferGeometry {
   let p = pielesPartidas.get(base);
-  if (!p) { p = partirLabios(g0); pielesPartidas.set(base, p); }
+  if (!p) { p = partirLabios(g0); if (malla) retorcerAntebrazos(p, malla); pielesPartidas.set(base, p); }
   return p;
+}
+
+/** LOS HUESOS DE GIRO DEL ANTEBRAZO (los «twist bones» de un rig profesional).
+ *  En el cuerpo, al girar la mano (pronación), el radio rueda sobre el cúbito:
+ *  el giro se reparte a lo largo del antebrazo y el codo casi no gira. Estos
+ *  cuerpos no los traen: con el antebrazo entero girando desde el codo, la piel
+ *  se estrangulaba ahí como un caramelo (medido: girado 85°, el codo quedaba en
+ *  la mitad de su grosor). Cada antebrazo suma un hueso de giro EN EL CODO que
+ *  des-gira el GIRO_ANTEBRAZO del giro; la piel pasa de ese hueso (en el codo)
+ *  al antebrazo (en la muñeca, con el giro entero, como la mano). Los dos van al
+ *  final del esqueleto: izquierdo y derecho. */
+export const GIRO_ANTEBRAZO = 0.85;
+function retorcerAntebrazos(g: THREE.BufferGeometry, malla: THREE.SkinnedMesh): void {
+  const esq = malla.skeleton, nB = esq.bones.length, si = g.attributes.skinIndex as THREE.BufferAttribute, sw = g.attributes.skinWeight as THREE.BufferAttribute;
+  const P = g.attributes.position as THREE.BufferAttribute, v = new THREE.Vector3();
+  ['l', 'r'].forEach((lado, k) => {
+    const ia = esq.bones.findIndex((b) => b.name === 'lowerarm_' + lado), ih = esq.bones.findIndex((b) => b.name === 'hand_' + lado);
+    if (ia < 0 || ih < 0) return;
+    const codo = new THREE.Vector3().setFromMatrixPosition(esq.boneInverses[ia].clone().invert());
+    const muneca = new THREE.Vector3().setFromMatrixPosition(esq.boneInverses[ih].clone().invert()), ab = muneca.clone().sub(codo);
+    for (let i = 0; i < P.count; i++) {
+      let c = -1; for (let s = 0; s < 4; s++) if (si.getComponent(i, s) === ia && sw.getComponent(i, s) > 0) c = s;
+      if (c < 0) continue;
+      v.fromBufferAttribute(P, i).applyMatrix4(malla.bindMatrix);
+      const tt = Math.max(0, Math.min(1, v.sub(codo).dot(ab) / ab.lengthSq())), u = Math.min(1, tt / 0.9), lejos = u * u * (3 - 2 * u);
+      const w = sw.getComponent(i, c), wGiro = w * (1 - lejos);
+      if (wGiro < 1e-3) continue;
+      sw.setComponent(i, c, w - wGiro);
+      // un lugar para el hueso de giro: uno vacío, o el del peso más chico (y se renormaliza)
+      let libre = -1, menor = Infinity;
+      for (let s = 0; s < 4; s++) { const x = sw.getComponent(i, s); if (s !== c && x < menor) { menor = x; libre = s; } }
+      if (menor > wGiro) { sw.setComponent(i, c, w); continue; }
+      si.setComponent(i, libre, nB + k); sw.setComponent(i, libre, wGiro);
+      let tot = 0; for (let s = 0; s < 4; s++) tot += sw.getComponent(i, s);
+      for (let s = 0; s < 4; s++) sw.setComponent(i, s, sw.getComponent(i, s) / tot);
+    }
+  });
+}
+
+/* ── LA PIEL CON VOLUMEN: skinning de cuaterniones duales ───────────────────
+   Three mezcla las matrices de los huesos (skinning lineal): en una flexión
+   fuerte la mezcla de dos giros achica la piel (el codo y la rodilla se
+   desinflaban, la cadera se volvía una masa) y en un giro se estrangula (el
+   «caramelo»). Mezclando los giros como cuaterniones duales (Kavan et al.), la
+   piel gira alrededor de la articulación y CONSERVA SU GROSOR: se porta como
+   carne sobre un hueso. El tamaño de cada hueso (cabeza, manos, pies) se mezcla
+   aparte. La GPU dibuja así y la CPU calcula igual (el pincel y el rayo tocan
+   donde se ve). */
+const DQ_GLSL = `
+vec4 dqQuat(mat3 m) {
+  float tr = m[0][0] + m[1][1] + m[2][2]; vec4 q;
+  if (tr > 0.0) { float s = sqrt(tr + 1.0) * 2.0; q = vec4((m[1][2] - m[2][1]) / s, (m[2][0] - m[0][2]) / s, (m[0][1] - m[1][0]) / s, 0.25 * s); }
+  else if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) { float s = sqrt(1.0 + m[0][0] - m[1][1] - m[2][2]) * 2.0; q = vec4(0.25 * s, (m[1][0] + m[0][1]) / s, (m[2][0] + m[0][2]) / s, (m[1][2] - m[2][1]) / s); }
+  else if (m[1][1] > m[2][2]) { float s = sqrt(1.0 + m[1][1] - m[0][0] - m[2][2]) * 2.0; q = vec4((m[1][0] + m[0][1]) / s, 0.25 * s, (m[2][1] + m[1][2]) / s, (m[2][0] - m[0][2]) / s); }
+  else { float s = sqrt(1.0 + m[2][2] - m[0][0] - m[1][1]) * 2.0; q = vec4((m[2][0] + m[0][2]) / s, (m[2][1] + m[1][2]) / s, 0.25 * s, (m[0][1] - m[1][0]) / s); }
+  return q;
+}
+vec4 dqMul(vec4 a, vec4 b) { return vec4(a.w * b.xyz + b.w * a.xyz + cross(a.xyz, b.xyz), a.w * b.w - dot(a.xyz, b.xyz)); }
+void dqHueso(mat4 M, out vec4 r, out vec4 d, out float s) {
+  s = length(M[0].xyz);
+  r = dqQuat(mat3(M[0].xyz / s, M[1].xyz / s, M[2].xyz / s));
+  d = 0.5 * dqMul(vec4(M[3].xyz, 0.0), r);
+}
+vec3 dqRotar(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
+vec3 dqMover(vec4 r, vec4 d) { return 2.0 * (r.w * d.xyz - d.w * r.xyz + cross(r.xyz, d.xyz)); }
+`;
+const DQ_MEZCLA = `
+  vec4 dqR, dqD; float dqS;
+  {
+    vec4 r0, d0, r1, d1, r2, d2, r3, d3; float s0, s1, s2, s3;
+    dqHueso(boneMatX, r0, d0, s0); dqHueso(boneMatY, r1, d1, s1); dqHueso(boneMatZ, r2, d2, s2); dqHueso(boneMatW, r3, d3, s3);
+    float w1 = dot(r0, r1) < 0.0 ? -skinWeight.y : skinWeight.y, w2 = dot(r0, r2) < 0.0 ? -skinWeight.z : skinWeight.z, w3 = dot(r0, r3) < 0.0 ? -skinWeight.w : skinWeight.w;
+    dqR = r0 * skinWeight.x + r1 * w1 + r2 * w2 + r3 * w3;
+    dqD = d0 * skinWeight.x + d1 * w1 + d2 * w2 + d3 * w3;
+    dqS = s0 * skinWeight.x + s1 * skinWeight.y + s2 * skinWeight.z + s3 * skinWeight.w;
+    float l = max(length(dqR), 1e-6); dqR /= l; dqD /= l;
+  }
+`;
+/** Pone el skinning de cuaterniones duales en un material de la piel (o de una pieza). */
+function skinningConVolumen(sh: Parameters<THREE.Material['onBeforeCompile']>[0]): void {
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <skinning_pars_vertex>', '#include <skinning_pars_vertex>\n#ifdef USE_SKINNING\n' + DQ_GLSL + '\n#endif')
+    .replace('#include <skinbase_vertex>', '#include <skinbase_vertex>\n#ifdef USE_SKINNING\n' + DQ_MEZCLA + '\n#endif')
+    .replace('#include <skinnormal_vertex>', `#ifdef USE_SKINNING
+  objectNormal = mat3(bindMatrixInverse) * dqRotar(dqR, mat3(bindMatrix) * objectNormal);
+#endif`)
+    .replace('#include <skinning_vertex>', `#ifdef USE_SKINNING
+  transformed = (bindMatrixInverse * vec4(dqRotar(dqR, (bindMatrix * vec4(transformed, 1.0)).xyz * dqS) + dqMover(dqR, dqD), 1.0)).xyz;
+#endif`);
+}
+/** Lo mismo en la CPU, con los cuaterniones duales de cada hueso ya calculados. */
+export class PielDQ {
+  r = new Float32Array(0); d = new Float32Array(0); s = new Float32Array(0);
+  private version = -1;
+  preparar(esq: THREE.Skeleton, version: number): void {
+    if (this.version === version && this.s.length === esq.bones.length) return;
+    this.version = version;
+    const n = esq.bones.length, M = esq.boneMatrices, m3 = new THREE.Matrix4(), q = new THREE.Quaternion();
+    if (this.s.length !== n) { this.r = new Float32Array(n * 4); this.d = new Float32Array(n * 4); this.s = new Float32Array(n); }
+    for (let b = 0; b < n; b++) {
+      const o = b * 16, s = Math.hypot(M[o], M[o + 1], M[o + 2]) || 1;
+      m3.set(M[o] / s, M[o + 4] / s, M[o + 8] / s, 0, M[o + 1] / s, M[o + 5] / s, M[o + 9] / s, 0, M[o + 2] / s, M[o + 6] / s, M[o + 10] / s, 0, 0, 0, 0, 1);
+      q.setFromRotationMatrix(m3);
+      const tx = M[o + 12], ty = M[o + 13], tz = M[o + 14];
+      this.r.set([q.x, q.y, q.z, q.w], b * 4); this.s[b] = s;
+      // d = ½ (t, 0) · q
+      this.d.set([0.5 * (q.w * tx + ty * q.z - tz * q.y), 0.5 * (q.w * ty + tz * q.x - tx * q.z), 0.5 * (q.w * tz + tx * q.y - ty * q.x), -0.5 * (tx * q.x + ty * q.y + tz * q.z)], b * 4);
+    }
+  }
+  /** La posición posada (como applyBoneTransform de three, pero con volumen). */
+  aplicar(malla: THREE.SkinnedMesh, i: number, v: THREE.Vector3): THREE.Vector3 {
+    const si = malla.geometry.attributes.skinIndex as THREE.BufferAttribute, sw = malla.geometry.attributes.skinWeight as THREE.BufferAttribute;
+    v.applyMatrix4(malla.bindMatrix);
+    const b0 = si.getComponent(i, 0) * 4, R = this.r, D = this.d;
+    let rx = 0, ry = 0, rz = 0, rw = 0, dx = 0, dy = 0, dz = 0, dw = 0, S = 0;
+    for (let k = 0; k < 4; k++) {
+      let w = sw.getComponent(i, k); if (!w) continue;
+      const b = si.getComponent(i, k), o = b * 4;
+      S += w * this.s[b];
+      if (R[o] * R[b0] + R[o + 1] * R[b0 + 1] + R[o + 2] * R[b0 + 2] + R[o + 3] * R[b0 + 3] < 0) w = -w;
+      rx += R[o] * w; ry += R[o + 1] * w; rz += R[o + 2] * w; rw += R[o + 3] * w;
+      dx += D[o] * w; dy += D[o + 1] * w; dz += D[o + 2] * w; dw += D[o + 3] * w;
+    }
+    const l = Math.hypot(rx, ry, rz, rw) || 1;
+    rx /= l; ry /= l; rz /= l; rw /= l; dx /= l; dy /= l; dz /= l; dw /= l;
+    const px = v.x * S, py = v.y * S, pz = v.z * S;
+    // rotar: v + 2 q×(q×v + w v)
+    const cx = ry * pz - rz * py + rw * px, cy = rz * px - rx * pz + rw * py, cz = rx * py - ry * px + rw * pz;
+    const ox = px + 2 * (ry * cz - rz * cy), oy = py + 2 * (rz * cx - rx * cz), oz = pz + 2 * (rx * cy - ry * cx);
+    // mover: 2 (w·d − dw·q + q×d)
+    const tx = 2 * (rw * dx - dw * rx + (ry * dz - rz * dy)), ty = 2 * (rw * dy - dw * ry + (rz * dx - rx * dz)), tz = 2 * (rw * dz - dw * rz + (rx * dy - ry * dx));
+    return v.set(ox + tx, oy + ty, oz + tz).applyMatrix4(malla.bindMatrixInverse);
+  }
 }
 
 /* ── UN PERSONAJE ──────────────────────────────────────────────────────────── */
@@ -848,8 +1042,12 @@ export class Personaje3D {
       }
     });
     this.cuerpo = this.mallas.reduce((a, b) => (b.geometry.attributes.position.count > a.geometry.attributes.position.count ? b : a));
-    { const g0 = this.cuerpo.geometry; this.cuerpo.geometry = pielEnNivel(this.datos.base, pielPartida(this.datos.base, g0), this.datos.definicion ?? 0); g0.dispose(); }
-    if (this.cuerpo.geometry.attributes.adentro) (this.cuerpo.material as THREE.Material).userData.conBoca = true;
+    { const g0 = this.cuerpo.geometry; this.cuerpo.geometry = pielEnNivel(this.datos.base, pielPartida(this.datos.base, g0, this.cuerpo), this.datos.definicion ?? 0); g0.dispose(); }
+    this.agregarHuesosDeGiro();
+    this.conVolumen(this.cuerpo);
+    // la piel siempre trae `adentro` (la boca) y `mascara` (lo protegido), aunque sea en cero
+    for (const a of ['adentro', 'mascara']) if (!this.cuerpo.geometry.attributes[a]) this.cuerpo.geometry.setAttribute(a, new THREE.BufferAttribute(new Float32Array(this.cuerpo.geometry.attributes.position.count), 1));
+    materialDelCuerpo(this.cuerpo.material as THREE.MeshStandardMaterial);
     this.original = new Float32Array(this.cuerpo.geometry.attributes.position.array as Float32Array);
     this.normalesOriginales = new Float32Array(this.cuerpo.geometry.attributes.normal.array as Float32Array);
     // los ojos (dos globos en una malla) y las cejas (otra malla), para los gestos
@@ -887,10 +1085,45 @@ export class Personaje3D {
     this.altoNatural = Math.max(0.1, caja.max.y - caja.min.y);
     if (this.datos.forma) this.ponerForma(this.datos.forma);
     if (this.datos.cara) this.ponerCara(this.datos.cara);
+    if (this.datos.capas) this.ponerCapas(this.datos.capas);
     if (this.datos.escultura) this.ponerEscultura(this.datos.escultura);
     const fab = this.datos.poseFabrica && !Object.keys(this.datos.pose).length ? posesListas.find((x) => x.id === this.datos.poseFabrica) : null;
     delete this.datos.poseFabrica;
     if (fab) this.ponerPoseDeFabrica(fab); else this.aplicar();
+    this.rehacerPiezas();
+  }
+
+  /* ── LOS HUESOS DE GIRO y LA PIEL CON VOLUMEN ── */
+  private giros: { lado: string; hueso: THREE.Bone; eje: THREE.Vector3 }[] = [];
+  private agregarHuesosDeGiro(): void {
+    const sk = this.cuerpo.skeleton, bones = sk.bones.slice(), inv = sk.boneInverses.map((m) => m.clone());
+    for (const lado of ['l', 'r']) {
+      const la = this.huesos.get('lowerarm_' + lado), mano = this.huesos.get('hand_' + lado), k = la ? bones.indexOf(la) : -1;
+      if (!la || !mano || k < 0) continue;
+      // en el codo: su reposo es el del antebrazo
+      const b = new THREE.Bone(); b.name = 'giro_lowerarm_' + lado; la.add(b);
+      bones.push(b); inv.push(inv[k].clone());
+      this.giros.push({ lado, hueso: b, eje: mano.position.clone().normalize() });
+    }
+    if (this.giros.length) this.cuerpo.bind(new THREE.Skeleton(bones, inv), this.cuerpo.bindMatrix);
+  }
+  /** El des-giro del codo: lo que el antebrazo gira sobre su largo, el codo lo deja de girar. */
+  private ponerGiros(): void {
+    for (const g of this.giros) {
+      const n = 'lowerarm_' + g.lado, d = this.datos.pose[n], b = BISAGRAS[n], w = this.enReposo.get(n);
+      let th = 0;
+      if (d && b && w) {
+        const largo = new THREE.Vector3().fromArray(b.largo), pp = d[0] * largo.x + d[1] * largo.y + d[2] * largo.z;
+        th = 2 * Math.atan2(pp, d[3]) * Math.sign(g.eje.clone().applyQuaternion(w).dot(largo) || 1);
+      }
+      g.hueso.quaternion.setFromAxisAngle(g.eje, -GIRO_ANTEBRAZO * th);
+    }
+  }
+  private dq = new PielDQ();
+  private versionHuesos = 0;
+  /** El rayo, el pincel y el piso calculan la piel posada igual que la GPU (con volumen). */
+  private conVolumen(m: THREE.SkinnedMesh): void {
+    m.applyBoneTransform = (i: number, v: THREE.Vector3) => { this.dq.preparar(m.skeleton, this.versionHuesos); return this.dq.aplicar(m, i, v); };
   }
 
   /** El alto en metros, parado y con las proporciones (sin la pose): se mide
@@ -939,6 +1172,7 @@ export class Personaje3D {
       else if (n === 'foot_l' || n === 'foot_r') b.scale.multiplyScalar(d.prop.pies ?? 1);
       if (n === 'pelvis' && d.raiz) b.position.add(_v.fromArray(d.raiz));
     }
+    this.ponerGiros();
     this.modelo.position.set(0, 0, 0);
     this.raiz.updateMatrixWorld(true);
     this.modelo.scale.setScalar(d.prop.escala);
@@ -952,7 +1186,9 @@ export class Personaje3D {
   private actualizar(): void {
     this.raiz.updateMatrixWorld(true);
     for (const m of this.mallas) {
-      m.skeleton.update();
+      if (m.userData.pieza) m.userData.toque = null;
+      else m.skeleton.update();
+      this.versionHuesos++;
       (m as unknown as { boundingBox: THREE.Box3 | null }).boundingBox = null;
       (m as unknown as { boundingSphere: THREE.Sphere | null }).boundingSphere = null;
     }
@@ -964,6 +1200,13 @@ export class Personaje3D {
     const pos = this.posicionesEnRaiz();
     let min = Infinity;
     for (let i = 1; i < pos.length; i += 3) if (pos[i] < min) min = pos[i];
+    // las piezas también apoyan (una suela, una bota)
+    const aRaiz = new THREE.Matrix4();
+    for (const m of this.piezasM.values()) {
+      if (!m.visible || !m.geometry.attributes.position) continue;
+      aRaiz.copy(this.raiz.matrixWorld).invert().multiply(m.matrixWorld);
+      for (let i = 0, n = m.geometry.attributes.position.count; i < n; i++) { m.getVertexPosition(i, _v); _v.applyMatrix4(aRaiz); if (_v.y < min) min = _v.y; }
+    }
     return min;
   }
   private posicionesEnRaiz(): Float32Array {
@@ -992,7 +1235,8 @@ export class Personaje3D {
     }
     let mejor = -1, max = 0;
     for (const [b, w] of peso) if (w > max) { max = w; mejor = b; }
-    return mejor >= 0 ? m.skeleton.bones[mejor]?.name ?? null : null;
+    const n = mejor >= 0 ? m.skeleton.bones[mejor]?.name : undefined;
+    return n ? nombreReal(n) : null;
   }
   /** Dónde está una articulación (en el mundo). */
   articulacion(n: string): THREE.Vector3 | null {
@@ -1051,13 +1295,13 @@ export class Personaje3D {
       out.rotar = Math.round((2 * Math.atan2(p, q.w) * 180) / Math.PI * 10) / 10;
       return out;
     }
-    const huesos = huesosDeControl(c), R = 180 / Math.PI;
+    const huesos = huesosDeControl(c), R = 180 / Math.PI, s = espejado(c) ? -1 : 1;
     let x = 0, y = 0, z = 0;
     for (const n of huesos) {
       const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().fromArray(this.datos.pose[n] ?? [0, 0, 0, 1]), 'YXZ');
       x += e.x * R; y += e.y * R; z += e.z * R;
     }
-    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, z: Math.round(z * 10) / 10 };
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * s * 10) / 10, z: Math.round(z * s * 10) / 10 };
   }
   /** Poner un dial del ajuste fino (grados): se reparte en los huesos del control. */
   ponerDial(c: string, eje: string, grados: number): void {
@@ -1072,6 +1316,7 @@ export class Personaje3D {
     }
     const huesos = huesosDeControl(c), pesos = pesosDeControl(c), R = Math.PI / 180;
     const v = { ...this.dialesValores(c), [eje]: grados };
+    if (espejado(c)) { v.y = -v.y; v.z = -v.z; }
     huesos.forEach((n, k) => {
       let q = new THREE.Quaternion().setFromEuler(new THREE.Euler(v.x * pesos[k] * R, v.y * pesos[k] * R, v.z * pesos[k] * R, 'YXZ'));
       q = limitarEjes(n, q, true);
@@ -1229,6 +1474,7 @@ export class Personaje3D {
     const col = new THREE.Color(c);
     for (const m of this.mallas) {
       const mat = m.material as THREE.MeshStandardMaterial;
+      if (mat.userData.pieza) continue;
       if (mat.userData.claro) (mat.userData.claro as THREE.Color).copy(col);
       else if (!mat.map) mat.color.copy(mat.name === 'M_Joints' ? col.clone().multiplyScalar(0.55) : col);
     }
@@ -1325,15 +1571,29 @@ export class Personaje3D {
   /** Los vértices bajo el pincel, con su peso (suave en el borde). */
   bajoElPincel(centro: THREE.Vector3, radio: number): { i: number; f: number }[] {
     const pos = this.posicionesMundo(), out: { i: number; f: number }[] = [], r2 = radio * radio, h = Math.max(0, Math.min(0.95, this.dureza));
+    const nrm = this.cuerpo.geometry.attributes.normal as THREE.BufferAttribute, m3 = new THREE.Matrix3(), nw = new THREE.Vector3();
     for (let i = 0, n = pos.length / 3; i < n; i++) {
       const d = (pos[i * 3] - centro.x) ** 2 + (pos[i * 3 + 1] - centro.y) ** 2 + (pos[i * 3 + 2] - centro.z) ** 2;
       if (d >= r2) continue;
-      // suave: (1 − u²)²; con dureza, pareja hasta `h` del radio y después se desvanece
-      const u = Math.sqrt(d / r2), x = u <= h ? 0 : (u - h) / (1 - h), t = 1 - x * x;
-      out.push({ i, f: t * t });
+      // la CURVA de caída (la de Blender); con dureza, pareja hasta `h` del radio
+      const u = Math.sqrt(d / r2), x = u <= h ? 0 : (u - h) / (1 - h);
+      let f = curvaCaida(this.caida, x);
+      // SÓLO LAS CARAS DE FRENTE (Blender «Front Faces Only», el BackfaceMask de
+      // ZBrush): en lo fino (una oreja, los dedos, un labio) el pincel no
+      // atraviesa al otro lado
+      if (this.frente && f > 0) {
+        nw.fromBufferAttribute(nrm, i).applyMatrix3(this.piel(i, m3)).normalize();
+        const k = Math.max(0, Math.min(1, (nw.dot(this.frente) + 0.05) / 0.3));
+        f *= k * k * (3 - 2 * k);
+      }
+      if (f > 1e-4) out.push({ i, f });
     }
     return out;
   }
+  /** la curva de caída del pincel (la pone el motor) */
+  caida: CaidaPincel = 'suave';
+  /** hacia la cámara, para pintar sólo lo que la mira (null: todo lo que toca) */
+  frente: THREE.Vector3 | null = null;
   /** Un toque de pincel: `mover(i, f)` da el corrimiento EN EL MUNDO de cada
    *  vértice; acá se pasa a la piel en reposo (y al par espejado). */
   private correr(afectados: { i: number; f: number }[], mover: (i: number, f: number) => THREE.Vector3 | null, simetria: boolean, relajar = 0): void {
@@ -1358,6 +1618,8 @@ export class Personaje3D {
         else if (b) final.set(u, refl(b));
       }
     } else for (const [i, v] of d) final.set(i, v);
+    // LA MÁSCARA protege (como Ctrl en ZBrush): lo enmascarado no se mueve
+    if (this.hayMascara) { const M = this.mascaraAttr().array as Float32Array; for (const [i, v] of final) v.multiplyScalar(1 - Math.min(1, M[i])); }
     // los duplicados de las costuras se mueven juntos (si no, la piel se abre)
     const porGrupo = new Map<number, THREE.Vector3>();
     for (const [i, v] of final) { const g = this.soldado![i]; if (!porGrupo.has(g)) porGrupo.set(g, v); }
@@ -1368,7 +1630,9 @@ export class Personaje3D {
       // reparte los puntos que el pellizco amontona sin rellenar el surco.
       // Medido sin esto: los surcos salían arrugados, como papel estrujado.
       const peso = new Map<number, number>();
-      for (const { i, f } of afectados) {
+      const Mr = this.hayMascara ? this.mascaraAttr().array as Float32Array : null;
+      for (const { i, f: f0 } of afectados) {
+        const f = Mr ? f0 * (1 - Math.min(1, Mr[i])) : f0;
         const g = this.soldado![i]; peso.set(g, Math.max(peso.get(g) || 0, f));
         if (simetria && this.espejo![i] >= 0) { const g2 = this.soldado![this.espejo![i]]; peso.set(g2, Math.max(peso.get(g2) || 0, f)); }
       }
@@ -1479,6 +1743,390 @@ export class Personaje3D {
     this.correr(this.agarre, (_i, f) => delta.clone().multiplyScalar(f), simetria);
   }
   terminarTirar(): void { this.agarre = null; }
+
+  /* ── LOS PINCELES DE LOS GRANDES (v3.41) ── */
+  /** La normal de un punto de la piel, posada, en el mundo. */
+  private normalMundo(i: number, m3 = new THREE.Matrix3()): THREE.Vector3 {
+    return new THREE.Vector3().fromBufferAttribute(this.cuerpo.geometry.attributes.normal as THREE.BufferAttribute, i).applyMatrix3(this.piel(i, m3)).normalize();
+  }
+  /** EL PLANO DEL PINCEL (el «area plane» de Blender): el centro y la normal
+   *  promedio de lo que toca. Empujar por ESA normal y no por la de cada punto
+   *  deja trazos limpios, sin abrir la piel en abanico. */
+  private planoDelPincel(af: { i: number; f: number }[]): { c: THREE.Vector3; n: THREE.Vector3 } | null {
+    const pos = this.posicionesMundo(), m3 = new THREE.Matrix3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+    let s = 0;
+    for (const { i, f } of af) { c.x += pos[i * 3] * f; c.y += pos[i * 3 + 1] * f; c.z += pos[i * 3 + 2] * f; n.addScaledVector(this.normalMundo(i, m3), f); s += f; }
+    if (s < 1e-9 || n.lengthSq() < 1e-12) return null;
+    return { c: c.multiplyScalar(1 / s), n: n.normalize() };
+  }
+  /** DIBUJAR (el Draw de Blender, el Standard de ZBrush): levanta (Ctrl: hunde) por el plano del pincel. */
+  dibujar(centro: THREE.Vector3, radio: number, fuerza: number, signo: number, simetria: boolean): void {
+    const af = this.bajoElPincel(centro, radio), pl = this.planoDelPincel(af); if (!pl) return;
+    this.correr(af, (_i, f) => pl.n.clone().multiplyScalar(signo * fuerza * f * radio * 0.03), simetria);
+  }
+  /** ARCILLA (el Clay Strips de Blender, el ClayBuildup de ZBrush): rellena hasta
+   *  un plano un poco por encima de la piel, con la punta cuadrada a lo largo del
+   *  trazo: va dejando tiras planas, como poner arcilla con la espátula. Ctrl: saca. */
+  direccion: THREE.Vector3 | null = null;
+  arcilla(centro: THREE.Vector3, radio: number, fuerza: number, signo: number, simetria: boolean): void {
+    const af = this.bajoElPincel(centro, radio), pl = this.planoDelPincel(af); if (!pl) return;
+    const pos = this.posicionesMundo(), alto = radio * 0.16 * signo;
+    const meta = pl.c.clone().addScaledVector(pl.n, alto);
+    // la punta cuadrada: un eje a lo largo del trazo y otro de costado
+    let ua: THREE.Vector3 | null = null, wa: THREE.Vector3 | null = null;
+    if (this.direccion) { ua = this.direccion.clone().addScaledVector(pl.n, -this.direccion.dot(pl.n)); if (ua.lengthSq() > 1e-10) { ua.normalize(); wa = pl.n.clone().cross(ua); } else ua = null; }
+    const p = new THREE.Vector3();
+    this.correr(af, (i, f) => {
+      p.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+      if (ua && wa) { const q = p.clone().sub(pl.c), s = Math.max(Math.abs(q.dot(ua)), Math.abs(q.dot(wa))) / radio; const k = Math.max(0, Math.min(1, (s - 0.62) / 0.33)); f *= 1 - k * k * (3 - 2 * k); }
+      const d = p.clone().sub(meta).dot(pl.n);
+      if (signo > 0 ? d >= 0 : d <= 0) return null;
+      return pl.n.clone().multiplyScalar(-d * fuerza * f * 0.35);
+    }, simetria);
+  }
+  /** CAPA (el Layer de Blender): levanta la piel hasta una altura fija en todo el
+   *  trazo: pasar dos veces por el mismo lugar no acumula (un escalón parejo, un
+   *  parche, una placa). Ctrl: hunde. */
+  private capaTrazo = new Map<number, number>();
+  capa(centro: THREE.Vector3, radio: number, fuerza: number, signo: number, simetria: boolean): void {
+    this.preparar();
+    const af = this.bajoElPincel(centro, radio), H = radio * 0.12 * Math.max(0.1, fuerza) * signo, m3 = new THREE.Matrix3();
+    this.correr(af, (i, f) => {
+      const g = this.soldado![i], a = this.capaTrazo.get(g) ?? 0, meta = H * f;
+      if (Math.abs(a) >= Math.abs(meta) - 1e-7) return null;
+      const paso = Math.sign(meta) * Math.min(Math.abs(meta - a), Math.abs(H) * 0.35);
+      this.capaTrazo.set(g, a + paso);
+      return this.normalMundo(i, m3).multiplyScalar(paso);
+    }, simetria);
+  }
+  /** RASPAR (el Scrape de Blender, el TrimDynamic de ZBrush): baja lo que sobresale
+   *  del plano del pincel. Ctrl: RELLENAR (el Fill), sube lo que está hundido. */
+  raspar(centro: THREE.Vector3, radio: number, fuerza: number, signo: number, simetria: boolean): void {
+    const af = this.bajoElPincel(centro, radio), pl = this.planoDelPincel(af); if (!pl) return;
+    const pos = this.posicionesMundo(), p = new THREE.Vector3();
+    this.correr(af, (i, f) => {
+      const d = p.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).sub(pl.c).dot(pl.n);
+      if (signo > 0 ? d <= 0 : d >= 0) return null;
+      return pl.n.clone().multiplyScalar(-d * fuerza * f * 0.5);
+    }, simetria);
+  }
+  /** GANCHO (el Snake Hook): agarra lo que está bajo el pincel AHORA y lo lleva
+   *  con el cursor: cuernos, mechones, orejas en punta, dedos. Se suaviza un poco
+   *  al pasar para que lo estirado no se arrugue. */
+  gancho(centro: THREE.Vector3, radio: number, delta: THREE.Vector3, fuerza: number, simetria: boolean): void {
+    const af = this.bajoElPincel(centro, radio), k = Math.min(1, 0.45 + fuerza * 0.55);
+    this.correr(af, (_i, f) => delta.clone().multiplyScalar(f * k), simetria, 0.2);
+  }
+  /** EMPUJAR (el Nudge): corre la piel por la superficie hacia donde va el trazo. */
+  empujar(centro: THREE.Vector3, radio: number, fuerza: number, simetria: boolean): void {
+    if (!this.direccion) return;
+    const dir = this.direccion.clone().normalize(), af = this.bajoElPincel(centro, radio), m3 = new THREE.Matrix3();
+    this.correr(af, (i, f) => {
+      const n = this.normalMundo(i, m3);
+      return dir.clone().addScaledVector(n, -dir.dot(n)).multiplyScalar(fuerza * f * radio * 0.08);
+    }, simetria, 0.15);
+  }
+
+  /* ── LA MÁSCARA (lo protegido de los pinceles) ── */
+  hayMascara = false;
+  private mascaraAttr(): THREE.BufferAttribute { return this.cuerpo.geometry.attributes.mascara as THREE.BufferAttribute; }
+  private mascaraCambiada(): void {
+    const a = this.mascaraAttr(), M = a.array as Float32Array;
+    let hay = false; for (let i = 0; i < M.length; i++) if (M[i] > 1e-3) { hay = true; break; }
+    this.hayMascara = hay; a.needsUpdate = true;
+  }
+  /** Un valor por punto soldado (las costuras parejas) y su espejo. */
+  private ponerEnGrupo(M: Float32Array, i: number, v: number, simetria: boolean): void {
+    const g = this.soldado![i];
+    for (const j of this.grupos[g]) M[j] = v;
+    if (simetria) { const e = this.espejo![i]; if (e >= 0) for (const j of this.grupos[this.soldado![e]]) M[j] = v; }
+  }
+  /** Pintar la máscara (Ctrl: borrarla; Shift: suavizar su borde). */
+  pintarMascara(centro: THREE.Vector3, radio: number, fuerza: number, signo: number, simetria: boolean, suavizar = false): void {
+    this.preparar();
+    const M = this.mascaraAttr().array as Float32Array, af = this.bajoElPincel(centro, radio);
+    if (suavizar) {
+      const nuevo = new Map<number, number>();
+      for (const { i, f } of af) {
+        const vs = this.vecinos[this.soldado![i]]; if (!vs.length) continue;
+        let s = 0; for (const h of vs) s += M[this.grupos[h][0]];
+        nuevo.set(i, M[i] + (s / vs.length - M[i]) * Math.min(1, fuerza * f * 1.5));
+      }
+      for (const [i, v] of nuevo) this.ponerEnGrupo(M, i, v, simetria);
+    } else for (const { i, f } of af) this.ponerEnGrupo(M, i, Math.max(0, Math.min(1, M[i] + signo * Math.min(1, fuerza * f * 1.6))), simetria);
+    this.mascaraCambiada();
+  }
+  /** Enmascarar una parte del cuerpo de un clic (por sus huesos: el borde queda
+   *  suave en las articulaciones). `modo`: poner (sólo esa), sumar o quitar. */
+  mascaraDeParte(parte: string, modo: 'poner' | 'sumar' | 'quitar'): boolean {
+    const P = PARTES_MASCARA.find((x) => x.id === parte); if (!P) return false;
+    const g = this.cuerpo.geometry, si = g.attributes.skinIndex as THREE.BufferAttribute, sw = g.attributes.skinWeight as THREE.BufferAttribute;
+    const bones = this.cuerpo.skeleton.bones, es = bones.map((b) => P.huesos.test(nombreReal(b.name))), M = this.mascaraAttr().array as Float32Array;
+    for (let i = 0; i < M.length; i++) {
+      let v = 0; for (let k = 0; k < 4; k++) if (es[si.getComponent(i, k)]) v += sw.getComponent(i, k);
+      v = Math.min(1, v);
+      // los pesos de los huesos suman 1: la unión de dos partes es la SUMA (con el
+      // máximo, un punto mitad torso y mitad cadera quedaba en 0,5 y la pieza se agujereaba)
+      M[i] = modo === 'poner' ? v : modo === 'sumar' ? Math.min(1, M[i] + v) : Math.max(0, M[i] - v);
+    }
+    this.mascaraCambiada();
+    return true;
+  }
+  invertirMascara(): void { const M = this.mascaraAttr().array as Float32Array; for (let i = 0; i < M.length; i++) M[i] = 1 - Math.min(1, M[i]); this.mascaraCambiada(); }
+  limpiarMascara(): void { (this.mascaraAttr().array as Float32Array).fill(0); this.mascaraCambiada(); }
+  /** Crecer (+1) o achicar (−1) la máscara un anillo de puntos (el Grow/Shrink de Blender). */
+  crecerMascara(paso: number): void {
+    this.preparar();
+    const M = this.mascaraAttr().array as Float32Array, G = this.grupos, v = G.map((l) => M[l[0]]);
+    const out = v.map((x, g) => { let r = x; for (const h of this.vecinos[g]) r = paso > 0 ? Math.max(r, v[h]) : Math.min(r, v[h]); return r; });
+    G.forEach((l, g) => { for (const i of l) M[i] = out[g]; });
+    this.mascaraCambiada();
+  }
+  /** Suavizar (borde difuso) o afilar (borde nítido) la máscara entera. */
+  suavizarMascara(afilar = false): void {
+    const M = this.mascaraAttr().array as Float32Array;
+    if (afilar) for (let i = 0; i < M.length; i++) { const k = Math.max(0, Math.min(1, (M[i] - 0.3) / 0.4)); M[i] = k * k * (3 - 2 * k); }
+    else this.suavizarCampo(M, 1, 2);
+    this.mascaraCambiada();
+  }
+  copiaMascara(): Float32Array { return (this.mascaraAttr().array as Float32Array).slice(); }
+  ponerMascara(m: Float32Array): void { const M = this.mascaraAttr().array as Float32Array; if (m.length === M.length) M.set(m); this.mascaraCambiada(); }
+  /** Cuánto de la piel está enmascarado (0 a 1). */
+  cuantaMascara(): number { const M = this.mascaraAttr().array as Float32Array; let s = 0; for (let i = 0; i < M.length; i++) s += Math.min(1, M[i]); return s / Math.max(1, M.length); }
+
+  /* ── EL TRAZO: lo que se arma al empezar y se cierra al soltar ── */
+  /** la capa de escultura donde va lo esculpido (null: la principal) */
+  capaActiva: string | null = null;
+  private pielAntes: Float32Array | null = null;
+  empezarTrazo(): void {
+    this.capaTrazo.clear();
+    const c = this.capaActiva ? this.datos.capas?.find((x) => x.id === this.capaActiva) : null;
+    if (c && Math.abs(c.fuerza) < 0.05) this.fuerzaCapa(c.id, 1);   // esculpir en una capa apagada: se prende
+    this.pielAntes = c ? (this.cuerpo.geometry.attributes.position.array as Float32Array).slice() : null;
+  }
+  /** Al soltar: lo del trazo pasa a la capa activa, y las piezas se rehacen. */
+  terminarTrazo(): void {
+    const c = this.capaActiva ? this.datos.capas?.find((x) => x.id === this.capaActiva) : null, D = c ? this.capasD.get(c.id) : null;
+    if (c && D && this.pielAntes) {
+      const arr = this.cuerpo.geometry.attributes.position.array as Float32Array, S = this.sumaCapas();
+      for (let i = 0; i < arr.length; i++) {
+        const d = arr[i] - this.pielAntes[i]; if (!d) continue;
+        D.d[i] += d / c.fuerza; S[i] += d;
+      }
+      D.e = undefined;
+    }
+    this.pielAntes = null; this.capaTrazo.clear();
+    this.rehacerPiezas();
+  }
+
+  /* ── LAS CAPAS DE ESCULTURA (como Nomad: cada una con su dial) ── */
+  private capasD = new Map<string, { d: Float32Array; e: string | undefined }>();
+  private capasSuma: Float32Array | null = null;
+  private sumaCapas(): Float32Array { return this.capasSuma ?? (this.capasSuma = new Float32Array(this.original.length)); }
+  /** La piel sin lo esculpido en la principal: la de fábrica + contextura + cara + capas. */
+  private fondo(): Float32Array {
+    const b = this.base(); if (!this.capasSuma) return b;
+    const o = b.slice(), S = this.capasSuma; for (let i = 0; i < o.length; i++) o[i] += S[i];
+    return o;
+  }
+  private decodificar(e: string | undefined): Float32Array {
+    const d = new Float32Array(this.original.length), n = d.length / 3;
+    for (const { i, d: v } of esculturaDeDatos(e)) if (i >= 0 && i < n) { d[i * 3] = v[0]; d[i * 3 + 1] = v[1]; d[i * 3 + 2] = v[2]; }
+    return d;
+  }
+  /** Pone las capas (sacando lo de las de antes): la piel se corre por la diferencia. */
+  private ponerCapas(lista: CapaEscultura[] | undefined): void {
+    const arr = this.cuerpo.geometry.attributes.position.array as Float32Array;
+    if (this.capasSuma) for (let i = 0; i < arr.length; i++) arr[i] -= this.capasSuma[i];
+    const nuevas = new Map<string, { d: Float32Array; e: string | undefined }>();
+    for (const c of lista ?? []) {
+      const ya = this.capasD.get(c.id);
+      nuevas.set(c.id, ya && (ya.e === c.e || (ya.e === undefined && !c.e && !ya.d.some((v) => v !== 0))) ? ya : { d: this.decodificar(c.e), e: c.e });
+    }
+    this.capasD = nuevas;
+    this.capasSuma = null;
+    if (lista?.length) {
+      const S = this.sumaCapas();
+      for (const c of lista) { const D = nuevas.get(c.id)!.d; if (c.fuerza) for (let i = 0; i < S.length; i++) S[i] += D[i] * c.fuerza; }
+      for (let i = 0; i < arr.length; i++) arr[i] += S[i];
+    }
+    this.datos.capas = lista?.length ? lista.map((c) => ({ ...c })) : undefined;
+    if (this.capaActiva && !this.capasD.has(this.capaActiva)) this.capaActiva = null;
+  }
+  private capasConTexto(): CapaEscultura[] | undefined {
+    const l = this.datos.capas; if (!l?.length) return undefined;
+    const ceros = new Float32Array(this.original.length);
+    return l.map((c) => {
+      const D = this.capasD.get(c.id);
+      if (D && D.e === undefined) D.e = esculturaATexto(ceros, D.d) ?? '';
+      const e = D?.e || undefined;
+      return { id: c.id, nombre: c.nombre, fuerza: c.fuerza, ...(e ? { e } : {}) };
+    });
+  }
+  /** Después de correr la piel entera: normales, cachés y piezas. */
+  private pielCambiada(): void {
+    (this.cuerpo.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    this.versionPiel++; this.recalcularNormales(); this.actualizar(); this.rehacerPiezas();
+  }
+  nuevaCapa(nombre?: string): string {
+    const id = idNuevo('capa'), l = this.datos.capas ?? [];
+    this.datos.capas = [...l, { id, nombre: (nombre || '').trim().slice(0, 60) || 'Capa ' + (l.length + 1), fuerza: 1 }];
+    this.capasD.set(id, { d: new Float32Array(this.original.length), e: undefined });
+    this.capaActiva = id;
+    return id;
+  }
+  fuerzaCapa(id: string, f: number): void {
+    const c = this.datos.capas?.find((x) => x.id === id), D = this.capasD.get(id); if (!c || !D) return;
+    f = Math.max(CAPA_FUERZA[0], Math.min(CAPA_FUERZA[1], Number.isFinite(f) ? f : 1));
+    const k = f - c.fuerza; if (!k) return;
+    const arr = this.cuerpo.geometry.attributes.position.array as Float32Array, S = this.sumaCapas();
+    for (let i = 0; i < arr.length; i++) { const v = D.d[i] * k; if (v) { arr[i] += v; S[i] += v; } }
+    c.fuerza = f;
+    this.pielCambiada();
+  }
+  renombrarCapa(id: string, nombre: string): void { const c = this.datos.capas?.find((x) => x.id === id); if (c && nombre.trim()) c.nombre = nombre.trim().slice(0, 60); }
+  /** Borrar la capa (lo esculpido en ella se va) o FUSIONARLA (queda en la principal, como «aplicar» en Blender). */
+  quitarCapa(id: string, fusionar = false): void {
+    const c = this.datos.capas?.find((x) => x.id === id), D = this.capasD.get(id); if (!c || !D) return;
+    const arr = this.cuerpo.geometry.attributes.position.array as Float32Array, S = this.sumaCapas();
+    for (let i = 0; i < arr.length; i++) { const v = D.d[i] * c.fuerza; if (v) { S[i] -= v; if (!fusionar) arr[i] -= v; } }
+    this.capasD.delete(id);
+    this.datos.capas = this.datos.capas!.filter((x) => x.id !== id);
+    if (!this.datos.capas.length) this.datos.capas = undefined;
+    if (this.capaActiva === id) this.capaActiva = null;
+    this.pielCambiada();
+  }
+
+  /* ── LOS FILTROS (el Mesh Filter de Blender): toda la piel de una, menos lo enmascarado ── */
+  filtro(tipo: FiltroEscultura, intensidad: number): void {
+    this.preparar();
+    const arr = this.cuerpo.geometry.attributes.position.array as Float32Array, N = this.cuerpo.geometry.attributes.normal.array as Float32Array;
+    const M = this.mascaraAttr().array as Float32Array, G = this.grupos, k = Math.max(0.05, Math.min(1, intensidad));
+    const P = new Float32Array(G.length * 3);
+    G.forEach((l, g) => { const i = l[0]; P[g * 3] = arr[i * 3]; P[g * 3 + 1] = arr[i * 3 + 1]; P[g * 3 + 2] = arr[i * 3 + 2]; });
+    const mov = new Float32Array(G.length * 3);
+    for (let g = 0; g < G.length; g++) {
+      const i = G[g][0], libre = 1 - Math.min(1, M[i]); if (libre <= 0) continue;
+      if (tipo === 'inflar' || tipo === 'desinflar') {
+        const s = (tipo === 'inflar' ? 1 : -1) * 0.0015 * k * libre;
+        for (let c = 0; c < 3; c++) mov[g * 3 + c] = N[i * 3 + c] * s;
+        continue;
+      }
+      const vs = this.vecinos[g]; if (!vs.length) continue;
+      for (let c = 0; c < 3; c++) {
+        let s = 0; for (const h of vs) s += P[h * 3 + c];
+        const lap = s / vs.length - P[g * 3 + c];
+        mov[g * 3 + c] = (tipo === 'suavizar' ? lap * 0.5 : -lap * 0.35) * k * libre;
+      }
+    }
+    G.forEach((l, g) => { for (const i of l) for (let c = 0; c < 3; c++) arr[i * 3 + c] += mov[g * 3 + c]; });
+    this.pielCambiada();
+  }
+
+  /* ── LAS PIEZAS: ropa, pelo, accesorios levantados de la piel ── */
+  private piezasM = new Map<string, THREE.SkinnedMesh>();
+  private mascarasCache = new Map<string, Float32Array>();
+  private mascaraDePieza(s: string): Float32Array {
+    const n = this.original.length / 3;
+    let m = this.mascarasCache.get(s);
+    if (!m || m.length !== n) { m = mascaraDeTexto(s, n); this.mascarasCache.set(s, m); }
+    return m;
+  }
+  /** Rehace las piezas desde la piel de ahora (si se esculpe o se engorda, la ropa acompaña). */
+  rehacerPiezas(soloId?: string): void {
+    const lista = this.datos.piezas ?? [];
+    for (const [id, m] of this.piezasM) if (!lista.some((p) => p.id === id)) {
+      m.removeFromParent(); m.geometry.dispose(); (m.material as THREE.Material).dispose();
+      this.piezasM.delete(id); this.mallas.splice(this.mallas.indexOf(m), 1);
+    }
+    if (!lista.length) return;
+    this.preparar();
+    const g = this.cuerpo.geometry, idx = g.index!.array as ArrayLike<number>;
+    const piel = { pos: g.attributes.position.array as Float32Array, nrm: g.attributes.normal.array as Float32Array, idx, soldado: this.soldado!, grupos: this.grupos,
+      skinIndex: g.attributes.skinIndex as THREE.BufferAttribute, skinWeight: g.attributes.skinWeight as THREE.BufferAttribute };
+    for (const p of lista) {
+      if (soloId && p.id !== soloId && this.piezasM.has(p.id)) continue;
+      const geo = levantarPieza(piel, this.mascaraDePieza(p.mascara), p.grosor, p.suave) ?? new THREE.BufferGeometry();
+      let m = this.piezasM.get(p.id);
+      if (!m) {
+        const mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.86, metalness: 0, side: THREE.DoubleSide });
+        mat.userData.pieza = true;
+        mat.customProgramCacheKey = () => 'pieza-dq';
+        mat.onBeforeCompile = (sh) => skinningConVolumen(sh);
+        const fant = (this.cuerpo.material as THREE.Material).userData.opBase;
+        if (fant !== undefined) { mat.userData.opBase = fant; mat.depthWrite = false; }
+        m = new THREE.SkinnedMesh(geo, mat);
+        m.name = 'pieza:' + p.id; m.userData.pieza = p.id; m.frustumCulled = false; m.castShadow = true;
+        this.cuerpo.parent!.add(m);
+        m.position.copy(this.cuerpo.position); m.quaternion.copy(this.cuerpo.quaternion); m.scale.copy(this.cuerpo.scale);
+        m.updateMatrixWorld(true);
+        m.bind(this.cuerpo.skeleton, this.cuerpo.bindMatrix);
+        const malla = m;
+        malla.raycast = (rc: THREE.Raycaster, out: THREE.Intersection[]) => this.tocarPieza(malla, rc, out);
+        this.conVolumen(malla);
+        this.piezasM.set(p.id, m); this.mallas.push(m);
+      } else { m.geometry.dispose(); m.geometry = geo; }
+      (m.material as THREE.MeshStandardMaterial).color.set(p.color);
+      m.visible = p.visible !== false && !!geo.attributes.position;
+      m.userData.toque = null;
+      (m as unknown as { boundingSphere: THREE.Sphere | null }).boundingSphere = null;
+    }
+  }
+  /** El rayo contra una pieza (por una rejilla, como la piel). */
+  private tocarPieza(m: THREE.SkinnedMesh, rc: THREE.Raycaster, out: THREE.Intersection[]): void {
+    if (!m.visible || !m.geometry.index) return;
+    let t = m.userData.toque as { pos: Float32Array; rej: RejillaPiel } | null;
+    if (!t) {
+      const n = m.geometry.attributes.position.count, pos = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { m.getVertexPosition(i, _v); _v.applyMatrix4(m.matrixWorld); pos[i * 3] = _v.x; pos[i * 3 + 1] = _v.y; pos[i * 3 + 2] = _v.z; }
+      t = { pos, rej: new RejillaPiel(pos, m.geometry.index.array as ArrayLike<number>) };
+      m.userData.toque = t;
+    }
+    const h = t.rej.tocar(rc.ray);
+    if (!h || h.t < rc.near || h.t > rc.far) return;
+    const I = m.geometry.index.array as ArrayLike<number>, a = I[h.tri * 3], b = I[h.tri * 3 + 1], c = I[h.tri * 3 + 2];
+    const A = new THREE.Vector3().fromArray(t.pos, a * 3), B = new THREE.Vector3().fromArray(t.pos, b * 3), C = new THREE.Vector3().fromArray(t.pos, c * 3);
+    const nw = B.sub(A).cross(C.sub(A)).normalize();
+    if (nw.dot(rc.ray.direction) > 0) nw.negate();
+    const normal = nw.transformDirection(new THREE.Matrix4().copy(m.matrixWorld).invert());
+    out.push({ distance: h.t, point: rc.ray.origin.clone().addScaledVector(rc.ray.direction, h.t), object: m, faceIndex: h.tri, face: { a, b, c, normal, materialIndex: 0 } } as THREE.Intersection);
+  }
+  /** Para esculpir tocando una pieza: el punto de la piel de donde sale. */
+  puntoDePiel(h: THREE.Intersection): THREE.Vector3 | null {
+    const f = (h.object as THREE.Mesh).geometry?.userData?.fuente as Int32Array | undefined;
+    if (!f || !h.face) return null;
+    const pos = this.posicionesMundo(), i = f[h.face.a];
+    return new THREE.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+  }
+  /** LEVANTAR UNA PIEZA de lo enmascarado (Extract): devuelve su id, o null si no hay máscara. */
+  extraerPieza(o: { nombre?: string; grosor: number; suave: number; color: string }): string | null {
+    const M = this.mascaraAttr().array as Float32Array;
+    if (!M.some((v) => v >= 0.5)) return null;
+    const id = idNuevo('pieza'), l = this.datos.piezas ?? [];
+    this.datos.piezas = [...l, { id, nombre: (o.nombre || '').trim().slice(0, 60) || 'Pieza ' + (l.length + 1),
+      color: /^#[0-9a-fA-F]{6}$/.test(o.color) ? o.color : '#6f7d8c', grosor: Math.max(PIEZA_GROSOR[0], Math.min(PIEZA_GROSOR[1], o.grosor)),
+      suave: Math.max(0, Math.min(1, o.suave)), mascara: mascaraATexto(M) }];
+    this.limpiarMascara();
+    this.rehacerPiezas(id);
+    return id;
+  }
+  cambiarPieza(id: string, c: Partial<Omit<Pieza, 'id' | 'mascara'>>): void {
+    const p = this.datos.piezas?.find((x) => x.id === id); if (!p) return;
+    if (typeof c.nombre === 'string' && c.nombre.trim()) p.nombre = c.nombre.trim().slice(0, 60);
+    if (typeof c.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(c.color)) p.color = c.color;
+    if (typeof c.grosor === 'number' && Number.isFinite(c.grosor)) p.grosor = Math.max(PIEZA_GROSOR[0], Math.min(PIEZA_GROSOR[1], c.grosor));
+    if (typeof c.suave === 'number' && Number.isFinite(c.suave)) p.suave = Math.max(0, Math.min(1, c.suave));
+    if (typeof c.visible === 'boolean') { if (c.visible) delete p.visible; else p.visible = false; }
+    this.rehacerPiezas(id);
+  }
+  borrarPieza(id: string): void {
+    if (!this.datos.piezas?.some((x) => x.id === id)) return;
+    this.datos.piezas = this.datos.piezas.filter((x) => x.id !== id);
+    if (!this.datos.piezas.length) this.datos.piezas = undefined;
+    this.rehacerPiezas();
+  }
+  /** Las mallas de las piezas (para las pruebas y el motor). */
+  mallaDePieza(id: string): THREE.SkinnedMesh | null { return this.piezasM.get(id) ?? null; }
   private recalcularNormales(): void {
     this.preparar();
     const g = this.cuerpo.geometry, pos = g.attributes.position.array as Float32Array, nrm = g.attributes.normal as THREE.BufferAttribute;
@@ -1505,7 +2153,7 @@ export class Personaje3D {
     this.recalcularNormales(); this.actualizar();
   }
   /** Vuelve la piel a como vino. */
-  sinEscultura(): void { this.ponerPiel(this.base()); }
+  sinEscultura(): void { this.ponerCapas(undefined); this.capaActiva = null; this.ponerPiel(this.base()); this.rehacerPiezas(); }
   esculpido(): boolean {
     const a = this.cuerpo.geometry.attributes.position.array as Float32Array, b = this.base();
     for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 1e-6) return true;
@@ -1513,7 +2161,7 @@ export class Personaje3D {
   }
   private ponerEscultura(e: number[] | string): void {
     const attr = this.cuerpo.geometry.attributes.position as THREE.BufferAttribute, arr = attr.array as Float32Array, n = arr.length / 3;
-    const b = this.base();
+    const b = this.fondo();
     for (const { i, d } of esculturaDeDatos(e)) {
       if (!(i >= 0 && i < n)) continue;
       arr[i * 3] = b[i * 3] + d[0]; arr[i * 3 + 1] = b[i * 3 + 1] + d[1]; arr[i * 3 + 2] = b[i * 3 + 2] + d[2];
@@ -1523,12 +2171,13 @@ export class Personaje3D {
   }
   /** Los datos para guardar (con la escultura como lista de corrimientos). */
   aDatos(): PersonajeDatos {
-    const escultura = esculturaATexto(this.base(), this.cuerpo.geometry.attributes.position.array as Float32Array);
-    const d = this.datos;
+    const escultura = esculturaATexto(this.fondo(), this.cuerpo.geometry.attributes.position.array as Float32Array);
+    const d = this.datos, capas = this.capasConTexto();
     return { base: d.base, prop: { ...d.prop }, pose: JSON.parse(JSON.stringify(d.pose)), pies: d.pies, color: d.color,
       ...(escultura ? { escultura } : {}), ...(d.definicion !== undefined ? { definicion: d.definicion } : {}),
       ...(d.forma ? { forma: { ...d.forma } } : {}), ...(d.cara ? { cara: { ...d.cara } } : {}),
-      ...(d.raiz ? { raiz: d.raiz.slice() } : {}), ...(d.actuacion ? { actuacion: JSON.parse(JSON.stringify(d.actuacion)) } : {}) };
+      ...(d.raiz ? { raiz: d.raiz.slice() } : {}), ...(d.actuacion ? { actuacion: JSON.parse(JSON.stringify(d.actuacion)) } : {}),
+      ...(capas ? { capas } : {}), ...(d.piezas ? { piezas: d.piezas.map((p) => ({ ...p })) } : {}) };
   }
   /** Vuelve a unos datos (deshacer, abrir) sin cambiar de cuerpo. */
   ponerDatos(x: PersonajeDatos): void {
@@ -1539,8 +2188,11 @@ export class Personaje3D {
     if (JSON.stringify(d.cara) !== JSON.stringify(this.datos.cara)) this.ponerCara(d.cara);
     const attr = this.cuerpo.geometry.attributes.position as THREE.BufferAttribute;
     (attr.array as Float32Array).set(this.base()); this.versionPiel++;
+    this.capasSuma = null; this.ponerCapas(d.capas);
     if (d.escultura) this.ponerEscultura(d.escultura); else { attr.needsUpdate = true; this.recalcularNormales(); }
+    this.datos.piezas = d.piezas;
     this.aplicar();
+    this.rehacerPiezas();
   }
   /* ── LA MARIONETA: manos, pies y cadera ── */
   /** Los extremos que se agarran: la mano mueve el brazo entero; el pie, la pierna. */
@@ -1748,23 +2400,49 @@ export class Personaje3D {
     if (nivel === actual) return d;
     const arr = this.cuerpo.geometry.attributes.position.array as Float32Array;
     let escultura: string | undefined;
+    // un corrimiento (lo esculpido en la principal o en una capa) llevado al otro nivel
+    let pasar: (corr: Float32Array) => string | undefined, nAbajoDe = () => this.original.length / 3;
     if (nivel > actual) {
       // lo esculpido sin la contextura ni la cara (la otra piel las recalcula)
-      const b = this.base(), esculpida = this.original.slice();
-      for (let i = 0; i < arr.length; i++) esculpida[i] += arr[i] - b[i];
-      let g = this.cuerpo.geometry, original = pielEnNivel(this.datos.base, this.cuerpo.geometry, 0);
-      original.setAttribute('position', new THREE.BufferAttribute(this.original.slice(), 3));
-      for (let k = actual; k < nivel; k++) { g = subdividir(g, g === this.cuerpo.geometry ? esculpida : g.attributes.position.array as Float32Array); original = subdividir(original); }
-      escultura = esculturaATexto(original.attributes.position.array as Float32Array, g.attributes.position.array as Float32Array);
-      g.dispose(); original.dispose();
+      pasar = (corr) => {
+        const esculpida = this.original.slice();
+        for (let i = 0; i < esculpida.length; i++) esculpida[i] += corr[i];
+        let g = this.cuerpo.geometry, original = pielEnNivel(this.datos.base, this.cuerpo.geometry, 0);
+        original.setAttribute('position', new THREE.BufferAttribute(this.original.slice(), 3));
+        for (let k = actual; k < nivel; k++) { g = subdividir(g, g === this.cuerpo.geometry ? esculpida : g.attributes.position.array as Float32Array); original = subdividir(original); }
+        const e = esculturaATexto(original.attributes.position.array as Float32Array, g.attributes.position.array as Float32Array);
+        g.dispose(); original.dispose();
+        return e;
+      };
     } else {
       const base = cuerpos.get(this.datos.base)!;
       let g0: THREE.BufferGeometry | null = null;
       base.scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (!g0 || m.geometry.attributes.position.count > g0.attributes.position.count)) g0 = m.geometry; });
       const nAbajo = pielEnNivel(this.datos.base, pielPartida(this.datos.base, g0!), nivel).attributes.position.count;
-      escultura = esculturaATexto(this.base().subarray(0, nAbajo * 3), arr.subarray(0, nAbajo * 3));
+      nAbajoDe = () => nAbajo;
+      pasar = (corr) => esculturaATexto(new Float32Array(nAbajo * 3), corr.subarray(0, nAbajo * 3));
     }
-    return { ...d, definicion: nivel, escultura };
+    const f = this.fondo(), principal = new Float32Array(arr.length);
+    for (let i = 0; i < arr.length; i++) principal[i] = arr[i] - f[i];
+    escultura = esculturaATexto(new Float32Array(arr.length), principal) ? pasar(principal) : undefined;
+    const capas = d.capas?.map((c) => { const D = this.capasD.get(c.id); const e = D ? pasar(D.d) : undefined; return { id: c.id, nombre: c.nombre, fuerza: c.fuerza, ...(e ? { e } : {}) }; });
+    const piezas = d.piezas?.map((p) => {
+      const m = this.mascaraDePieza(p.mascara);
+      if (nivel < actual) return { ...p, mascara: mascaraATexto(m.subarray(0, nAbajoDe())) };
+      // subir: la máscara va como un atributo más de la piel subdividida
+      let g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(this.original.slice(), 3));
+      g.setAttribute('normal', this.cuerpo.geometry.attributes.normal.clone());
+      g.setAttribute('skinIndex', this.cuerpo.geometry.attributes.skinIndex.clone());
+      g.setAttribute('skinWeight', this.cuerpo.geometry.attributes.skinWeight.clone());
+      g.setAttribute('mascara', new THREE.BufferAttribute(m.slice(), 1));
+      g.setIndex(this.cuerpo.geometry.index!.clone());
+      for (let k = actual; k < nivel; k++) { const s = subdividir(g); g.dispose(); g = s; }
+      const out = mascaraATexto(g.attributes.mascara.array as Float32Array);
+      g.dispose();
+      return { ...p, mascara: out };
+    });
+    return { ...d, definicion: nivel, escultura, ...(capas ? { capas } : {}), ...(piezas ? { piezas } : {}) };
   }
   /** Cuántos triángulos tiene la piel (para mostrarlo). */
   triangulos(): number { const g = this.cuerpo.geometry; return (g.index ? g.index.count : g.attributes.position.count) / 3; }
@@ -1925,9 +2603,10 @@ export class Personaje3D {
         upperarm: 'lowerarm', lowerarm: 'hand', thigh: 'calf', calf: 'foot' };
       const segmentos = new Map<number, { a: THREE.Vector3; b: THREE.Vector3; k: number }>();
       bones.forEach((b, k) => {
-        const lado = /_[lr]$/.test(b.name) ? b.name.slice(-2) : '', r = b.name.replace(/_[lr]$/, ''), parte = PARTE_DE_HUESO[r], f2 = parte ? gr[parte] : undefined;
+        const nombre = nombreReal(b.name);
+        const lado = /_[lr]$/.test(nombre) ? nombre.slice(-2) : '', r = nombre.replace(/_[lr]$/, ''), parte = PARTE_DE_HUESO[r], f2 = parte ? gr[parte] : undefined;
         if (!parte || f2 === undefined) return;
-        const a = enReposo(r === 'pelvis' || /^spine/.test(r) ? 'pelvis' : b.name);
+        const a = enReposo(r === 'pelvis' || /^spine/.test(r) ? 'pelvis' : nombre);
         let fin = enReposo(sig[r] + (sig[r] === 'Head' || sig[r] === 'neck_01' ? '' : lado));
         if (!a || !fin) return;
         if (r === 'Head') fin = a.clone().add(new THREE.Vector3(0, 0.22, 0));   // la cabeza: hacia la coronilla
@@ -1982,6 +2661,7 @@ export class Personaje3D {
     this.formaCapa = nueva; this.baseCache = null; this.datos.forma = fv;
     attr.needsUpdate = true; this.versionPiel++;
     this.recalcularNormales();
+    this.rehacerPiezas();
     // el relieve de los músculos (la textura de normales) acompaña: menos músculo, menos relieve
     const k = Math.max(0.12, Math.min(1.8, 1 + (fv?.musculo ?? 0) * 0.85 - 0.5 * Math.max(0, fv?.peso ?? 0)));
     for (const m of this.mallas) { const mat = m.material as THREE.MeshStandardMaterial; if (mat.normalMap && mat === (this.cuerpo.material as THREE.Material)) mat.normalScale.set(k, k); }
@@ -2196,6 +2876,7 @@ export class Personaje3D {
     }
     this.mundoCache = null; this.rejilla = null;
     this.datos.cara = caraValida(c);
+    if (this.datos.piezas) this.rehacerPiezas();
   }
   liberar(): void {
     for (const m of this.mallas) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }

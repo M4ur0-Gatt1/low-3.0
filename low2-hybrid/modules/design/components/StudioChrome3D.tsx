@@ -109,12 +109,14 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
  useEffect(()=>{
    const key=(e:KeyboardEvent)=>{
      if((e.target as HTMLElement)?.closest('input,textarea,select,[contenteditable="true"]'))return;
+     // Esc mientras se ajusta el pincel con F: es del pincel (lo deja como estaba), no cierra el panel
+     if(e.key==='Escape'&&engine.current?.ajustandoPincel())return;
      if(e.key==='Tab'){e.preventDefault();e.stopImmediatePropagation();setFocus(v=>!v);}
      else if(e.key==='Escape'&&(menu||help||panel||focus)){e.preventDefault();e.stopImmediatePropagation();setMenu(false);setHelp(false);setPanel(null);setFocus(false);}
      else if(e.key==='?'){e.preventDefault();setHelp(v=>!v);}
    };
    window.addEventListener('keydown',key,true);return()=>window.removeEventListener('keydown',key,true);
- },[menu,help,panel,focus]);
+ },[menu,help,panel,focus,engine]);
  useEffect(()=>{const root=engine.current?.canvasElement()?.parentElement;root?.classList.toggle('studio-focus',focus);root?.classList.toggle('studio-inspector-open',!!panel&&!focus);return()=>{root?.classList.remove('studio-focus','studio-inspector-open');};},[focus,panel,engine]);
  const iconButton=(name:string,label:string,action:()=>void,pressed?:boolean,disabled=false)=><button type="button" className="studio-icon-button" title={label} aria-label={label} aria-pressed={pressed} disabled={disabled} onClick={action}><StudioIcon name={name}/></button>;
  return <div className={'studio-chrome studio-feather'+(focus?' is-focused':'')}>

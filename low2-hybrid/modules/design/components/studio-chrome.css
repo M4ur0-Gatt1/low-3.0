@@ -253,3 +253,20 @@
 .taller3d-desl input[type=range] { flex:1 1 auto; min-width:0; }
 .taller3d-desl output, .taller3d .toma3d-fila output { min-width:34px; text-align:right; font-variant-numeric:tabular-nums; font-size:11px; }
 .taller3d-cierre { margin-top:12px; }
+
+/* ══ v3.41: el modelado (pinceles con su tecla, máscara, piezas, capas) ══ */
+.taller3d-pinceles-grilla { display:grid !important; grid-template-columns:repeat(4, 1fr); gap:4px; }
+.taller3d-pinceles-grilla button { position:relative; padding:6px 2px 5px; line-height:1.15; }
+.taller3d-pinceles-grilla kbd { display:block; margin-top:1px; font:inherit; font-size:9.5px; opacity:.55; letter-spacing:.02em; }
+.taller3d-ayuda-pincel { min-height:30px; }
+.taller3d-acciones-chicas { flex-wrap:wrap; gap:4px; }
+.taller3d-acciones-chicas .persp3d-boton { flex:1 1 30%; padding:5px 4px; font-size:11px; }
+.taller3d-pieza { border:1px solid var(--studio-line, #2c2e33); border-radius:8px; padding:6px 7px; margin:6px 0; }
+.taller3d-pieza .toma3d-fila input[type=text] { flex:1 1 auto; min-width:0; }
+.taller3d-pieza .toma3d-fila input[type=color] { width:28px; height:22px; padding:0; border:0; background:none; }
+.taller3d-capas { display:flex; flex-direction:column; gap:4px; margin:2px 0 6px; }
+.taller3d-capa { display:flex; align-items:center; gap:5px; font-size:12px; }
+.taller3d-capa input[type=text] { flex:0 1 84px; min-width:0; }
+.taller3d-capa input[type=range] { flex:1 1 auto; min-width:40px; }
+.taller3d-capa output { font-size:11px; min-width:30px; font-variant-numeric:tabular-nums; }
+.taller3d-capa .persp3d-boton { padding:3px 6px; font-size:11px; }

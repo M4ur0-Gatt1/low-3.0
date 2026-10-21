@@ -24,16 +24,24 @@ const VISTAS: [number, string][] = [[0, 'Frente'], [45, '3/4'], [90, 'Perfil'], 
 const MODOS: [ModoTaller, string, string][] = [
   ['dibujar', 'Dibujar', 'Dibujá sobre el cuerpo con todas las herramientas: cada trazo se pega a la parte que toca y la sigue'],
   ['posar', 'Posar', 'Como un armazón de stop motion: arrastrar una parte la gira de a poco (Shift: más fino · Alt: sobre su largo · flechas: de a 2°). Anillos de manos y pies: el brazo o la pierna entera; rombos: los hombros; cuadrado: la cadera con los pies quietos'],
-  ['esculpir', 'Esculpir', 'Modelá la piel con pinceles · Shift: suavizar · Ctrl: invertir · [ y ]: tamaño · la presión de la lapicera dosifica'],
+  ['animar', 'Animar', 'Animaciones listas (caminar, correr, saltar…) y poses clave por cuadro: el cuerpo pasa de una a otra solo. Se agarra el cuerpo como en Posar y cada pose queda como clave'],
+  ['esculpir', 'Esculpir', 'Modelá la piel como en Blender o ZBrush · Shift: suavizar · Ctrl: invertir · F: tamaño · Shift+F: fuerza · [ ]: tamaño · la presión de la lapicera dosifica'],
 ];
-const PINCELES: [PincelEscultura, string, string][] = [
-  ['tirar', 'Tirar', 'Agarra la piel y la lleva con el cursor'],
-  ['inflar', 'Inflar', 'Empuja la piel hacia afuera (músculos, panza, nariz)'],
-  ['desinflar', 'Desinflar', 'Hunde la piel (cintura, mejillas)'],
-  ['suavizar', 'Suavizar', 'Empareja la piel bajo el pincel'],
-  ['aplanar', 'Aplanar', 'Lleva la piel a un plano (caras, cortes)'],
-  ['pellizcar', 'Pellizcar', 'Junta la piel hacia el centro: afina bordes y marca aristas'],
-  ['surco', 'Surco', 'Hunde una línea: arrugas, pliegues de la ropa, labios (Ctrl: cresta)'],
+/** [pincel, nombre, tecla (la de Blender), qué hace] */
+const PINCELES: [PincelEscultura, string, string, string][] = [
+  ['dibujar', 'Dibujar', 'X', 'Levanta la piel por el plano del pincel (Ctrl: hunde) · el Draw de Blender, el Standard de ZBrush'],
+  ['arcilla', 'Arcilla', 'C', 'Tiras planas, como poner arcilla con la espátula: construye volumen por capas (Ctrl: saca) · el Clay Strips'],
+  ['capa', 'Capa', 'L', 'Sube la piel a una altura pareja: pasar dos veces no acumula (placas, parches, ropa ceñida) · el Layer'],
+  ['inflar', 'Inflar', 'I', 'Empuja la piel hacia afuera (Ctrl: desinfla): músculos, panza, nariz'],
+  ['surco', 'Surco', '⇧C', 'Hunde una línea fina: arrugas, pliegues, párpados, labios (Ctrl: cresta) · el DamStandard'],
+  ['pellizcar', 'Pellizcar', 'P', 'Junta la piel hacia el centro: afina bordes y marca aristas'],
+  ['suavizar', 'Suavizar', 'S', 'Empareja la piel (con cualquier pincel: Shift)'],
+  ['aplanar', 'Aplanar', '⇧T', 'Lleva la piel a un plano: caras, cortes, planos duros'],
+  ['raspar', 'Raspar', 'R', 'Baja lo que sobresale del plano (Ctrl: rellena lo hundido) · el Scrape / Fill'],
+  ['tirar', 'Mover', 'G', 'Agarra un pedazo de piel y lo lleva con el cursor · el Grab / Move'],
+  ['gancho', 'Gancho', 'K', 'Estira la piel siguiendo el cursor: cuernos, orejas en punta, mechones · el Snake Hook'],
+  ['empujar', 'Empujar', 'N', 'Corre la piel por la superficie hacia donde va el trazo · el Nudge'],
+  ['mascara', 'Máscara', 'M', 'Protege lo que pintás de todos los pinceles; también marca dónde va una pieza (Ctrl: borra · Shift: suaviza el borde)'],
 ];
 const DEFINICIONES: [number, string][] = [[0, 'Normal'], [1, 'Alta (×4)'], [2, 'Muy alta (×16)']];
 const VELOCIDADES: [number, string][] = [[0.5, 'Lenta (½)'], [1, 'Normal'], [1.5, 'Rápida (1½)'], [2, 'Doble']];
@@ -78,6 +86,9 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
   const [calidad, setCalidad] = useState(0.5);
   const [aviso, setAviso] = useState('');
   const [ocupado, setOcupado] = useState(false);
+  const [parteMascara, setParteMascara] = useState('torso');
+  const [intensidadFiltro, setIntensidadFiltro] = useState(0.5);
+  const [nombrePieza, setNombrePieza] = useState('');
   const mirror = useLowStore().mirrorMode;
 
   useEffect(() => {
@@ -239,6 +250,20 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
             <output>{fmt(v)}</output></label>;
         })}
       </>}
+    </>}
+
+    {t.modo === 'animar' && <>
+      <p className="persp3d-nota taller3d-articulacion" aria-live="polite">{t.control ? <>Elegido: <b>{t.nombreControl}</b></> : 'Agarrá el cuerpo como en Posar: cada pose queda como clave en el cuadro de ahora'}</p>
+      <h3>Animaciones listas</h3>
+      <p className="persp3d-nota">Caminar, correr, saltar, sentarse, bailar… (43, de Quaternius). Quedan como claves, una por cuadro, para retocarlas posando.</p>
+      <label className="toma3d-fila">Animación<select aria-label="Animación de la biblioteca" value={anim} onChange={(ev) => setAnim(ev.target.value)}>
+        {animaciones.map((a) => <option key={a.id} value={a.id}>{a.nombre} ({fmt(a.segundos, 1)} s)</option>)}</select></label>
+      <label className="toma3d-fila">Velocidad<select aria-label="Velocidad de la animación" value={vel} onChange={(ev) => setVel(Number(ev.target.value))}>
+        {VELOCIDADES.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select></label>
+      <div className="biblio3d-acciones">
+        <button className="persp3d-boton taller3d-animacion" disabled={!animaciones.length} title="Claves en cada cuadro desde el de ahora; después se retocan"
+          onClick={async () => { const n = await e?.ponerAnimacionTaller(anim, marco.fps, vel); if (n) { setAviso(`Animación puesta: ${n} cuadros desde el ${t.cuadro} · retocá las poses y quedan como claves`); e?.reproducirTaller(true, marco.fps); } }}>Poner desde el cuadro {t.cuadro} y reproducir</button>
+      </div>
 
       <h3>Actuación</h3>
       <p className="persp3d-nota">Poses clave por cuadro: el cuerpo pasa de una a otra solo. Con la primera clave puesta, cada cambio de pose deja clave en el cuadro de ahora.</p>
@@ -259,14 +284,6 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
         <button className="persp3d-boton" onClick={() => e?.setCuadroTaller(Math.min(t.cuadros, t.cuadro + 1))} title="Cuadro siguiente">Siguiente ▶</button>
         <button className="persp3d-boton taller3d-play" disabled={!t.claves.length} onClick={() => e?.reproducirTaller(!t.reproduciendo, marco.fps)}>{t.reproduciendo ? '⏸ Parar' : '▶ Reproducir'}</button>
       </div>
-      <label className="toma3d-fila">Animación<select aria-label="Animación de la biblioteca" value={anim} onChange={(ev) => setAnim(ev.target.value)}>
-        {animaciones.map((a) => <option key={a.id} value={a.id}>{a.nombre} ({fmt(a.segundos, 1)} s)</option>)}</select></label>
-      <label className="toma3d-fila">Velocidad<select aria-label="Velocidad de la animación" value={vel} onChange={(ev) => setVel(Number(ev.target.value))}>
-        {VELOCIDADES.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select></label>
-      <div className="biblio3d-acciones">
-        <button className="persp3d-boton taller3d-animacion" disabled={!animaciones.length} title="Claves en cada cuadro desde el de ahora; después se retocan"
-          onClick={async () => { const n = await e?.ponerAnimacionTaller(anim, marco.fps, vel); if (n) setAviso(`Animación puesta: ${n} cuadros desde el ${t.cuadro} · retocá las poses y quedan como claves`); }}>Poner desde el cuadro {t.cuadro}</button>
-      </div>
       <label className="toma3d-fila">Calidad<select aria-label="Calidad de la actuación" value={calidad} onChange={(ev) => setCalidad(Number(ev.target.value))}>
         <option value={0.5}>Media (la mitad: más liviana)</option><option value={1}>Completa</option></select></label>
       <div className="biblio3d-acciones">
@@ -275,27 +292,111 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
       </div>
     </>}
 
-    {t.modo === 'esculpir' && <>
-      <div className="taller3d-pinceles" role="radiogroup" aria-label="Pincel de escultura">
-        {PINCELES.map(([p, n, ayuda]) => <button key={p} role="radio" aria-checked={t.pincel.tipo === p} data-pincel={p} title={ayuda}
-          className={t.pincel.tipo === p ? 'on' : ''} onClick={() => e?.setPincelEscultura({ tipo: p })}>{n}</button>)}
+    {t.modo === 'esculpir' && (() => {
+      const P = t.pincel, ayudaPincel = PINCELES.find((x) => x[0] === P.tipo)?.[3] ?? '', modelado = e?.listasModelado();
+      const desl = (aria: string, nombre: string, titulo: string, min: number, max: number, paso: number, valor: number, poner: (v: number) => void, salida: string) =>
+        <label className="toma3d-fila taller3d-desl" title={titulo}>{nombre}
+          <input type="range" aria-label={aria} min={min} max={max} step={paso} value={valor} onChange={(ev) => poner(Number(ev.target.value))}/>
+          <output>{salida}</output></label>;
+      return <>
+      <div className="taller3d-pinceles taller3d-pinceles-grilla" role="radiogroup" aria-label="Pincel de escultura">
+        {PINCELES.map(([p, n, tecla, ayuda]) => <button key={p} role="radio" aria-checked={P.tipo === p} data-pincel={p} title={ayuda + ' · tecla ' + tecla}
+          className={P.tipo === p ? 'on' : ''} onClick={() => e?.setPincelEscultura({ tipo: p })}>{n}<kbd>{tecla}</kbd></button>)}
       </div>
-      <label className="toma3d-fila taller3d-desl" title="El tamaño del pincel (en centímetros) · [ y ] lo cambian">Tamaño
-        <input type="range" aria-label="Tamaño del pincel" min={0.2} max={40} step={0.1} value={Math.round(t.pincel.radio * 1000) / 10} onChange={(ev) => e?.setPincelEscultura({ radio: Number(ev.target.value) / 100 })}/>
-        <output>{fmt(t.pincel.radio * 100, 1)} cm</output></label>
-      <label className="toma3d-fila taller3d-desl" title="Suave: se desvanece desde el centro · Firme: parejo hasta el borde">Dureza
-        <input type="range" aria-label="Dureza del pincel" min={0} max={0.9} step={0.05} value={t.pincel.dureza} onChange={(ev) => e?.setPincelEscultura({ dureza: Number(ev.target.value) })}/>
-        <output>{Math.round(t.pincel.dureza * 100)} %</output></label>
-      <label className="toma3d-fila taller3d-desl" title="Cuánto cambia la piel en cada pasada">Fuerza
-        <input type="range" aria-label="Fuerza del pincel" min={0.05} max={1} step={0.05} value={t.pincel.fuerza} onChange={(ev) => e?.setPincelEscultura({ fuerza: Number(ev.target.value) })}/>
-        <output>{Math.round(t.pincel.fuerza * 100)} %</output></label>
-      <label className="taller3d-ver"><span><input type="checkbox" checked={t.pincel.simetria} onChange={(ev) => e?.setPincelEscultura({ simetria: ev.target.checked })}/> Simetría (izquierda = derecha)</span></label>
+      <p className="persp3d-nota taller3d-ayuda-pincel">{ayudaPincel}</p>
+      {desl('Tamaño del pincel', 'Tamaño', 'El tamaño del pincel (en centímetros) · F: con el mouse · [ y ]', 0.2, 40, 0.1, Math.round(P.radio * 1000) / 10, (v) => e?.setPincelEscultura({ radio: v / 100 }), fmt(P.radio * 100, 1) + ' cm')}
+      {desl('Fuerza del pincel', 'Fuerza', 'Cuánto cambia la piel en cada pasada · Shift+F: con el mouse', 0.05, 1, 0.05, P.fuerza, (v) => e?.setPincelEscultura({ fuerza: v }), Math.round(P.fuerza * 100) + ' %')}
+      {desl('Dureza del pincel', 'Dureza', 'Suave: se desvanece desde el centro · Firme: parejo hasta el borde', 0, 0.9, 0.05, P.dureza, (v) => e?.setPincelEscultura({ dureza: v }), Math.round(P.dureza * 100) + ' %')}
+      <label className="toma3d-fila" title="Cómo se apaga el pincel del centro al borde (las curvas de Blender)">Caída
+        <select aria-label="Caída del pincel" value={P.caida} onChange={(ev) => e?.setPincelEscultura({ caida: ev.target.value as typeof P.caida })}>
+          {(modelado?.caidas ?? []).map((c) => <option key={c.id} value={c.id} title={c.ayuda}>{c.nombre}</option>)}</select></label>
+      {desl('Estabilizador del pincel', 'Estabilizador', 'La punta va detrás del cursor, atada con una cuerda: trazos firmes con el pulso tembloroso (el Lazy Mouse de ZBrush)', 0, 120, 2, P.estabilizador, (v) => e?.setPincelEscultura({ estabilizador: v }), P.estabilizador ? P.estabilizador + ' px' : 'no')}
+      {desl('Espaciado del pincel', 'Espaciado', 'Cada cuánto toca el pincel a lo largo del trazo (más junto: más parejo)', 0.05, 0.6, 0.01, P.espaciado, (v) => e?.setPincelEscultura({ espaciado: v }), Math.round(P.espaciado * 100) + ' %')}
+      <div className="taller3d-ver">
+        <label><input type="checkbox" checked={P.simetria} onChange={(ev) => e?.setPincelEscultura({ simetria: ev.target.checked })}/> Simetría</label>
+        <label title="El pincel no atraviesa lo fino (orejas, dedos, labios): toca sólo lo que mira a la cámara"><input type="checkbox" aria-label="Sólo caras de frente" checked={P.soloFrente} onChange={(ev) => e?.setPincelEscultura({ soloFrente: ev.target.checked })}/> Sólo caras de frente</label>
+        <label title="Con la lapicera, apretar más agranda el pincel (además de darle fuerza)"><input type="checkbox" checked={P.presionTamano} onChange={(ev) => e?.setPincelEscultura({ presionTamano: ev.target.checked })}/> Presión = tamaño</label>
+      </div>
+
+      <h3>Máscara</h3>
+      <p className="persp3d-nota">Lo enmascarado se ve oscuro y ningún pincel lo mueve. Pintala con <b>Máscara (M)</b> o elegí una parte del cuerpo.{t.mascara > 0 ? ` Enmascarado: ${Math.max(1, Math.round(t.mascara * 100))} %` : ''}</p>
+      <label className="toma3d-fila">Parte<select aria-label="Parte para enmascarar" value={parteMascara} onChange={(ev) => setParteMascara(ev.target.value)}>
+        {(modelado?.partes ?? []).map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select></label>
+      <div className="biblio3d-acciones taller3d-acciones-chicas">
+        <button className="persp3d-boton" data-mascara-parte="poner" onClick={() => e?.mascaraParteTaller(parteMascara, 'poner')} title="Enmascara sólo esa parte">Sólo esa</button>
+        <button className="persp3d-boton" data-mascara-parte="sumar" onClick={() => e?.mascaraParteTaller(parteMascara, 'sumar')} title="Suma esa parte a la máscara">Sumar</button>
+        <button className="persp3d-boton" data-mascara-parte="quitar" onClick={() => e?.mascaraParteTaller(parteMascara, 'quitar')} title="Saca esa parte de la máscara">Quitar</button>
+      </div>
+      <div className="biblio3d-acciones taller3d-acciones-chicas">
+        <button className="persp3d-boton" data-mascara="invertir" onClick={() => e?.mascaraTaller('invertir')} title="Lo protegido queda libre y al revés · Ctrl+I">Invertir</button>
+        <button className="persp3d-boton" data-mascara="crecer" onClick={() => e?.mascaraTaller('crecer')} title="La máscara crece un anillo de puntos">Crecer</button>
+        <button className="persp3d-boton" data-mascara="achicar" onClick={() => e?.mascaraTaller('achicar')} title="La máscara se achica un anillo de puntos">Achicar</button>
+        <button className="persp3d-boton" data-mascara="suavizar" onClick={() => e?.mascaraTaller('suavizar')} title="El borde de la máscara, difuso">Suavizar</button>
+        <button className="persp3d-boton" data-mascara="afilar" onClick={() => e?.mascaraTaller('afilar')} title="El borde de la máscara, nítido">Afilar</button>
+        <button className="persp3d-boton" data-mascara="limpiar" disabled={!t.mascara} onClick={() => e?.mascaraTaller('limpiar')} title="Sin máscara · Alt+M">Borrar</button>
+      </div>
+
+      <h3>Piezas: ropa, pelo, accesorios</h3>
+      <p className="persp3d-nota">Enmascará dónde va (una remera: el torso y los brazos; el pelo: la cabeza) y levantala con grosor, como el Extract de ZBrush. La pieza sigue al cuerpo cuando posa o engorda, y se dibuja encima.</p>
+      {desl('Grosor de la pieza nueva', 'Grosor', 'Cuánto se despega de la piel', 0.5, 40, 0.5, Math.round(t.nuevaPieza.grosor * 2000) / 2, (v) => e?.setNuevaPieza({ grosor: v / 1000 }), fmt(t.nuevaPieza.grosor * 1000, 1) + ' mm')}
+      {desl('Suavizado de la pieza nueva', 'Suavizado', 'Cero calca la piel; más, una tela lisa que no marca los músculos', 0, 1, 0.05, t.nuevaPieza.suave, (v) => e?.setNuevaPieza({ suave: v }), Math.round(t.nuevaPieza.suave * 100) + ' %')}
+      <label className="toma3d-fila">Nombre<input type="text" aria-label="Nombre de la pieza nueva" placeholder="Remera, pelo, botas…" value={nombrePieza} onChange={(ev) => setNombrePieza(ev.target.value)}/>
+        <input type="color" aria-label="Color de la pieza nueva" value={t.nuevaPieza.color} onChange={(ev) => e?.setNuevaPieza({ color: ev.target.value })}/></label>
+      <div className="biblio3d-acciones">
+        <button className="persp3d-boton persp3d-repetir-ya taller3d-extraer" disabled={!t.mascara} onClick={() => { if (e?.extraerPiezaTaller(nombrePieza)) setNombrePieza(''); }}
+          title="Levanta una pieza de lo enmascarado (un paso de Ctrl+Z)">Levantar la pieza de la máscara</button>
+      </div>
+      {t.piezas.map((x) => <div key={x.id} className="taller3d-pieza" data-pieza={x.id}>
+        <div className="toma3d-fila">
+          <input type="checkbox" aria-label={'Ver ' + x.nombre} checked={x.visible !== false} onChange={(ev) => e?.piezaTaller(x.id, { visible: ev.target.checked })}/>
+          <input type="text" aria-label="Nombre de la pieza" defaultValue={x.nombre} onBlur={(ev) => { if (ev.target.value.trim() && ev.target.value !== x.nombre) e?.piezaTaller(x.id, { nombre: ev.target.value }); }}/>
+          <input type="color" aria-label={'Color de ' + x.nombre} value={x.color} onChange={(ev) => e?.piezaTaller(x.id, { color: ev.target.value })}/>
+          <button className="persp3d-boton" aria-label={'Borrar ' + x.nombre} onClick={() => e?.borrarPiezaTaller(x.id)}>✕</button>
+        </div>
+        <label className="toma3d-fila taller3d-desl">Grosor
+          <input type="range" aria-label={'Grosor de ' + x.nombre} data-pieza-grosor={x.id} min={0.5} max={40} step={0.5} value={Math.round(x.grosor * 2000) / 2}
+            onChange={(ev) => e?.verPiezaTaller(x.id, { grosor: Number(ev.target.value) / 1000 })}
+            onPointerUp={() => e?.confirmarVivo(false)} onKeyUp={() => e?.confirmarVivo(false)} onBlur={() => e?.confirmarVivo(false)}/>
+          <output>{fmt(x.grosor * 1000, 1)} mm</output></label>
+        <label className="toma3d-fila taller3d-desl">Suavizado
+          <input type="range" aria-label={'Suavizado de ' + x.nombre} min={0} max={1} step={0.05} value={x.suave}
+            onChange={(ev) => e?.verPiezaTaller(x.id, { suave: Number(ev.target.value) })}
+            onPointerUp={() => e?.confirmarVivo(false)} onKeyUp={() => e?.confirmarVivo(false)} onBlur={() => e?.confirmarVivo(false)}/>
+          <output>{Math.round(x.suave * 100)} %</output></label>
+      </div>)}
+
+      <h3>Capas de escultura</h3>
+      <p className="persp3d-nota">Como en Nomad Sculpt: lo que esculpís va a la capa elegida, y su dial lo sube o lo baja (unas arrugas, una panza, una variante).</p>
+      <div className="taller3d-capas" role="radiogroup" aria-label="Capas de escultura">
+        <label className="taller3d-capa"><input type="radio" name="capa-esc" data-capa="" checked={!t.capaActiva} onChange={() => e?.activarCapaTaller(null)}/> <span>Principal</span></label>
+        {t.capas.map((c) => <div key={c.id} className="taller3d-capa" data-capa-fila={c.id}>
+          <input type="radio" name="capa-esc" aria-label={'Esculpir en ' + c.nombre} data-capa={c.id} checked={t.capaActiva === c.id} onChange={() => e?.activarCapaTaller(c.id)}/>
+          <input type="text" aria-label="Nombre de la capa" defaultValue={c.nombre} onBlur={(ev) => { if (ev.target.value.trim() && ev.target.value !== c.nombre) e?.renombrarCapaTaller(c.id, ev.target.value); }}/>
+          <input type="range" aria-label={'Intensidad de ' + c.nombre} data-capa-fuerza={c.id} min={-1} max={2} step={0.05} value={c.fuerza}
+            onChange={(ev) => e?.verFuerzaCapa(c.id, Number(ev.target.value))}
+            onPointerUp={() => e?.confirmarVivo(false)} onKeyUp={() => e?.confirmarVivo(false)} onBlur={() => e?.confirmarVivo(false)}/>
+          <output>{fmt(c.fuerza)}</output>
+          <button className="persp3d-boton" title="Pasa lo de la capa a la principal (como «aplicar» en Blender)" onClick={() => e?.quitarCapaTaller(c.id, true)}>Fijar</button>
+          <button className="persp3d-boton" aria-label={'Borrar ' + c.nombre} onClick={() => e?.quitarCapaTaller(c.id)}>✕</button>
+        </div>)}
+      </div>
+      <div className="biblio3d-acciones"><button className="persp3d-boton taller3d-nueva-capa" onClick={() => e?.nuevaCapaTaller()}>Nueva capa</button></div>
+
+      <h3>Filtros (toda la piel)</h3>
+      <p className="persp3d-nota">De una, sobre todo lo que no esté enmascarado (el Mesh Filter de Blender).</p>
+      {desl('Intensidad del filtro', 'Intensidad', 'Cuánto hace cada pasada del filtro', 0.05, 1, 0.05, intensidadFiltro, setIntensidadFiltro, Math.round(intensidadFiltro * 100) + ' %')}
+      <div className="biblio3d-acciones taller3d-acciones-chicas">
+        {([['suavizar', 'Suavizar'], ['inflar', 'Inflar'], ['desinflar', 'Desinflar'], ['afilar', 'Afilar']] as const).map(([f, n]) =>
+          <button key={f} className="persp3d-boton" data-filtro={f} onClick={() => e?.filtroTaller(f, intensidadFiltro)}>{n}</button>)}
+      </div>
+
       <label className="toma3d-fila" title="Más malla: más detalle para esculpir (la escultura pasa de un nivel al otro)">Definición
         <select aria-label="Definición de la piel" value={t.definicion} onChange={(ev) => { setAviso('Subdividiendo la piel…'); const v = Number(ev.target.value); setTimeout(() => { e?.setDefinicionTaller(v); setAviso(''); }, 30); }}>
           {DEFINICIONES.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select>
         <output>{Math.round(t.triangulos / 1000)} mil △</output></label>
       <div className="biblio3d-acciones"><button className="persp3d-boton taller3d-sin-escultura" onClick={() => e?.sinEscultura()} title="La piel vuelve a como vino (Ctrl+Z lo deshace)">Volver a la piel original</button></div>
-    </>}
+      </>;
+    })()}
 
     <h3>Vistas</h3>
     <div className="taller3d-vistas" role="group" aria-label="Vistas del personaje">

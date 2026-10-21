@@ -21,7 +21,8 @@ import * as THREE from 'three';
 import { piezasDeCalle, pegarARed, estirarPuntas, franja, correr, MEDIDAS, type CalleRed, type TipoCalle } from './calles';
 import { ESTILO_BASE, type EstiloKit, type Pieza, type Categoria } from './biblioteca3d';
 import { Personaje3D, personajeNuevo, personajeValido, cargarCuerpo, cargarPoses, cuerpoListo, posesDeFabrica, controlDeHueso, nombreControl, ladoOpuesto,
-  CONTROLES, cargarAnimaciones, animacionesDeFabrica, dialesDe, EXPRESIONES, VISEMAS, CONTEXTURAS, CARA_NEUTRA, type Cara, type Forma, type BaseCuerpo, type PersonajeDatos, type Proporciones, type ModoTaller, type PincelEscultura } from './personaje3d';
+  CONTROLES, cargarAnimaciones, animacionesDeFabrica, dialesDe, EXPRESIONES, VISEMAS, CONTEXTURAS, CARA_NEUTRA, type Cara, type Forma, type BaseCuerpo, type PersonajeDatos, type Proporciones, type ModoTaller, type PincelEscultura, type FiltroEscultura, PARTES_MASCARA } from './personaje3d';
+import { CAIDAS, type CaidaPincel, type Pieza as PiezaPersonaje } from './modelado3d';
 import { Terreno, LADO as LADO_TERRENO, PINCEL_INICIAL, type PincelTerreno, type Parche } from './terreno3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -114,6 +115,40 @@ interface StrokeRecord {
 
 /** Dónde estaba cada hueso con trazos pegados (y cada trazo) antes de un cambio. */
 type FotoHuesos = Map<StrokeRecord, { hueso: THREE.Bone; b0: THREE.Matrix4; m0: THREE.Matrix4 }>;
+/** POSAR y ANIMAR agarran el cuerpo igual (en Animar, cada pose queda como clave). */
+const posando = (m: ModoTaller | undefined): boolean => m === 'posar' || m === 'animar';
+/** El pincel de escultura del taller. */
+export interface PincelTaller {
+  tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean; dureza: number;
+  /** la curva de caída (las de Blender) */
+  caida: CaidaPincel;
+  /** sólo las caras que miran a la cámara (no atraviesa lo fino) */
+  soloFrente: boolean;
+  /** la cuerda del estabilizador, en píxeles (0: sin estabilizar) */
+  estabilizador: number;
+  /** cada cuánto un toque, en fracciones del radio */
+  espaciado: number;
+  /** la presión de la lapicera cambia el tamaño (además de la fuerza) */
+  presionTamano: boolean;
+}
+const PINCEL_TALLER: PincelTaller = { tipo: 'dibujar', radio: 0.05, fuerza: 0.5, simetria: true, dureza: 0, caida: 'suave', soloFrente: true, estabilizador: 0, espaciado: 0.15, presionTamano: false };
+const TIPOS_PINCEL: PincelEscultura[] = ['dibujar', 'arcilla', 'capa', 'inflar', 'desinflar', 'surco', 'pellizcar', 'suavizar', 'aplanar', 'raspar', 'tirar', 'gancho', 'empujar', 'mascara'];
+function pincelValido(x: Partial<PincelTaller>, d: PincelTaller = PINCEL_TALLER): PincelTaller {
+  const num = (v: unknown, def: number, a: number, b: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(a, Math.min(b, v)) : def);
+  return {
+    tipo: TIPOS_PINCEL.includes(x.tipo as PincelEscultura) ? x.tipo as PincelEscultura : d.tipo,
+    radio: num(x.radio, d.radio, 0.002, 0.6), fuerza: num(x.fuerza, d.fuerza, 0.02, 1), dureza: num(x.dureza, d.dureza, 0, 0.95),
+    simetria: typeof x.simetria === 'boolean' ? x.simetria : d.simetria,
+    caida: CAIDAS.some((c) => c.id === x.caida) ? x.caida as CaidaPincel : d.caida,
+    soloFrente: typeof x.soloFrente === 'boolean' ? x.soloFrente : d.soloFrente,
+    estabilizador: num(x.estabilizador, d.estabilizador, 0, 150), espaciado: num(x.espaciado, d.espaciado, 0.05, 0.6),
+    presionTamano: typeof x.presionTamano === 'boolean' ? x.presionTamano : d.presionTamano,
+  };
+}
+function pincelGuardado(): PincelTaller {
+  try { const s = localStorage.getItem('low3d:pincel-escultura'); if (s) return pincelValido(JSON.parse(s)); } catch { /* sin almacenamiento */ }
+  return { ...PINCEL_TALLER };
+}
 
 interface Command {
   undo: () => void;
@@ -2343,6 +2378,7 @@ export class WebGLDesign3D {
     this.updateCursor(e);
     this.downScreen.set(...this.screenOf(e));
     // en el taller, POSAR y ESCULPIR son gestos sobre el cuerpo, no dibujo
+    if (this.ajustePincel) { this.terminarAjustePincel(false); return; }
     if (this.taller && this.taller.modo !== 'dibujar') { this.tallerApretar(e); return; }
 
     if (this.tool === 'pencil' || this.tool === 'guide' || this.tool === 'pencil-free') {
@@ -2422,6 +2458,8 @@ export class WebGLDesign3D {
     if (this.mode === 'draw' && e.pointerType === 'pen' && e.pressure === 0 && e.buttons === 0) return;
     this.updateCursor(e);
     this.setPointerFromEvent(e);
+    this.ultimoPuntero = { x: e.clientX, y: e.clientY };
+    if (this.ajustePincel) { this.moverAjustePincel(e.clientX); return; }
     if (this.mode === 'taller') { this.tallerMover(e); return; }
     if (this.mode === 'idle' && this.taller && this.taller.modo !== 'dibujar') this.tallerEncima();
     if (this.cajaGesto) this.cajaMover(e);
@@ -2558,14 +2596,17 @@ export class WebGLDesign3D {
     // del estudio (elegir una pose de la lista y Ctrl+Z no deshacía nada)
     const sinUndoPropio = target instanceof HTMLElement && (target.tagName === 'SELECT'
       || (target.tagName === 'INPUT' && /^(range|checkbox|radio|color|button)$/i.test((target as HTMLInputElement).type)));
+    // y con el foco en un deslizador o una casilla, las LETRAS siguen siendo atajos (las
+    // flechas mueven el deslizador): tocar el tamaño del pincel y apretar X no hacía nada
+    const atajo = sinUndoPropio && (target as HTMLElement).tagName === 'INPUT' && /^[a-z[\]{}]$/i.test(e.key);
     const typing = target instanceof HTMLElement && !!target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')
-      && !(sinUndoPropio && ctrl && /^[zy]$/i.test(e.key));
+      && !(sinUndoPropio && ctrl && /^[zy]$/i.test(e.key)) && !atajo;
     // Los campos conservan Supr, Backspace, copiar/pegar y su propio Undo.
     if(typing || e.defaultPrevented)return;
-    if (this.taller?.modo === 'posar' && this.taller.control && /^Arrow/.test(e.key)) {
+    if (posando(this.taller?.modo) && this.taller!.control && /^Arrow/.test(e.key)) {
       // las FLECHAS mueven la articulación elegida de a 2° (Shift: medio grado; Alt: sobre su largo)
       e.preventDefault();
-      const c = this.taller.control, paso = e.shiftKey ? 0.5 : 2;
+      const c = this.taller!.control!, paso = e.shiftKey ? 0.5 : 2;
       const dx = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0, dy = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
       this.cambiarPersonaje((x) => {
         if (e.altKey) x.girarSobreSi(c, (dx || -dy) * paso);
@@ -2573,10 +2614,28 @@ export class WebGLDesign3D {
       }, true);
       return;
     }
-    if (this.taller?.modo === 'esculpir' && (e.key === '[' || e.key === ']')) {
+    if (this.ajustePincel && (e.key === 'Escape' || e.key === 'Enter')) { e.preventDefault(); this.terminarAjustePincel(e.key === 'Escape'); return; }
+    if (this.taller?.modo === 'esculpir' && (e.key === '[' || e.key === ']' || e.key === '{' || e.key === '}')) {
       e.preventDefault();
-      this.setPincelEscultura({ radio: this.taller.pincel.radio * (e.key === ']' ? 1.15 : 1 / 1.15) });
+      // [ ] el tamaño; con Shift ({ }), la fuerza
+      if (e.shiftKey) this.setPincelEscultura({ fuerza: this.taller.pincel.fuerza + (e.key === '}' || e.key === ']' ? 0.05 : -0.05) });
+      else this.setPincelEscultura({ radio: this.taller.pincel.radio * (e.key === ']' ? 1.15 : 1 / 1.15) });
       return;
+    }
+    if (this.taller?.modo === 'esculpir' && !e.repeat) {
+      // LOS ATAJOS DE BLENDER (modo Escultura): X dibujar, C arcilla, L capa, I inflar,
+      // Shift+C surco, P pellizcar, S suavizar, Shift+T aplanar, G mover, K gancho,
+      // M máscara; F tamaño, Shift+F fuerza; Ctrl+I invertir la máscara, Alt+M borrarla.
+      // Más R raspar y N empujar (Blender no les da tecla).
+      const k = e.key.toLowerCase();
+      if (ctrl && !e.altKey && k === 'i') { e.preventDefault(); this.mascaraTaller('invertir'); return; }
+      if (e.altKey && !ctrl && (k === 'm' || e.code === 'KeyM')) { e.preventDefault(); this.mascaraTaller('limpiar'); return; }
+      if (!ctrl && !e.altKey) {
+        if (k === 'f') { e.preventDefault(); this.ajustarPincel(e.shiftKey ? 'fuerza' : 'radio'); return; }
+        const mapa: Record<string, PincelEscultura> = e.shiftKey ? { t: 'aplanar', c: 'surco' }
+          : { x: 'dibujar', c: 'arcilla', l: 'capa', i: 'inflar', p: 'pellizcar', s: 'suavizar', g: 'tirar', k: 'gancho', m: 'mascara', r: 'raspar', n: 'empujar' };
+        if (mapa[k]) { e.preventDefault(); this.setPincelEscultura({ tipo: mapa[k] }); return; }
+      }
     }
     if(e.key==='Home'){e.preventDefault();this.frameContent();return;}
     if (this.calleGesto && e.key === 'Enter') { e.preventDefault(); this.calleTerminar(); return; }
@@ -4289,10 +4348,17 @@ export class WebGLDesign3D {
   private taller: {
     rec: StrokeRecord | null; lineas: boolean; vista: number; modo: ModoTaller;
     control: string | null; encima: string | null; fantasma: boolean;
-    pincel: { tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean; dureza: number };
+    pincel: PincelTaller;
     /** el cuadro de la actuación que se está viendo/posando */
     cuadro: number; reproduciendo: boolean;
+    /** la capa de escultura donde va lo que se esculpe (null: la principal) */
+    capaActiva: string | null;
+    /** cómo sale la próxima pieza que se levante de la máscara */
+    nuevaPieza: { grosor: number; suave: number; color: string };
   } | null = null;
+  /** F / Shift+F (como Blender): el tamaño o la fuerza del pincel moviendo el mouse */
+  private ajustePincel: { tipo: 'radio' | 'fuerza'; x0: number; v0: number } | null = null;
+  private ultimoPuntero = { x: 0, y: 0 };
   private lineasEl: HTMLCanvasElement | null = null;
   private anilloPincel: THREE.Mesh | null = null;
   private gestoTaller: { tipo: 'posar'; control: string; plano: THREE.Plane; base: FotoHuesos; antes: PersonajeDatos;
@@ -4300,19 +4366,23 @@ export class WebGLDesign3D {
     | { tipo: 'extremo'; control: string; plano: THREE.Plane; base: FotoHuesos; antes: PersonajeDatos; pose: Record<string, number[]>; raiz?: number[] }
     | { tipo: 'cadera'; plano: THREE.Plane; base: FotoHuesos; antes: PersonajeDatos; pose: Record<string, number[]>; raiz?: number[];
         desde: THREE.Vector3; cadera: THREE.Vector3; pies: { l: THREE.Vector3; r: THREE.Vector3 } }
-    | { tipo: 'esculpir'; antes: PersonajeDatos; ultimo: THREE.Vector3 | null; plano: THREE.Plane } | null = null;
+    | { tipo: 'esculpir'; antes: PersonajeDatos; ultimo: THREE.Vector3 | null; plano: THREE.Plane;
+        /** la punta del pincel (con estabilizador va detrás del cursor) y lo que sobró del espaciado */
+        pluma: { x: number; y: number }; resto: number; mascaraAntes: Float32Array | null; gancho: THREE.Vector3 | null; piezasHace: number } | null = null;
   private cambioVivo: { antes: PersonajeDatos; base: FotoHuesos } | null = null;
   private cargasPersonajes = new Set<Promise<unknown>>();
 
   /** El estado para el panel (liviano: se pide en cada cambio). */
   enTaller(): {
     lineas: boolean; vista: number; modo: ModoTaller; control: string | null; nombreControl: string; fantasma: boolean;
-    pincel: { tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean; dureza: number };
+    pincel: PincelTaller;
     listo: boolean; base: BaseCuerpo; prop: Proporciones; pies: boolean; color: string; alto: number;
     cuadro: number; cuadros: number; claves: number[]; reproduciendo: boolean; definicion: number; triangulos: number;
     diales: { eje: string; nombre: string; min: number; max: number; valor: number }[];
     tieneCara: boolean; cara: Cara; forma: Forma; hombrosAuto: boolean; aceptaContextura: boolean;
     manos: Record<'l' | 'r', { cerrar: number; indice: number; pulgar: number }>;
+    mascara: number; capas: { id: string; nombre: string; fuerza: number }[]; capaActiva: string | null;
+    piezas: PiezaPersonaje[]; nuevaPieza: { grosor: number; suave: number; color: string };
   } | null {
     const t = this.taller; if (!t) return null;
     const inst = this.personajeDelTaller(), d = inst?.datos ?? t.rec?.personajeDatos ?? personajeNuevo();
@@ -4323,7 +4393,10 @@ export class WebGLDesign3D {
       diales: inst && t.control ? (() => { const v = inst.dialesValores(t.control); return dialesDe(t.control).map((x) => ({ ...x, valor: v[x.eje] ?? 0 })); })() : [],
       tieneCara: !!inst?.tieneCara(), cara: { ...CARA_NEUTRA, ...d.cara }, forma: { peso: d.forma?.peso ?? 0, musculo: d.forma?.musculo ?? 0, grosor: { ...d.forma?.grosor } },
       hombrosAuto: inst ? inst.hombrosAuto : true, aceptaContextura: inst ? inst.aceptaContextura() : true,
-      manos: { l: inst ? inst.mano('l') : { cerrar: 0, indice: 0, pulgar: 0 }, r: inst ? inst.mano('r') : { cerrar: 0, indice: 0, pulgar: 0 } } };
+      manos: { l: inst ? inst.mano('l') : { cerrar: 0, indice: 0, pulgar: 0 }, r: inst ? inst.mano('r') : { cerrar: 0, indice: 0, pulgar: 0 } },
+      mascara: inst?.hayMascara ? Math.max(0.001, inst.cuantaMascara()) : 0,
+      capas: (d.capas ?? []).map((c) => ({ id: c.id, nombre: c.nombre, fuerza: c.fuerza })), capaActiva: t.capaActiva,
+      piezas: (d.piezas ?? []).map((p) => ({ ...p })), nuevaPieza: { ...t.nuevaPieza } };
   }
   /** El personaje del taller (null mientras se carga su cuerpo). */
   personajeDelTaller(): Personaje3D | null { return this.taller?.rec?.personaje ?? null; }
@@ -4341,7 +4414,7 @@ export class WebGLDesign3D {
       if (rec) this.addStrokeRecord(rec);
     }
     this.taller = { rec, lineas: false, vista: 25, modo: 'dibujar', control: null, encima: null, fantasma: false,
-      pincel: { tipo: 'inflar', radio: 0.06, fuerza: 0.5, simetria: true, dureza: 0 }, cuadro: 1, reproduciendo: false };
+      pincel: pincelGuardado(), cuadro: 1, reproduciendo: false, capaActiva: null, nuevaPieza: { grosor: 0.004, suave: 0.4, color: '#5f6f82' } };
     this.undoStack = []; this.redoStack = [];
     this.vistaPersonaje(25);
     this.publishObjects();
@@ -4353,18 +4426,91 @@ export class WebGLDesign3D {
   setModoTaller(m: ModoTaller): void {
     const t = this.taller; if (!t) return;
     t.modo = m; t.encima = null;
-    if (m !== 'posar') t.control = null;
+    if (!posando(m)) t.control = null;
     if (this.anilloPincel) this.anilloPincel.visible = false;
     window.dispatchEvent(new Event('low3d:taller'));
   }
-  setPincelEscultura(p: Partial<{ tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean; dureza: number }>): void {
+  setPincelEscultura(p: Partial<PincelTaller>): void {
     const t = this.taller; if (!t) return;
-    const n = { ...t.pincel, ...p };
-    n.radio = Math.max(0.002, Math.min(0.6, Number(n.radio) || t.pincel.radio));
-    n.dureza = Math.max(0, Math.min(0.95, Number(n.dureza) || 0));
-    n.fuerza = Math.max(0.02, Math.min(1, Number(n.fuerza) || t.pincel.fuerza));
-    t.pincel = n;
+    t.pincel = pincelValido({ ...t.pincel, ...p }, t.pincel);
+    try { localStorage.setItem('low3d:pincel-escultura', JSON.stringify(t.pincel)); } catch { /* sin almacenamiento */ }
+    if (this.anilloPincel?.visible) this.anilloPincel.scale.setScalar(t.pincel.radio);
+    this.colorAnillo();
     window.dispatchEvent(new Event('low3d:taller'));
+  }
+  /** las curvas de caída y las partes para el panel */
+  listasModelado(): { caidas: { id: CaidaPincel; nombre: string; ayuda: string }[]; partes: { id: string; nombre: string }[] } {
+    return { caidas: CAIDAS.map((c) => ({ ...c })), partes: PARTES_MASCARA.map((x) => ({ id: x.id, nombre: x.nombre })) };
+  }
+
+  /* ── LA MÁSCARA, LAS PIEZAS, LAS CAPAS Y LOS FILTROS (v3.41) ── */
+  /** Cada cambio de la máscara es un paso de Ctrl+Z (no está en los datos del personaje). */
+  private conMascara(hacer: (x: Personaje3D) => void): void {
+    const inst = this.personajeDelTaller(); if (!inst) return;
+    const antes = inst.copiaMascara(); hacer(inst); const despues = inst.copiaMascara();
+    if (antes.some((v, i) => v !== despues[i])) this.pushCmd({ undo: () => this.ponerMascaraTaller(antes), redo: () => this.ponerMascaraTaller(despues) });
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  private ponerMascaraTaller(m: Float32Array): void { this.personajeDelTaller()?.ponerMascara(m); window.dispatchEvent(new Event('low3d:taller')); }
+  mascaraTaller(op: 'invertir' | 'limpiar' | 'crecer' | 'achicar' | 'suavizar' | 'afilar'): void {
+    this.conMascara((x) => {
+      if (op === 'invertir') x.invertirMascara(); else if (op === 'limpiar') x.limpiarMascara();
+      else if (op === 'crecer' || op === 'achicar') x.crecerMascara(op === 'crecer' ? 1 : -1); else x.suavizarMascara(op === 'afilar');
+    });
+  }
+  mascaraParteTaller(parte: string, modo: 'poner' | 'sumar' | 'quitar'): void { this.conMascara((x) => { x.mascaraDeParte(parte, modo); }); }
+  setNuevaPieza(c: Partial<{ grosor: number; suave: number; color: string }>): void {
+    const t = this.taller; if (!t) return;
+    t.nuevaPieza = { grosor: Math.max(0.0003, Math.min(0.06, Number(c.grosor ?? t.nuevaPieza.grosor) || 0.004)), suave: Math.max(0, Math.min(1, Number(c.suave ?? t.nuevaPieza.suave))),
+      color: typeof c.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : t.nuevaPieza.color };
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  /** LEVANTAR UNA PIEZA de lo enmascarado: ropa, pelo, armadura. Un paso de Ctrl+Z (que también devuelve la máscara). */
+  extraerPiezaTaller(nombre?: string): string | null {
+    const t = this.taller, inst = this.personajeDelTaller(); if (!t || !inst) return null;
+    if (!inst.hayMascara) { this.avisar('Primero pintá con la Máscara (M) dónde va la pieza, o elegí una parte del cuerpo'); return null; }
+    const mAntes = inst.copiaMascara(), antes = inst.aDatos(), foto = this.fotoHuesos();
+    const id = inst.extraerPieza({ nombre, ...t.nuevaPieza });
+    this.seguirHuesos(foto);
+    if (!id) { this.avisar('La máscara es muy chica para levantar una pieza: pintá un poco más'); return null; }
+    const despues = inst.aDatos();
+    this.pushCmd({ undo: () => { this.volverPersonaje(antes); this.ponerMascaraTaller(mAntes); }, redo: () => { this.volverPersonaje(despues); this.personajeDelTaller()?.limpiarMascara(); } });
+    window.dispatchEvent(new Event('low3d:taller'));
+    return id;
+  }
+  verPiezaTaller(id: string, c: Partial<Omit<PiezaPersonaje, 'id' | 'mascara'>>): void { this.enVivo((x) => x.cambiarPieza(id, c)); }
+  piezaTaller(id: string, c: Partial<Omit<PiezaPersonaje, 'id' | 'mascara'>>): boolean { return this.cambiarPersonaje((x) => x.cambiarPieza(id, c)); }
+  borrarPiezaTaller(id: string): boolean { return this.cambiarPersonaje((x) => x.borrarPieza(id)); }
+  nuevaCapaTaller(): string | null {
+    const t = this.taller; let id: string | null = null;
+    this.cambiarPersonaje((x) => { id = x.nuevaCapa(); });
+    if (t && id) { t.capaActiva = id; window.dispatchEvent(new Event('low3d:taller')); }
+    return id;
+  }
+  activarCapaTaller(id: string | null): void { const t = this.taller; if (!t) return; t.capaActiva = id; window.dispatchEvent(new Event('low3d:taller')); }
+  verFuerzaCapa(id: string, f: number): void { this.enVivo((x) => x.fuerzaCapa(id, f)); }
+  renombrarCapaTaller(id: string, nombre: string): boolean { return this.cambiarPersonaje((x) => x.renombrarCapa(id, nombre)); }
+  quitarCapaTaller(id: string, fusionar = false): boolean {
+    const t = this.taller; if (t?.capaActiva === id) t.capaActiva = null;
+    return this.cambiarPersonaje((x) => x.quitarCapa(id, fusionar));
+  }
+  filtroTaller(tipo: FiltroEscultura, intensidad: number): boolean { return this.cambiarPersonaje((x) => x.filtro(tipo, intensidad)); }
+  /** F / Shift+F: empezar a cambiar el tamaño o la fuerza con el mouse (clic o Enter: listo; Esc: como estaba). */
+  ajustarPincel(tipo: 'radio' | 'fuerza'): void {
+    const t = this.taller; if (!t) return;
+    this.ajustePincel = { tipo, x0: this.ultimoPuntero.x, v0: tipo === 'radio' ? t.pincel.radio : t.pincel.fuerza };
+    this.avisar((tipo === 'radio' ? 'Tamaño' : 'Fuerza') + ' del pincel: mové el mouse a los costados · clic o Enter: listo · Esc: como estaba');
+  }
+  ajustandoPincel(): boolean { return !!this.ajustePincel; }
+  private moverAjustePincel(x: number): void {
+    const a = this.ajustePincel; if (!a) return;
+    const d = x - a.x0;
+    this.setPincelEscultura(a.tipo === 'radio' ? { radio: a.v0 * Math.exp(d / 160) } : { fuerza: a.v0 + d / 300 });
+  }
+  private terminarAjustePincel(cancelar: boolean): void {
+    const a = this.ajustePincel; if (!a) return;
+    this.ajustePincel = null;
+    if (cancelar) this.setPincelEscultura(a.tipo === 'radio' ? { radio: a.v0 } : { fuerza: a.v0 });
   }
   /** Elegir qué articulación se ajusta con los botones (sin arrastrar). */
   setControlTaller(c: string | null): void { if (this.taller) { this.taller.control = c; window.dispatchEvent(new Event('low3d:taller')); } }
@@ -4681,7 +4827,7 @@ export class WebGLDesign3D {
     if (!t || !inst) return;
     if (t.reproduciendo) this.reproducirTaller(false);
     // la MARIONETA: los agarres de manos, pies y cadera ganan sobre la piel
-    const ag = t.modo === 'posar' ? this.agarreBajo(e, inst) : null;
+    const ag = posando(t.modo) ? this.agarreBajo(e, inst) : null;
     if (ag) {
       const haciaCam0 = (this.camera as THREE.Camera).getWorldDirection(new THREE.Vector3()).negate();
       const plano = new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam0, ag.p);
@@ -4702,20 +4848,27 @@ export class WebGLDesign3D {
       return;
     }
     const h = this.tocarPersonaje();
-    if (!h) { if (t.modo === 'posar' && t.control) { t.control = null; window.dispatchEvent(new Event('low3d:taller')); } return; }
+    if (!h) { if (posando(t.modo) && t.control) { t.control = null; window.dispatchEvent(new Event('low3d:taller')); } return; }
     const haciaCam = (this.camera as THREE.Camera).getWorldDirection(new THREE.Vector3()).negate();
-    if (t.modo === 'posar') {
+    if (posando(t.modo)) {
       const hueso = inst.huesoDeCara(h.object, h.face), c = hueso ? controlDeHueso(hueso) : null, tip = c ? inst.punta(c) : null;
       if (!c || !tip) return;
       t.control = c;
       this.gestoTaller = { tipo: 'posar', control: c, plano: new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam, tip), base: this.fotoHuesos(), antes: inst.aDatos(),
         sx: e.clientX, sy: e.clientY, pose: JSON.parse(JSON.stringify(inst.datos.pose)), raiz: inst.datos.raiz?.slice() };
     } else {
-      this.gestoTaller = { tipo: 'esculpir', antes: inst.aDatos(), ultimo: h.point.clone(), plano: new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam, h.point) };
       this.leerToque(e);
-      inst.dureza = t.pincel.dureza;
-      if (t.pincel.tipo === 'tirar' && !this.toqueMods.shift) inst.empezarTirar(h.point, t.pincel.radio);
-      else this.toquePincel(inst, h);
+      const p = t.pincel, punto = h.object.userData.pieza ? inst.puntoDePiel(h) ?? h.point : h.point, n = this.normalDeToque(h);
+      inst.capaActiva = t.capaActiva && inst.datos.capas?.some((c) => c.id === t.capaActiva) ? t.capaActiva : null;
+      inst.dureza = p.dureza; inst.caida = p.caida; inst.frente = p.soloFrente ? haciaCam.clone() : null; inst.direccion = null;
+      inst.empezarTrazo();
+      const tipo = this.toqueMods.shift ? 'suavizar' : p.tipo;
+      this.gestoTaller = { tipo: 'esculpir', antes: inst.aDatos(), ultimo: punto.clone(), plano: new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam, punto),
+        pluma: { x: e.clientX, y: e.clientY }, resto: 0, mascaraAntes: p.tipo === 'mascara' ? inst.copiaMascara() : null,
+        gancho: tipo === 'gancho' ? punto.clone() : null, piezasHace: performance.now() };
+      if (tipo === 'tirar') inst.empezarTirar(punto, p.radio);
+      else if (tipo !== 'gancho') this.toquePincel(inst, punto, n);
+      this.moverAnilloEn(punto, n);
     }
     this.activePointerId = e.pointerId;
     this.mode = 'taller';
@@ -4756,17 +4909,45 @@ export class WebGLDesign3D {
   private leerToque(e: PointerEvent): void {
     this.toqueMods = { presion: e.pointerType === 'pen' && e.pressure > 0 ? Math.max(0.05, e.pressure) : 1, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey };
   }
-  private toquePincel(inst: Personaje3D, h: THREE.Intersection): void {
+  private normalDeToque(h: THREE.Intersection): THREE.Vector3 {
+    return h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize() : new THREE.Vector3(0, 0, 1);
+  }
+  /** UN TOQUE del pincel en un punto de la piel. El espaciado decide cuántos: la
+   *  fuerza se reparte para que el resultado no dependa de él. */
+  private toquePincel(inst: Personaje3D, punto: THREE.Vector3, n: THREE.Vector3): void {
     const p = this.taller!.pincel, m = this.toqueMods;
-    const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize() : new THREE.Vector3(0, 0, 1);
-    const fuerza = p.fuerza * m.presion, tipo = m.shift ? 'suavizar' : p.tipo, signo = m.ctrl ? -1 : 1;
-    inst.dureza = p.dureza;
-    if (tipo === 'inflar' || tipo === 'desinflar') inst.inflar(h.point, p.radio, fuerza, (tipo === 'inflar' ? 1 : -1) * signo, p.simetria);
-    else if (tipo === 'suavizar') inst.suavizar(h.point, p.radio, fuerza, p.simetria);
-    else if (tipo === 'aplanar') inst.aplanar(h.point, n, p.radio, fuerza, p.simetria);
-    else if (tipo === 'pellizcar') inst.pellizcar(h.point, p.radio, fuerza, p.simetria);
-    else if (tipo === 'surco') inst.pellizcar(h.point, p.radio, fuerza, p.simetria, signo);
-    this.moverAnillo(h);
+    const radio = p.presionTamano ? p.radio * (0.25 + 0.75 * m.presion) : p.radio;
+    const fuerza = p.fuerza * m.presion * Math.min(2, p.espaciado / 0.2), signo = m.ctrl ? -1 : 1, s = p.simetria;
+    const tipo = m.shift && p.tipo !== 'mascara' ? 'suavizar' : p.tipo;
+    inst.dureza = p.dureza; inst.caida = p.caida;
+    switch (tipo) {
+      case 'dibujar': inst.dibujar(punto, radio, fuerza, signo, s); break;
+      case 'arcilla': inst.arcilla(punto, radio, fuerza, signo, s); break;
+      case 'capa': inst.capa(punto, radio, p.fuerza * m.presion, signo, s); break;
+      case 'inflar': case 'desinflar': inst.inflar(punto, radio, fuerza, (tipo === 'inflar' ? 1 : -1) * signo, s); break;
+      case 'surco': inst.pellizcar(punto, radio, fuerza, s, signo); break;
+      case 'pellizcar': inst.pellizcar(punto, radio, fuerza, s); break;
+      case 'suavizar': inst.suavizar(punto, radio, fuerza, s); break;
+      case 'aplanar': inst.aplanar(punto, n, radio, fuerza, s); break;
+      case 'raspar': inst.raspar(punto, radio, fuerza, signo, s); break;
+      case 'empujar': inst.empujar(punto, radio, fuerza, s); break;
+      case 'mascara': inst.pintarMascara(punto, radio, fuerza, signo, s, m.shift); break;
+      default: break;
+    }
+  }
+  /** El radio del pincel en píxeles, a la profundidad de un punto. */
+  private radioEnPantalla(p: THREE.Vector3, radio: number): number {
+    const cam = this.camera as THREE.Camera, der = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+    const a = p.clone().project(cam), b = p.clone().addScaledVector(der, radio).project(cam);
+    return Math.hypot((b.x - a.x) * this.canvas.clientWidth / 2, (b.y - a.y) * this.canvas.clientHeight / 2);
+  }
+  /** El cuerpo bajo un punto de la pantalla (lo de una pieza, a la piel de abajo). */
+  private tocarEn(cx: number, cy: number): { punto: THREE.Vector3; n: THREE.Vector3 } | null {
+    const inst = this.personajeDelTaller(); if (!inst) return null;
+    const r = this.canvas.getBoundingClientRect();
+    this.raycaster.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), this.camera as THREE.Camera);
+    const h = this.raycaster.intersectObjects(inst.mallas, false)[0]; if (!h) return null;
+    return { punto: h.object.userData.pieza ? inst.puntoDePiel(h) ?? h.point : h.point, n: this.normalDeToque(h) };
   }
   private tallerMover(e?: PointerEvent): void {
     const g = this.gestoTaller, inst = this.personajeDelTaller(), t = this.taller;
@@ -4792,27 +4973,70 @@ export class WebGLDesign3D {
       window.dispatchEvent(new Event('low3d:taller'));
       return;
     }
-    if (t.pincel.tipo === 'tirar' && !this.toqueMods.shift) {
-      const p = new THREE.Vector3();
-      if (!this.raycaster.ray.intersectPlane(g.plano, p) || !g.ultimo) return;
-      const d = p.clone().sub(g.ultimo);
+    const p = t.pincel, tipo = this.toqueMods.shift && p.tipo !== 'mascara' ? 'suavizar' : p.tipo;
+    if (tipo === 'tirar') {
+      const q = new THREE.Vector3();
+      if (!this.raycaster.ray.intersectPlane(g.plano, q) || !g.ultimo) return;
+      const d = q.clone().sub(g.ultimo);
       if (d.lengthSq() < 1e-12) return;
-      inst.tirar(d, t.pincel.simetria);
-      g.ultimo = p;
+      inst.tirar(d, p.simetria);
+      g.ultimo = q;
+      this.piezasEnVivo(inst, g);
       return;
     }
-    const h = this.tocarPersonaje();
-    if (!h) return;
-    if (g.ultimo && h.point.distanceTo(g.ultimo) < t.pincel.radio * 0.2) { this.moverAnillo(h); return; }
-    g.ultimo = h.point.clone();
-    this.toquePincel(inst, h);
+    if (tipo === 'gancho' && g.gancho) {
+      // GANCHO: lo de bajo el pincel va con el cursor (el pincel lo sigue)
+      const plano = new THREE.Plane().setFromNormalAndCoplanarPoint((this.camera as THREE.Camera).getWorldDirection(new THREE.Vector3()).negate(), g.gancho);
+      const q = new THREE.Vector3();
+      if (!this.raycaster.ray.intersectPlane(plano, q)) return;
+      const d = q.clone().sub(g.gancho);
+      if (d.length() < p.radio * 0.04) return;
+      inst.gancho(g.gancho, p.radio, d, p.fuerza * this.toqueMods.presion, p.simetria);
+      g.gancho.copy(q);
+      if (this.anilloPincel) this.anilloPincel.position.copy(q);
+      this.piezasEnVivo(inst, g);
+      return;
+    }
+    if (!e) return;
+    // EL ESTABILIZADOR (Lazy Mouse de ZBrush, Stabilize Stroke de Blender): la punta
+    // va detrás del cursor, a la distancia de una cuerda; un pulso tembloroso no llega
+    const dx = e.clientX - g.pluma.x, dy = e.clientY - g.pluma.y, dist = Math.hypot(dx, dy), cuerda = p.estabilizador;
+    if (dist <= cuerda || dist < 0.5) return;
+    const k = (dist - cuerda) / dist, nx = g.pluma.x + dx * k, ny = g.pluma.y + dy * k, largo = Math.hypot(nx - g.pluma.x, ny - g.pluma.y);
+    // EL ESPACIADO: un toque cada tanto (una fracción del radio), interpolado por el
+    // camino aunque el mouse salte; antes, con un movimiento rápido quedaban huecos
+    const paso = Math.max(1, this.radioEnPantalla(g.ultimo ?? g.plano.coplanarPoint(new THREE.Vector3()), p.radio) * p.espaciado);
+    let s = paso - g.resto;
+    for (let toques = 0; s <= largo && toques < 400; s += paso, toques++) {
+      const x = g.pluma.x + ((nx - g.pluma.x) * s) / largo, y = g.pluma.y + ((ny - g.pluma.y) * s) / largo;
+      const h = this.tocarEn(x, y); if (!h) continue;
+      inst.direccion = g.ultimo ? h.punto.clone().sub(g.ultimo) : null;
+      if (inst.direccion && inst.direccion.lengthSq() < 1e-14) inst.direccion = null;
+      this.toquePincel(inst, h.punto, h.n);
+      g.ultimo = h.punto;
+      this.moverAnilloEn(h.punto, h.n);
+    }
+    g.resto = largo - (s - paso);
+    g.pluma = { x: nx, y: ny };
+    this.piezasEnVivo(inst, g);
+  }
+  /** Mientras se esculpe, la ropa acompaña (cada tanto: rehacerla es lo que más tarda). */
+  private piezasEnVivo(inst: Personaje3D, g: { piezasHace: number }): void {
+    if (!inst.datos.piezas?.length || performance.now() - g.piezasHace < 140) return;
+    g.piezasHace = performance.now(); inst.rehacerPiezas();
   }
   private tallerSoltar(): void {
     const g = this.gestoTaller, inst = this.personajeDelTaller();
     this.gestoTaller = null;
     if (!g || !inst) return;
-    if (g.tipo === 'esculpir') inst.terminarTirar();
-    else this.claveAutomatica(inst);
+    if (g.tipo === 'esculpir') {
+      inst.terminarTirar(); inst.terminarTrazo(); inst.direccion = null;
+      // la máscara no está en los datos: su propio paso de Ctrl+Z
+      if (g.mascaraAntes) {
+        const mA = g.mascaraAntes, mD = inst.copiaMascara();
+        if (mA.some((v, i) => v !== mD[i])) this.pushCmd({ undo: () => this.ponerMascaraTaller(mA), redo: () => this.ponerMascaraTaller(mD) });
+      }
+    } else this.claveAutomatica(inst);
     const antes = g.antes, despues = inst.aDatos();
     if (JSON.stringify(antes) !== JSON.stringify(despues)) this.pushCmd({ undo: () => this.volverPersonaje(antes), redo: () => this.volverPersonaje(despues) });
     window.dispatchEvent(new Event('low3d:taller'));
@@ -4827,28 +5051,34 @@ export class WebGLDesign3D {
       const t = this.taller, inst = this.personajeDelTaller();
       if (!t || !inst || this.mode !== 'idle') return;
       const h = this.tocarPersonaje();
-      if (t.modo === 'posar') {
+      if (posando(t.modo)) {
         const hueso = h ? inst.huesoDeCara(h.object, h.face) : null;
         t.encima = hueso ? controlDeHueso(hueso) : null;
         this.canvas.style.cursor = t.encima ? 'grab' : '';
       } else if (t.modo === 'esculpir') {
-        if (h) this.moverAnillo(h); else if (this.anilloPincel) this.anilloPincel.visible = false;
+        if (h) this.moverAnilloEn(h.object.userData.pieza ? inst.puntoDePiel(h) ?? h.point : h.point, this.normalDeToque(h));
+        else if (this.anilloPincel) this.anilloPincel.visible = false;
       }
     }, 40);
   }
-  private moverAnillo(h: THREE.Intersection): void {
+  private moverAnilloEn(punto: THREE.Vector3, n: THREE.Vector3): void {
     const t = this.taller; if (!t) return;
     if (!this.anilloPincel) {
       this.anilloPincel = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48),
         new THREE.MeshBasicMaterial({ color: 0xf0450e, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }));
       this.anilloPincel.renderOrder = 20;
       this.scene.add(this.anilloPincel);
+      this.colorAnillo();
     }
-    const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize() : new THREE.Vector3(0, 0, 1);
-    this.anilloPincel.position.copy(h.point).addScaledVector(n, 0.002);
-    this.anilloPincel.lookAt(h.point.clone().add(n));
+    this.anilloPincel.position.copy(punto).addScaledVector(n, 0.002);
+    this.anilloPincel.lookAt(punto.clone().add(n));
     this.anilloPincel.scale.setScalar(t.pincel.radio);
     this.anilloPincel.visible = t.modo === 'esculpir';
+  }
+  /** El anillo naranja; azul con la máscara (se ve que se está protegiendo, no modelando). */
+  private colorAnillo(): void {
+    if (!this.anilloPincel || !this.taller) return;
+    (this.anilloPincel.material as THREE.MeshBasicMaterial).color.set(this.taller.pincel.tipo === 'mascara' ? 0x2f7fd8 : 0xf0450e);
   }
   /** Con espejo (X) en el taller, un trazo sobre una parte cae espejado sobre
    *  la parte del otro lado del CUERPO (no del mundo): sigue a la pose. */
@@ -4889,7 +5119,7 @@ export class WebGLDesign3D {
    *  articulación que se agarra (la elegida en naranja). */
   private pintarLineasModelo(): void {
     const t = this.taller, inst = this.personajeDelTaller();
-    const ver = !!(t && inst && (t.lineas || t.modo === 'posar'));
+    const ver = !!(t && inst && (t.lineas || posando(t.modo)));
     if (!ver) { if (this.lineasEl) this.lineasEl.style.display = 'none'; return; }
     if (!this.lineasEl) {
       this.lineasEl = document.createElement('canvas');
@@ -4922,7 +5152,7 @@ export class WebGLDesign3D {
       }
       g.setLineDash([]);
     }
-    if (t!.modo === 'posar') {
+    if (posando(t!.modo)) {
       for (const ctl of CONTROLES) {
         const a = inst!.articulacion(ctl), b = inst!.punta(ctl);
         if (!a) continue;

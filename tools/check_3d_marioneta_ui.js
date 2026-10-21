@@ -103,7 +103,9 @@ async function main() {
     const cadZ = await hueso("pelvis");
     if (dist(cadZ, cad0) > 0.002) mal("Ctrl+Z no deshizo la cadera de un paso", { cadZ, cad0 });
 
-    // ── 2. la actuación: claves y entre-cuadros ──
+    // ── 2. la actuación: claves y entre-cuadros (v3.41: en su propia pestaña, «Animar»;
+    // en Posar quedaba enterrada debajo de las manos y la cara y Mauro no la encontraba) ──
+    await clicEn('[data-modo="animar"]');
     await clicEn('.taller3d-clave');
     const c1 = await ev(`__low3d.enTaller().claves`);
     if (c1.join() !== "1") mal("«Clave aquí» no dejó clave en el cuadro 1", c1);
@@ -129,8 +131,11 @@ async function main() {
     await poner('input[aria-label="Cuadro de la actuación"]', 13); await w(150);
     await poner('select[aria-label="Animación de la biblioteca"]', "Walk_Loop"); await w(100);
     await clicEn('.taller3d-animacion'); await w(500);
-    const anim = await ev(`(()=>{ const t = __low3d.enTaller(); return { n: t.claves.filter(f => f >= 13).length, cuadros: t.cuadros }; })()`);
+    const anim = await ev(`(()=>{ const t = __low3d.enTaller(); return { n: t.claves.filter(f => f >= 13).length, cuadros: t.cuadros, r: t.reproduciendo }; })()`);
     if (anim.n < 20) mal("«Caminar» no dejó una clave por cuadro desde el 13", anim);
+    // y camina sola: se reproduce al ponerla («hacía la caminata sola y ahora no logro hacerlo»)
+    if (!anim.r) mal("al poner «Caminar» no se reprodujo la caminata", anim);
+    await clicEn('.taller3d-play');
     await poner('input[aria-label="Cuadro de la actuación"]', 14); await w(150);
     const pie14 = await hueso("foot_l");
     await poner('input[aria-label="Cuadro de la actuación"]', 22); await w(150);
