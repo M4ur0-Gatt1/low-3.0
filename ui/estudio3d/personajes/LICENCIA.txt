@@ -1,0 +1,13 @@
+Personajes del Taller de personaje de LOW
+
+hombre.glb, mujer.glb: «Universal Base Characters» [Standard], de Quaternius.
+maniqui.glb y poses.json: «Universal Animation Library» [Standard], de Quaternius.
+https://quaternius.com
+
+Licencia de los paquetes (tal como vienen en License_Standard.txt / License.txt):
+CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Convertidos para LOW con tools/personajes_quaternius.py: .gltf + .bin a .glb,
+sin atributos ni texturas que el estudio no usa, texturas a 1024, y un cuadro de
+cada animación como pose.

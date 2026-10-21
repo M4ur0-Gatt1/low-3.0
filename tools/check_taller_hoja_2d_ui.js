@@ -62,10 +62,12 @@ async function main() {
   await alEstudio();
   await evIframe(`try{localStorage.clear()}catch(e){}; __low3d.newProject(); true`); await w(200);
   if (!(await evIframe(`__low3d.enTaller()`))) {
-    await evIframe(`(document.querySelector('[data-maniqui="cartoon"]')||{click(){}}).click(); document.querySelector(".taller3d-entrar").click(); true`);
+    await evIframe(`document.querySelector('[data-cuerpo="mujer"]').click(); true`); await w(150);
+    await evIframe(`document.querySelector(".taller3d-entrar").click(); true`);
     await w(500);
   }
-  if (!(await evIframe(`__low3d.enTaller() && !!document.querySelector(".taller3d-hoja")`))) mal("no se abrió el taller de personaje dentro de LOW", {});
+  await evIframe(`__low3d.personajesListos()`);
+  if (!(await evIframe(`__low3d.enTaller() && !!__low3d.personajeDelTaller() && !!document.querySelector(".taller3d-hoja")`))) mal("no se abrió el taller de personaje dentro de LOW", {});
 
   const capas = async () => evHost(`(()=>{ const sc = DZ.doc.scene;
     return sc.layers.map((ly, i) => { const lv = sc.level(ly.levelId);

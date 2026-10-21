@@ -60,6 +60,14 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
     return () => window.removeEventListener('low3d:edicion', oir);
   }, [engine]);
 
+  // un personaje no tiene miniatura hasta que llega su cuerpo: entonces se rehace
+  const [cargas, setCargas] = useState(0);
+  useEffect(() => {
+    const oir = () => { for (const k of [...minis.current.keys()]) if (!minis.current.get(k)) minis.current.delete(k); setCargas((v) => v + 1); };
+    window.addEventListener('low3d:personajes', oir);
+    return () => window.removeEventListener('low3d:personajes', oir);
+  }, []);
+
   // miniaturas de a poco (cada una es un render): primero lo que se ve
   const piezas = kit.piezas.filter((p) => cat === 'todas' || p.categoria === cat);
   useEffect(() => {
@@ -74,7 +82,7 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
     };
     una();
     return () => { vivo = false; };
-  }, [kit.id, cat, kit.piezas.length, edicion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kit.id, cat, kit.piezas.length, edicion, cargas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // la respuesta de LOW al guardar/abrir un .lowkit
   useEffect(() => {
@@ -128,7 +136,7 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
     // un PERSONAJE (o un maniquí) se edita en el Taller de personaje
     if (p?.maniqui || categoria === 'personaje') {
       destinoTaller.kitId = kit.fabrica ? null : kit.id; destinoTaller.piezaId = kit.fabrica ? null : p?.id ?? null;
-      if (!e.abrirTaller(p, nombre, p?.maniqui)) setAviso('Ya estás editando algo: guardalo o cancelalo primero');
+      if (!e.abrirTaller(p, nombre)) setAviso('Ya estás editando algo: guardalo o cancelalo primero');
       setNueva(null);
       return;
     }

@@ -1,6 +1,16 @@
 /* English · LOW. La clave es el texto en español tal cual aparece en la interfaz (ver i18n/idioma.js).
    «{}» en una clave es cualquier cosa, y se repite en la traducción en el mismo orden. */
 LOW_I18N.registrar("en", "English", {
+  "Espejar horizontal": "Flip horizontal",
+  "Espejar vertical": "Flip vertical",
+  "Espejar horizontal (lo elegido)": "Flip horizontal (selection)",
+  "Espejar vertical (lo elegido)": "Flip vertical (selection)",
+  "Elegí con la flecha lo que querés espejar (Ctrl+A elige todo)": "Pick what you want to flip with the arrow (Ctrl+A selects all)",
+  "⇋ Espejado en horizontal: {} objeto(s) · Ctrl+Z lo deshace": "⇋ Flipped horizontally: {} object(s) · Ctrl+Z undoes it",
+  "⇋ Espejado en vertical: {} objeto(s) · Ctrl+Z lo deshace": "⇋ Flipped vertically: {} object(s) · Ctrl+Z undoes it",
+  "Voltear": "Flip",
+  "Voltear horizontal": "Flip horizontal",
+  "Voltear vertical": "Flip vertical",
   "(desmarcá para probar sin grabar · Enter clava, Esc descarta)": "(uncheck to test without recording · Enter commits, Esc discards)",
   "(sin atajo)": "(no shortcut)",
   "+ Capa": "+ Layer",
@@ -1632,5 +1642,22 @@ LOW_I18N.registrar("en", "English", {
  "Hoja de modelo · {}": "Model sheet · {}",
  "Giro · {}": "Turnaround · {}",
  "El giro de «{}»: {} vistas, una por cuadro, en la capa «{}» (al fondo) · Ctrl+Z la saca": "The turnaround of «{}»: {} views, one per frame, in layer «{}» (at the bottom) · Ctrl+Z removes it",
- "La hoja de modelo de «{}» ({} vistas, con las líneas de modelo) está en la capa «{}» (al fondo, para calcar) · Ctrl+Z la saca": "The model sheet of «{}» ({} views, with the model lines) is in layer «{}» (at the bottom, for tracing) · Ctrl+Z removes it"
+ "La hoja de modelo de «{}» ({} vistas, con las líneas de modelo) está en la capa «{}» (al fondo, para calcar) · Ctrl+Z la saca": "The model sheet of «{}» ({} views, with the model lines) is in layer «{}» (at the bottom, for tracing) · Ctrl+Z removes it",
+ "Mostrar guías": "Show guides",
+ "Bloquear guías": "Lock guides",
+ "Imantar a las guías": "Snap to guides",
+ "Borrar las guías": "Clear guides",
+ "Guía borrada · Ctrl+Z la vuelve": "Guide deleted · Ctrl+Z brings it back",
+ "Guía horizontal en y {} px · arrastrala para moverla, a la regla para borrarla · doble clic para escribir la posición": "Horizontal guide at y {} px · drag it to move it, onto the ruler to delete it · double-click to type the position",
+ "Guía vertical en x {} px · arrastrala para moverla, a la regla para borrarla · doble clic para escribir la posición": "Vertical guide at x {} px · drag it to move it, onto the ruler to delete it · double-click to type the position",
+ "Guías visibles": "Guides visible",
+ "Guías ocultas · Ctrl+Ñ las vuelve a mostrar": "Guides hidden · Ctrl+; shows them again",
+ "Guías bloqueadas: no se mueven ni se borran por accidente": "Guides locked: they won't move or get deleted by accident",
+ "Guías desbloqueadas": "Guides unlocked",
+ "Imantar a las guías: lo que movés y dibujás se pega a ellas": "Snap to guides: what you move and draw sticks to them",
+ "Sin imán de guías": "Guide snapping off",
+ "Guías borradas · Ctrl+Z las vuelve": "Guides cleared · Ctrl+Z brings them back",
+ "Posición de la guía (y, px)": "Guide position (y, px)",
+ "Posición de la guía (x, px)": "Guide position (x, px)",
+ "Reglas activas — arrastrá desde una regla para crear una guía (Ctrl+R oculta)": "Rulers on — drag from a ruler to create a guide (Ctrl+R hides them)"
 });

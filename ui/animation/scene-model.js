@@ -1297,6 +1297,10 @@
       this.palettes = (data.palettes || []).map((p) => new Palette(p));
       this.levels.forEach((l) => this.ensureLevelPalette(l));   // todo nivel NACE con su paleta (ver ensureLevelPalette)
       this.camera = clone(data.camera || { keys: {} });
+      // las GUÍAS de la regla (drawing/guias.js): {axis: "h"|"v", u} en unidades de la hoja
+      this.guias = (Array.isArray(data.guias) ? data.guias : [])
+        .filter((g) => g && (g.axis === "h" || g.axis === "v") && Number.isFinite(Number(g.u)))
+        .slice(0, 500).map((g) => ({ axis: g.axis, u: Number(g.u) }));
       this.composition = compositionData(data.composition);
       this.storyboard = storyboardData(data.storyboard);
       this.audio = clone(data.audio || []);
@@ -1973,7 +1977,8 @@
                palettes: this.palettes.map((p) => p.toJSON()),
                camera: this.camera, composition: clone(this.composition),
                storyboard: clone(this.storyboard), audio: this.audio,
-               rig: rigToJSON(this.rig), perspective: clone(this.perspective), revision: this.revision };
+               rig: rigToJSON(this.rig), perspective: clone(this.perspective), revision: this.revision,
+               guias: (this.guias || []).map((g) => ({ axis: g.axis, u: g.u })) };
     }
 
     /** Convierte el modelo VIEJO (`frames` = lista de archivos) al nuevo. Cada

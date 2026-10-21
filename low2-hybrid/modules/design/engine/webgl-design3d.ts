@@ -20,7 +20,8 @@
 import * as THREE from 'three';
 import { piezasDeCalle, pegarARed, estirarPuntas, franja, correr, MEDIDAS, type CalleRed, type TipoCalle } from './calles';
 import { ESTILO_BASE, type EstiloKit, type Pieza, type Categoria } from './biblioteca3d';
-import { MANIQUIES, maniquiValido, itemsDeManiqui, lineasDeModelo, partesDeManiqui, type Maniqui, type LineaModelo } from './maniqui3d';
+import { Personaje3D, personajeNuevo, personajeValido, cargarCuerpo, cargarPoses, cuerpoListo, posesDeFabrica, controlDeHueso, nombreControl, ladoOpuesto,
+  CONTROLES, type BaseCuerpo, type PersonajeDatos, type Proporciones, type ModoTaller, type PincelEscultura } from './personaje3d';
 import { Terreno, LADO as LADO_TERRENO, PINCEL_INICIAL, type PincelTerreno, type Parche } from './terreno3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -98,13 +99,21 @@ interface StrokeRecord {
    *  la malla (calzada, veredas, cordones, pintura) se arma con la red entera,
    *  porque los cruces dependen de las otras calles. Ver calles.ts. */
   calle?: TipoCalle;
-  /** TALLER DE PERSONAJE (maniqui3d.ts): la parte del maniquí (cabeza,
-   *  brazo-izq…). En un volumen del maniquí, cuál es; en un trazo, sobre qué
-   *  parte se dibujó: la sigue cuando cambian las proporciones (o la pose). */
+  /** TALLER DE PERSONAJE (personaje3d.ts): en un trazo, el hueso del cuerpo
+   *  sobre el que se dibujó (Head, lowerarm_l…): lo sigue al posar y al cambiar
+   *  las proporciones. (En la 3.37 era la parte del maniquí de cápsulas.) */
   parte?: string;
   /** true = es un volumen DEL MANIQUÍ (no un trazo del personaje). */
   maniqui?: boolean;
+  /** UN PERSONAJE (personaje3d.ts): sus datos siempre; el cuerpo, cuando cargó */
+  personajeDatos?: PersonajeDatos;
+  personaje?: Personaje3D | null;
+  /** su espejo ya es otro trazo (el taller espeja sobre el cuerpo): no se le suma el del mundo */
+  sinEspejo?: boolean;
 }
+
+/** Dónde estaba cada hueso con trazos pegados (y cada trazo) antes de un cambio. */
+type FotoHuesos = Map<StrokeRecord, { hueso: THREE.Bone; b0: THREE.Matrix4; m0: THREE.Matrix4 }>;
 
 interface Command {
   undo: () => void;
@@ -132,6 +141,8 @@ interface HitInfo {
   cuerpos?: THREE.Object3D[];
   /** el punto salió de la malla de apoyo bloqueada, no de su plano infinito */
   enMalla?: boolean;
+  /** sobre la piel de un personaje: el hueso que la mueve */
+  hueso?: string;
 }
 
 /** Hasta dónde llega el apoyo de un trazo (la lógica de Feather: se dibuja
@@ -176,6 +187,9 @@ export interface Low3DProject {
     /** la parte del maniquí (ver StrokeRecord) */
     parte?: string;
     maniqui?: boolean;
+    /** un personaje del taller (personaje3d.ts) */
+    personaje?: PersonajeDatos;
+    sinEspejo?: boolean;
   }>;
   /** El relieve (terreno3d.ts: centímetros Int16 en base64; vacío = plano). */
   terreno?: string;
@@ -291,7 +305,7 @@ export class WebGLDesign3D {
   private static readonly LIQUIFY_STRENGTH = 0.18;
 
   // interacción
-  private mode: 'idle' | 'draw' | 'move' | 'lasso' | 'point-drag' | 'pivot-drag' | 'liquify-drag' | 'joystick' = 'idle';
+  private mode: 'idle' | 'draw' | 'move' | 'lasso' | 'point-drag' | 'pivot-drag' | 'liquify-drag' | 'joystick' | 'taller' = 'idle';
   private current: {
     points: THREE.Vector3[];
     pressures: number[];
@@ -328,6 +342,8 @@ export class WebGLDesign3D {
     cuerpos?: THREE.Object3D[];
     /** La parte del maniquí sobre la que se dibuja (taller de personaje). */
     parte?: string;
+    /** con espejo en el taller: dónde cae el trazo espejado (ver espejoEnTaller) */
+    espejo?: THREE.Matrix4;
   } | null = null;
   private downScreen = new THREE.Vector2();
   /** RECTAS A LOS EJES (v3.29.3), como el «Draw Shape» de Feather: al SOLTAR,
@@ -1898,7 +1914,7 @@ export class WebGLDesign3D {
     } else if (estricto) {
       // en ortogonal, los CUERPOS de los elementos (volúmenes) sí son apoyo:
       // son superficies, no tubos de tinta
-      for (const r of this.strokes) if (r.solid && r.object.visible) r.object.traverse((o) => { if ((o as THREE.Mesh).isMesh) targets.push(o); });
+      for (const r of this.strokes) if ((r.solid || r.personajeDatos) && r.object.visible) r.object.traverse((o) => { if ((o as THREE.Mesh).isMesh) targets.push(o); });
     }
     // las CAJAS son apoyo en todas las vistas (en ortogonal, sólo las caras de
     // frente a la vista: la vista sigue mandando el plano)
@@ -1923,13 +1939,14 @@ export class WebGLDesign3D {
         // el CUERPO de un elemento (volumen o relleno) es una superficie, como
         // una guía: el trazo lo recorre (con todas las piezas macizas de su
         // grupo: de la pared se pasa al techo) y no sale de él
-        if (recTocado && (recTocado.solid || recTocado.fill)) {
-          const del = recTocado.groupId
+        if (recTocado && (recTocado.solid || recTocado.fill || recTocado.personajeDatos)) {
+          const del = recTocado.groupId && !recTocado.personajeDatos
             ? this.strokes.filter((s) => s.groupId === recTocado.groupId && (s.solid || s.fill) && s.object.visible)
             : [recTocado];
           const n = normal.clone();
           if (n.dot(this.raycaster.ray.direction) > 0) n.negate();
-          return { point: h.point.clone(), normal: n, target: recTocado.object, kind: 'surface', cuerpos: del.map((s) => s.object) };
+          const hueso = recTocado.personaje?.huesoDeCara(h.object, h.face) ?? undefined;
+          return { point: h.point.clone(), normal: n, target: recTocado.object, kind: 'surface', cuerpos: del.map((s) => s.object), hueso };
         }
         const isGuide = !!this.guides.find((g) => g.mesh === target || g.mesh === h.object);
         // arrancar encima de un trazo: su PLANO DE APOYO, no la normal del tubo
@@ -2234,8 +2251,10 @@ export class WebGLDesign3D {
     while (obj && !obj.userData.strokeId) obj = obj.parent;
     if (!obj) return null;
     const rec = this.strokes.find((s) => s.id === obj!.userData.strokeId) ?? null;
-    // en el taller el maniquí es el soporte: la goma y la flecha no lo agarran
-    if (rec?.maniqui && this.taller) return null;
+    // en el taller el cuerpo es el soporte: la goma y la flecha no lo agarran
+    if ((rec?.maniqui || rec?.personajeDatos) && this.taller) return null;
+    // un personaje colocado se mueve o se borra entero (no tiene puntos que editar)
+    if (rec?.personajeDatos && this.tool !== 'move' && this.tool !== 'eraser') return null;
     // los trazos de una capa bloqueada son inertes: no se seleccionan ni se
     // agarran para mover/liquify/editar.
     return rec && this.isLayerLocked(rec.layerId) ? null : rec;
@@ -2321,6 +2340,8 @@ export class WebGLDesign3D {
     this.setPointerFromEvent(e);
     this.updateCursor(e);
     this.downScreen.set(...this.screenOf(e));
+    // en el taller, POSAR y ESCULPIR son gestos sobre el cuerpo, no dibujo
+    if (this.taller && this.taller.modo !== 'dibujar') { this.tallerApretar(e); return; }
 
     if (this.tool === 'pencil' || this.tool === 'guide' || this.tool === 'pencil-free') {
       this.activePointerId = e.pointerId;
@@ -2399,6 +2420,8 @@ export class WebGLDesign3D {
     if (this.mode === 'draw' && e.pointerType === 'pen' && e.pressure === 0 && e.buttons === 0) return;
     this.updateCursor(e);
     this.setPointerFromEvent(e);
+    if (this.mode === 'taller') { this.tallerMover(); return; }
+    if (this.mode === 'idle' && this.taller && this.taller.modo !== 'dibujar') this.tallerEncima();
     if (this.cajaGesto) this.cajaMover(e);
     else if (this.calleGesto) this.calleVista();
     else if (this.sembrado) this.sembrarMover();
@@ -2463,6 +2486,7 @@ export class WebGLDesign3D {
     else if (this.mode === 'pivot-drag') { this.endPivotDrag(); }
     else if (this.mode === 'liquify-drag') { this.endLiquify(); }
     else if (this.mode === 'joystick') { this.joyEndDrag(); }
+    else if (this.mode === 'taller') { this.tallerSoltar(); }
     this.mode = 'idle';
     this.controls.enabled = true;
     try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* noop */ }
@@ -2528,7 +2552,12 @@ export class WebGLDesign3D {
   private onKeyDown = (e: KeyboardEvent): void => {
     const ctrl = e.ctrlKey || e.metaKey;
     const target = document.activeElement;
-    const typing = target instanceof HTMLElement && !!target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]');
+    // una lista, un deslizador o una casilla no tienen Ctrl+Z propio: ahí vale el
+    // del estudio (elegir una pose de la lista y Ctrl+Z no deshacía nada)
+    const sinUndoPropio = target instanceof HTMLElement && (target.tagName === 'SELECT'
+      || (target.tagName === 'INPUT' && /^(range|checkbox|radio|color|button)$/i.test((target as HTMLInputElement).type)));
+    const typing = target instanceof HTMLElement && !!target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')
+      && !(sinUndoPropio && ctrl && /^[zy]$/i.test(e.key));
     // Los campos conservan Supr, Backspace, copiar/pegar y su propio Undo.
     if(typing || e.defaultPrevented)return;
     if(e.key==='Home'){e.preventDefault();this.frameContent();return;}
@@ -3094,6 +3123,7 @@ export class WebGLDesign3D {
       drawTarget: this.tool === 'pencil' && surf && surf.kind !== 'stroke' && surf.kind !== 'box' ? surf.target : undefined,
       cuerpos: this.tool === 'pencil' ? surf?.cuerpos : undefined,
       parte: this.parteDelApoyo(surf),
+      espejo: kind === 'stroke' ? this.espejoEnTaller(this.parteDelApoyo(surf)) : undefined,
       limite: estricto && kind === 'stroke' && surf ? this.limiteDelApoyo(surf) : undefined,
       ejes: hit.ejes ? [hit.ejes[0].clone(), hit.ejes[1].clone()] : undefined,
       // PLANO BLOQUEADO para todo el trazo. Si el soporte no traía plano
@@ -3402,7 +3432,8 @@ export class WebGLDesign3D {
   private updatePreview(): void {
     if (!this.current) return;
     this.current.line?.geometry.setFromPoints(this.current.points);
-    if (this.current.mirrorLine) this.current.mirrorLine.geometry.setFromPoints(this.mirroredVariants(this.current.points)[0] || []);
+    const esp = this.current.espejo;
+    if (this.current.mirrorLine) this.current.mirrorLine.geometry.setFromPoints(esp ? this.current.points.map((q) => q.clone().applyMatrix4(esp)) : this.mirroredVariants(this.current.points)[0] || []);
   }
 
   private strokeRadius(size: number = this.brush.size): number {
@@ -4191,11 +4222,12 @@ export class WebGLDesign3D {
     if (guardar) {
       pieza = this.elementoDeLaMesa();
       if (!pieza) { this.avisar('La mesa está vacía: dibujá el elemento antes de guardarlo (o «Cancelar»)'); return { ok: false, pieza: null }; }
-      if (this.taller) { pieza.maniqui = { ...this.taller.m }; pieza.categoria = 'personaje'; }
+      if (this.taller) pieza.categoria = 'personaje';
     }
     const eraTaller = !!this.taller;
-    this.taller = null;
+    this.taller = null; this.gestoTaller = null; this.cambioVivo = null;
     if (this.lineasEl) this.lineasEl.style.display = 'none';
+    if (this.anilloPincel) this.anilloPincel.visible = false;
     this.calleCancelar(); this.aguaCancelar(); this.cajaCancelar();
     this.edicion = null;
     // fuera lo del elemento; vuelve TU escena con sus mismos objetos
@@ -4224,109 +4256,340 @@ export class WebGLDesign3D {
     return { ok: true, pieza };
   }
 
-  // ══ EL TALLER DE PERSONAJE (maniqui3d.ts) ══════════════════════════════════
+  // ══ EL TALLER DE PERSONAJE (personaje3d.ts) ═══════════════════════════════
   // Mauro: «un módulo de diseño de personaje con todas las herramientas al
-  // mejor estilo Grease Pencil… una biblioteca de maniquíes distintos que
-  // también sirva para la composición de fondos». Sin IA: el personaje se
-  // dibuja SOBRE un maniquí y se gira de verdad. Es el editor de elementos
-  // (la escena espera afuera, intacta) con el maniquí, sus proporciones, el
-  // giradiscos, las líneas de modelo y la hoja de modelo para el 2D. Lo que se
-  // guarda es un elemento de la categoría Personajes con sus proporciones:
-  // se reabre en el taller o se coloca en la escena como figura.
-  private taller: { m: Maniqui; lineas: boolean; vista: number } | null = null;
+  // mejor estilo Grease Pencil», «quiero algo mucho más estilizado y realista»
+  // y «tengo que poder modelarlo también». Es el editor de elementos (la escena
+  // espera afuera, intacta) con UN personaje —cuerpos de Quaternius (CC0)— y
+  // tres modos:
+  //   DIBUJAR sobre él: cada trazo se pega al hueso que toca y lo sigue;
+  //   POSAR: se agarra una parte y se arrastra, gira desde su articulación;
+  //   ESCULPIR la piel con pinceles (tirar, inflar, desinflar, suavizar, aplanar).
+  // Las proporciones van por el esqueleto. Lo que se guarda es un elemento de la
+  // categoría Personajes: se reabre en el taller o se coloca en un fondo.
+  private taller: {
+    rec: StrokeRecord | null; lineas: boolean; vista: number; modo: ModoTaller;
+    control: string | null; encima: string | null; fantasma: boolean;
+    pincel: { tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean };
+  } | null = null;
   private lineasEl: HTMLCanvasElement | null = null;
-  enTaller(): { m: Maniqui; lineas: boolean; vista: number } | null {
-    return this.taller ? { m: { ...this.taller.m }, lineas: this.taller.lineas, vista: this.taller.vista } : null;
+  private anilloPincel: THREE.Mesh | null = null;
+  private gestoTaller: { tipo: 'posar'; control: string; plano: THREE.Plane; base: FotoHuesos; antes: PersonajeDatos }
+    | { tipo: 'esculpir'; antes: PersonajeDatos; ultimo: THREE.Vector3 | null; plano: THREE.Plane } | null = null;
+  private cambioVivo: { antes: PersonajeDatos; base: FotoHuesos } | null = null;
+  private cargasPersonajes = new Set<Promise<unknown>>();
+
+  /** El estado para el panel (liviano: se pide en cada cambio). */
+  enTaller(): {
+    lineas: boolean; vista: number; modo: ModoTaller; control: string | null; nombreControl: string; fantasma: boolean;
+    pincel: { tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean };
+    listo: boolean; base: BaseCuerpo; prop: Proporciones; pies: boolean; color: string; alto: number;
+  } | null {
+    const t = this.taller; if (!t) return null;
+    const inst = this.personajeDelTaller(), d = inst?.datos ?? t.rec?.personajeDatos ?? personajeNuevo();
+    return { lineas: t.lineas, vista: t.vista, modo: t.modo, control: t.control, nombreControl: t.control ? nombreControl(t.control) : '',
+      fantasma: t.fantasma, pincel: { ...t.pincel }, listo: !!inst, base: d.base, prop: { ...d.prop }, pies: d.pies, color: d.color, alto: inst ? inst.alto() : 0 };
   }
-  /** Abre el taller con un personaje de la biblioteca (o uno nuevo con esas proporciones). */
-  abrirTaller(p: Pieza | null, nombre: string, m?: Maniqui): boolean {
-    const maniqui = maniquiValido(p?.maniqui ?? m ?? MANIQUIES[3].m);
+  /** El personaje del taller (null mientras se carga su cuerpo). */
+  personajeDelTaller(): Personaje3D | null { return this.taller?.rec?.personaje ?? null; }
+  /** Todos los cuerpos pedidos ya cargados (para las pruebas y el guardado). */
+  personajesListos(): Promise<void> { return Promise.all([...this.cargasPersonajes]).then(() => undefined); }
+
+  /** Abre el taller con un personaje de la biblioteca (o uno nuevo con ese cuerpo). */
+  abrirTaller(p: Pieza | null, nombre: string, base: BaseCuerpo = 'hombre'): boolean {
     if (!this.editarElemento(p, nombre || p?.nombre || 'Personaje', 'personaje')) return false;
-    this.taller = { m: maniqui, lineas: true, vista: 25 };
-    if (!this.strokes.some((r) => r.maniqui)) this.ponerManiqui(maniqui);
+    // el maniquí de cápsulas de la 3.37 no vuelve: el cuerpo ahora es otro
+    for (const r of this.strokes.filter((s) => s.maniqui)) this.removeStrokeRecord(r);
+    let rec = this.strokes.find((s) => s.personajeDatos) ?? null;
+    if (!rec) {
+      rec = this.registroDeItem({ ...WebGLDesign3D.itemPersonaje({ ...personajeNuevo(base), poseFabrica: 'parado' }), id: '', layerId: this.activeLayerId() });
+      if (rec) this.addStrokeRecord(rec);
+    }
+    this.taller = { rec, lineas: false, vista: 25, modo: 'dibujar', control: null, encima: null, fantasma: false,
+      pincel: { tipo: 'inflar', radio: 0.06, fuerza: 0.5, simetria: true } };
     this.undoStack = []; this.redoStack = [];
     this.vistaPersonaje(25);
+    this.publishObjects();
     window.dispatchEvent(new Event('low3d:taller'));
     window.dispatchEvent(new Event('low3d:history'));
-    this.avisar('Taller de personaje: dibujá sobre el maniquí (los trazos se pegan a cada parte y la siguen) · las vistas giran el personaje · «Guardar» lo lleva a la biblioteca');
+    this.avisar('Taller de personaje: «Dibujar» pega los trazos al cuerpo · «Posar» agarra una parte y la mueve · «Esculpir» modela la piel · «Guardar» lo lleva a la biblioteca');
     return true;
   }
-  /** Las proporciones nuevas (un paso de Ctrl+Z). Los trazos dibujados sobre
-   *  una parte la siguen: se corren con su articulación y se estiran con ella. */
-  setManiqui(m: Partial<Maniqui>): boolean {
-    if (!this.taller) return false;
-    const antes = { ...this.taller.m }, despues = maniquiValido({ ...antes, ...m });
-    if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
-    this.ponerManiqui(despues);
-    this.pushCmd({ undo: () => this.ponerManiqui(antes), redo: () => this.ponerManiqui(despues) });
-    return true;
-  }
-  /** Mientras se arrastra un deslizador: se ve al instante, sin pasos de Ctrl+Z. */
-  verManiqui(m: Partial<Maniqui>): void {
-    if (!this.taller) return;
-    const nuevo = maniquiValido({ ...this.taller.m, ...m });
-    if (JSON.stringify(nuevo) !== JSON.stringify(this.taller.m)) this.ponerManiqui(nuevo);
-  }
-  /** Al soltar el deslizador: UN paso de Ctrl+Z desde como estaba antes de arrastrar. */
-  confirmarManiqui(antes: Maniqui): void {
-    if (!this.taller) return;
-    const a = maniquiValido(antes), d = { ...this.taller.m };
-    if (JSON.stringify(a) === JSON.stringify(d)) return;
-    this.pushCmd({ undo: () => this.ponerManiqui(a), redo: () => this.ponerManiqui(d) });
-  }
-  /** El maniquí transparente, para ver el dibujo solo (sigue siendo apoyo). */
-  setManiquiFantasma(on: boolean): void {
-    for (const r of this.strokes) if (r.maniqui) r.object.traverse((o) => {
-      const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
-      if (!mat || !(o as THREE.Mesh).isMesh) return;
-      mat.transparent = on || r.baseOpacity < 1; mat.opacity = on ? 0.22 : 1; mat.depthWrite = !on; mat.needsUpdate = true;
-    });
-    if (this.taller) (this.taller as { fantasma?: boolean }).fantasma = on;
-  }
-  private ponerManiqui(m: Maniqui): void {
-    if (!this.taller) return;
-    const items = itemsDeManiqui(m);
-    const partes = new Map(this.strokes.filter((r) => r.maniqui && r.parte).map((r) => [r.parte!, r] as [string, StrokeRecord]));
-    for (const it of items) {
-      const v = partes.get(it.parte!);
-      const nuevos = it.points.map((q) => new THREE.Vector3(q[0], q[1], q[2]));
-      if (!v) {
-        const rec = this.registroDeItem({ ...it, id: '', layerId: this.activeLayerId() });
-        if (rec) this.addStrokeRecord(rec);
-        continue;
-      }
-      const vieja = v.object.position.clone(), nueva = new THREE.Vector3().fromArray(it.position);
-      const s0 = new THREE.Box3().setFromPoints(v.points).getSize(new THREE.Vector3());
-      const s1 = new THREE.Box3().setFromPoints(nuevos).getSize(new THREE.Vector3());
-      const esc = new THREE.Vector3(s0.x > 1e-6 ? s1.x / s0.x : 1, s0.y > 1e-6 ? s1.y / s0.y : 1, s0.z > 1e-6 ? s1.z / s0.z : 1);
-      // los trazos de esa parte la siguen: la articulación se corre y la forma se estira desde ella
-      const M = new THREE.Matrix4().makeTranslation(nueva.x, nueva.y, nueva.z)
-        .multiply(new THREE.Matrix4().makeScale(esc.x, esc.y, esc.z))
-        .multiply(new THREE.Matrix4().makeTranslation(-vieja.x, -vieja.y, -vieja.z));
-      for (const r of this.strokes) if (!r.maniqui && r.parte === it.parte) { r.object.applyMatrix4(M); r.object.updateMatrixWorld(true); }
-      v.points = nuevos; v.pressures = nuevos.map(() => 1);
-      v.object.position.copy(nueva);
-      v.brush = { ...v.brush, color: m.color };
-      this.rebuildStrokeMesh(v);
-    }
-    this.taller.m = m;
-    this.applyLayerStyles(); this.publishObjects();
-    if ((this.taller as { fantasma?: boolean }).fantasma) this.setManiquiFantasma(true);
+  setModoTaller(m: ModoTaller): void {
+    const t = this.taller; if (!t) return;
+    t.modo = m; t.encima = null;
+    if (m !== 'posar') t.control = null;
+    if (this.anilloPincel) this.anilloPincel.visible = false;
     window.dispatchEvent(new Event('low3d:taller'));
   }
-  /** La parte del maniquí que hay bajo el apoyo de un trazo: el volumen de la
-   *  parte o un trazo ya pegado a ella (dibujar el pelo sobre la cabeza). */
+  setPincelEscultura(p: Partial<{ tipo: PincelEscultura; radio: number; fuerza: number; simetria: boolean }>): void {
+    const t = this.taller; if (!t) return;
+    const n = { ...t.pincel, ...p };
+    n.radio = Math.max(0.005, Math.min(0.6, Number(n.radio) || t.pincel.radio));
+    n.fuerza = Math.max(0.02, Math.min(1, Number(n.fuerza) || t.pincel.fuerza));
+    t.pincel = n;
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  /** Elegir qué articulación se ajusta con los botones (sin arrastrar). */
+  setControlTaller(c: string | null): void { if (this.taller) { this.taller.control = c; window.dispatchEvent(new Event('low3d:taller')); } }
+
+  /* ── los trazos pegados siguen a sus huesos ── */
+  /** Dónde está cada hueso con trazos pegados (y cada uno de esos trazos). */
+  private fotoHuesos(): FotoHuesos {
+    const inst = this.personajeDelTaller(), out: FotoHuesos = new Map();
+    if (!inst) return out;
+    inst.raiz.updateMatrixWorld(true);
+    for (const r of this.strokes) {
+      if (r.personajeDatos || !r.parte) continue;
+      const b = inst.huesos.get(r.parte); if (!b) continue;
+      r.object.updateMatrixWorld(true);
+      out.set(r, { hueso: b, b0: b.matrixWorld.clone(), m0: r.object.matrixWorld.clone() });
+    }
+    return out;
+  }
+  /** Cada trazo pegado va adonde fue su hueso (desde la foto: sin acumular error). */
+  private seguirHuesos(foto: FotoHuesos): void {
+    const M = new THREE.Matrix4(), inv = new THREE.Matrix4();
+    for (const [r, f] of foto) {
+      M.copy(f.hueso.matrixWorld).multiply(inv.copy(f.b0).invert()).multiply(f.m0);
+      if (r.object.parent) { r.object.parent.updateMatrixWorld(true); M.premultiply(inv.copy(r.object.parent.matrixWorld).invert()); }
+      M.decompose(r.object.position, r.object.quaternion, r.object.scale);
+      r.object.updateMatrixWorld(true);
+    }
+  }
+  /** Un cambio del personaje = un paso de Ctrl+Z; los trazos pegados lo siguen. */
+  private cambiarPersonaje(hacer: (p: Personaje3D) => void): boolean {
+    const inst = this.personajeDelTaller(); if (!inst) return false;
+    const antes = inst.aDatos(), foto = this.fotoHuesos();
+    hacer(inst);
+    this.seguirHuesos(foto);
+    const despues = inst.aDatos();
+    window.dispatchEvent(new Event('low3d:taller'));
+    if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+    this.pushCmd({ undo: () => this.volverPersonaje(antes), redo: () => this.volverPersonaje(despues) });
+    return true;
+  }
+  private volverPersonaje(d: PersonajeDatos): void {
+    const rec = this.taller?.rec, inst = this.personajeDelTaller();
+    if (!rec || !inst) return;
+    const foto = this.fotoHuesos();
+    if (d.base !== inst.datos.base) { this.reemplazarCuerpo(rec, d); }
+    else inst.ponerDatos(d);
+    this.seguirHuesos(foto);
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  /** Otro cuerpo (hombre, mujer, maniquí) con la misma pose y proporciones. */
+  private reemplazarCuerpo(rec: StrokeRecord, d: PersonajeDatos): void {
+    const viejo = rec.personaje;
+    if (viejo) { rec.object.remove(viejo.raiz); viejo.liberar(); }
+    rec.personaje = null; rec.personajeDatos = personajeValido(d);
+    this.ponerCuerpo(rec);
+  }
+  setProporciones(p: Partial<Proporciones>): boolean { return this.cambiarPersonaje((x) => x.ponerProp(p)); }
+  /** Mientras se arrastra un deslizador: se ve al instante, sin pasos de Ctrl+Z. */
+  verProporciones(p: Partial<Proporciones>): void {
+    const inst = this.personajeDelTaller(); if (!inst) return;
+    if (!this.cambioVivo) this.cambioVivo = { antes: inst.aDatos(), base: this.fotoHuesos() };
+    inst.ponerProp(p); this.seguirHuesos(this.cambioVivo.base);
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  /** Al soltar el deslizador: UN paso de Ctrl+Z desde como estaba. */
+  confirmarProporciones(): void {
+    const v = this.cambioVivo, inst = this.personajeDelTaller(); this.cambioVivo = null;
+    if (!v || !inst) return;
+    const antes = v.antes, despues = inst.aDatos();
+    if (JSON.stringify(antes) !== JSON.stringify(despues)) this.pushCmd({ undo: () => this.volverPersonaje(antes), redo: () => this.volverPersonaje(despues) });
+  }
+  ponerPose(id: string | null): boolean {
+    const p = id ? posesDeFabrica().find((x) => x.id === id) ?? null : null;
+    if (id && !p) return false;
+    return this.cambiarPersonaje((x) => x.ponerPoseDeFabrica(p));
+  }
+  posesDelTaller(): { id: string; nombre: string }[] { return posesDeFabrica().map((p) => ({ id: p.id, nombre: p.nombre })); }
+  enderezarControl(): boolean { const c = this.taller?.control; return !!c && this.cambiarPersonaje((x) => x.enderezar(c)); }
+  copiarControlAlOtroLado(): boolean { const c = this.taller?.control; return !!c && this.cambiarPersonaje((x) => x.copiarAlOtroLado(c)); }
+  espejarPose(): boolean { return this.cambiarPersonaje((x) => x.espejarPose()); }
+  setPiesEnElPiso(on: boolean): boolean { return this.cambiarPersonaje((x) => x.ponerPies(on)); }
+  setColorPersonaje(c: string): boolean { return this.cambiarPersonaje((x) => x.ponerColor(c)); }
+  sinEscultura(): boolean { return this.cambiarPersonaje((x) => x.sinEscultura()); }
+  /** Cambiar de cuerpo: la escultura no pasa (es de otra piel). Un paso de Ctrl+Z. */
+  cambiarCuerpo(base: BaseCuerpo): boolean {
+    const rec = this.taller?.rec, inst = this.personajeDelTaller();
+    if (!rec || !inst || inst.datos.base === base) return false;
+    const antes = inst.aDatos(), despues = { ...antes, base, escultura: undefined };
+    const foto = this.fotoHuesos();
+    const cambiar = () => {
+      this.reemplazarCuerpo(rec, despues);
+      this.seguirHuesos(foto);
+      this.pushCmd({ undo: () => this.volverPersonaje(antes), redo: () => this.volverPersonaje(despues) });
+      window.dispatchEvent(new Event('low3d:taller'));
+    };
+    if (cuerpoListo(base)) cambiar();
+    else { const p = cargarCuerpo(base).then(cambiar, () => this.avisar('No se pudo cargar ese cuerpo')); this.cargasPersonajes.add(p); p.finally(() => this.cargasPersonajes.delete(p)); }
+    return true;
+  }
+  /** El personaje transparente, para ver el dibujo solo (sigue siendo apoyo). */
+  setPersonajeFantasma(on: boolean): void {
+    const t = this.taller, inst = this.personajeDelTaller(); if (!t) return;
+    t.fantasma = on;
+    if (inst) for (const m of inst.mallas) {
+      const mat = m.material as THREE.MeshStandardMaterial;
+      if (on) mat.userData.opBase = 0.22; else delete mat.userData.opBase;
+      mat.depthWrite = !on;
+    }
+    this.applyLayerStyles();
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+
+  /** El cuerpo de un registro de personaje: ya, si está cargado; si no, cuando llegue. */
+  private ponerCuerpo(rec: StrokeRecord): void {
+    const d = rec.personajeDatos; if (!d) return;
+    const armar = () => {
+      if (rec.personaje || rec.personajeDatos !== d) return;
+      const inst = new Personaje3D(d);
+      rec.personaje = inst; rec.personajeDatos = inst.datos;
+      rec.object.add(inst.raiz);
+      if (this.taller?.fantasma && this.taller.rec === rec) this.setPersonajeFantasma(true);
+      this.applyLayerStyles();
+      if (this.taller?.rec === rec) { this.vistaPersonaje(this.taller.vista); window.dispatchEvent(new Event('low3d:taller')); }
+    };
+    if (cuerpoListo(d.base) && (!d.poseFabrica || posesDeFabrica().length)) { armar(); return; }
+    const p = Promise.all([cargarCuerpo(d.base), cargarPoses()]).then(armar, () => this.avisar('No se pudo cargar el cuerpo del personaje'));
+    this.cargasPersonajes.add(p); p.finally(() => this.cargasPersonajes.delete(p));
+  }
+  /** Un personaje como objeto de proyecto/pieza (los puntos no se usan). */
+  static itemPersonaje(d: PersonajeDatos): ItemProyecto {
+    return { id: '', layerId: '', points: [[0, 0, 0], [0, 1, 0]], pressures: [1, 1], baseOpacity: 1, position: [0, 0, 0], quaternion: [0, 0, 0, 1], scale: [1, 1, 1], personaje: d };
+  }
+
+  /* ── posar y esculpir con el mouse ── */
+  private tocarPersonaje(): THREE.Intersection | null {
+    const inst = this.personajeDelTaller(); if (!inst) return null;
+    this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    return this.raycaster.intersectObjects(inst.mallas, false)[0] ?? null;
+  }
+  private tallerApretar(e: PointerEvent): void {
+    const t = this.taller, inst = this.personajeDelTaller();
+    if (!t || !inst) return;
+    const h = this.tocarPersonaje();
+    if (!h) { if (t.modo === 'posar' && t.control) { t.control = null; window.dispatchEvent(new Event('low3d:taller')); } return; }
+    const haciaCam = (this.camera as THREE.Camera).getWorldDirection(new THREE.Vector3()).negate();
+    if (t.modo === 'posar') {
+      const hueso = inst.huesoDeCara(h.object, h.face), c = hueso ? controlDeHueso(hueso) : null, tip = c ? inst.punta(c) : null;
+      if (!c || !tip) return;
+      t.control = c;
+      this.gestoTaller = { tipo: 'posar', control: c, plano: new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam, tip), base: this.fotoHuesos(), antes: inst.aDatos() };
+    } else {
+      this.gestoTaller = { tipo: 'esculpir', antes: inst.aDatos(), ultimo: h.point.clone(), plano: new THREE.Plane().setFromNormalAndCoplanarPoint(haciaCam, h.point) };
+      if (t.pincel.tipo === 'tirar') inst.empezarTirar(h.point, t.pincel.radio);
+      else this.toquePincel(inst, h);
+    }
+    this.activePointerId = e.pointerId;
+    this.mode = 'taller';
+    this.controls.enabled = false;
+    try { this.canvas.setPointerCapture(e.pointerId); } catch { /* noop */ }
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  private toquePincel(inst: Personaje3D, h: THREE.Intersection): void {
+    const p = this.taller!.pincel;
+    const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize() : new THREE.Vector3(0, 0, 1);
+    if (p.tipo === 'inflar' || p.tipo === 'desinflar') inst.inflar(h.point, p.radio, p.fuerza, p.tipo === 'inflar' ? 1 : -1, p.simetria);
+    else if (p.tipo === 'suavizar') inst.suavizar(h.point, p.radio, p.fuerza, p.simetria);
+    else if (p.tipo === 'aplanar') inst.aplanar(h.point, n, p.radio, p.fuerza, p.simetria);
+    this.moverAnillo(h);
+  }
+  private tallerMover(): void {
+    const g = this.gestoTaller, inst = this.personajeDelTaller(), t = this.taller;
+    if (!g || !inst || !t) return;
+    this.raycaster.setFromCamera(this.pointer, this.camera as THREE.Camera);
+    if (g.tipo === 'posar') {
+      const p = new THREE.Vector3();
+      if (!this.raycaster.ray.intersectPlane(g.plano, p)) return;
+      inst.girarHacia(g.control, p, this.raycaster.ray);
+      this.seguirHuesos(g.base);
+      window.dispatchEvent(new Event('low3d:taller'));
+      return;
+    }
+    if (t.pincel.tipo === 'tirar') {
+      const p = new THREE.Vector3();
+      if (!this.raycaster.ray.intersectPlane(g.plano, p) || !g.ultimo) return;
+      const d = p.clone().sub(g.ultimo);
+      if (d.lengthSq() < 1e-12) return;
+      inst.tirar(d, t.pincel.simetria);
+      g.ultimo = p;
+      return;
+    }
+    const h = this.tocarPersonaje();
+    if (!h) return;
+    if (g.ultimo && h.point.distanceTo(g.ultimo) < t.pincel.radio * 0.3) { this.moverAnillo(h); return; }
+    g.ultimo = h.point.clone();
+    this.toquePincel(inst, h);
+  }
+  private tallerSoltar(): void {
+    const g = this.gestoTaller, inst = this.personajeDelTaller();
+    this.gestoTaller = null;
+    if (!g || !inst) return;
+    if (g.tipo === 'esculpir') inst.terminarTirar();
+    const antes = g.antes, despues = inst.aDatos();
+    if (JSON.stringify(antes) !== JSON.stringify(despues)) this.pushCmd({ undo: () => this.volverPersonaje(antes), redo: () => this.volverPersonaje(despues) });
+    window.dispatchEvent(new Event('low3d:taller'));
+  }
+  /** Sin apretar: en Posar se marca la parte que se va a agarrar; en Esculpir,
+   *  el anillo del pincel sobre la piel (cada 40 ms: el rayo recorre la piel). */
+  private encimaTimer = 0;
+  private tallerEncima(): void {
+    if (this.encimaTimer) return;
+    this.encimaTimer = window.setTimeout(() => {
+      this.encimaTimer = 0;
+      const t = this.taller, inst = this.personajeDelTaller();
+      if (!t || !inst || this.mode !== 'idle') return;
+      const h = this.tocarPersonaje();
+      if (t.modo === 'posar') {
+        const hueso = h ? inst.huesoDeCara(h.object, h.face) : null;
+        t.encima = hueso ? controlDeHueso(hueso) : null;
+        this.canvas.style.cursor = t.encima ? 'grab' : '';
+      } else if (t.modo === 'esculpir') {
+        if (h) this.moverAnillo(h); else if (this.anilloPincel) this.anilloPincel.visible = false;
+      }
+    }, 40);
+  }
+  private moverAnillo(h: THREE.Intersection): void {
+    const t = this.taller; if (!t) return;
+    if (!this.anilloPincel) {
+      this.anilloPincel = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48),
+        new THREE.MeshBasicMaterial({ color: 0xf0450e, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }));
+      this.anilloPincel.renderOrder = 20;
+      this.scene.add(this.anilloPincel);
+    }
+    const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize() : new THREE.Vector3(0, 0, 1);
+    this.anilloPincel.position.copy(h.point).addScaledVector(n, 0.002);
+    this.anilloPincel.lookAt(h.point.clone().add(n));
+    this.anilloPincel.scale.setScalar(t.pincel.radio);
+    this.anilloPincel.visible = t.modo === 'esculpir';
+  }
+  /** Con espejo (X) en el taller, un trazo sobre una parte cae espejado sobre
+   *  la parte del otro lado del CUERPO (no del mundo): sigue a la pose. */
+  private espejoEnTaller(parte: string | undefined): THREE.Matrix4 | undefined {
+    if (!this.taller || !parte || !this.mirror.x) return undefined;
+    return this.personajeDelTaller()?.matrizEspejo(parte) ?? undefined;
+  }
+
+  /** La parte del cuerpo bajo el apoyo de un trazo: el hueso de la piel tocada,
+   *  o el de un trazo ya pegado (dibujar el pelo sobre la cabeza). */
   private parteDelApoyo(hit: HitInfo | null | undefined): string | undefined {
-    if (!this.taller || !hit?.target) return undefined;
+    if (!this.taller || !hit) return undefined;
+    if (hit.hueso) return hit.hueso;
+    if (!hit.target) return undefined;
     const rec = this.strokes.find((s) => s.object === hit.target || s.object === hit.target!.parent);
-    return rec?.parte;
+    return rec && !rec.personajeDatos ? rec.parte : undefined;
   }
   /** EL GIRADISCOS: la cámara gira alrededor del personaje (0 = frente, 90 =
    *  perfil, 180 = espalda), a la altura del medio del cuerpo, encuadrándolo. */
   vistaPersonaje(grados: number): void {
     if (!this.taller) return;
     if (this.view !== 'persp') this.setView('persp');
-    const alto = this.taller.m.alto, mira = new THREE.Vector3(0, alto * 0.52, 0);
+    const inst = this.personajeDelTaller();
+    const alto = inst ? inst.alto() : 1.8, mira = new THREE.Vector3(0, alto * 0.5, 0);
     const fov = ((this.perspCamera.fov || 45) * Math.PI) / 180;
     const dist = (alto * 0.8) / Math.tan(fov / 2);   // entero, de la cabeza a los pies, con aire
     const a = (grados * Math.PI) / 180;
@@ -4337,11 +4600,13 @@ export class WebGLDesign3D {
     window.dispatchEvent(new Event('low3d:view'));
   }
   setLineasModelo(on: boolean): void { if (this.taller) { this.taller.lineas = on; window.dispatchEvent(new Event('low3d:taller')); } }
-  lineasModelo(): LineaModelo[] { return this.taller ? lineasDeModelo(this.taller.m) : []; }
-  /** Las líneas de modelo sobre la vista: cada altura del maniquí proyectada,
-   *  de lado a lado, con su nombre (como en una hoja de modelo). */
+  lineasModelo(): { id: string; nombre: string; y: number }[] { return this.personajeDelTaller()?.alturas() ?? []; }
+  /** Encima de la vista: las LÍNEAS DE MODELO (cada altura del cuerpo de lado a
+   *  lado, con su nombre) y, en Posar, el ESQUELETO: un punto en cada
+   *  articulación que se agarra (la elegida en naranja). */
   private pintarLineasModelo(): void {
-    const ver = !!(this.taller && this.taller.lineas);
+    const t = this.taller, inst = this.personajeDelTaller();
+    const ver = !!(t && inst && (t.lineas || t.modo === 'posar'));
     if (!ver) { if (this.lineasEl) this.lineasEl.style.display = 'none'; return; }
     if (!this.lineasEl) {
       this.lineasEl = document.createElement('canvas');
@@ -4355,20 +4620,42 @@ export class WebGLDesign3D {
     const g = c.getContext('2d'); if (!g) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, Hh);
     const cam = this.camera as THREE.Camera;
-    g.font = '600 10px system-ui, sans-serif'; g.textBaseline = 'bottom'; g.textAlign = 'right';
-    // los nombres van a la IZQUIERDA del personaje (contra el borde los tapaba la barra del pincel)
-    const m = this.taller!.m, H = m.alto / m.cabezas;
-    const p0 = new THREE.Vector3(0, 0, 0).project(cam), p1 = new THREE.Vector3(0, m.alto, 0).project(cam);
-    const pxm = Math.abs(((1 - p1.y) / 2 - (1 - p0.y) / 2) * Hh) / Math.max(1e-6, m.alto);
-    const xEt = Math.max(70, ((p0.x + 1) / 2) * W - (Math.max(m.hombros, m.cadera) * H * 0.5 + H * 0.45) * pxm - 12);
-    for (const l of lineasDeModelo(m)) {
-      const v = new THREE.Vector3(0, l.y, 0).project(cam);
-      if (v.z > 1) continue;
-      const y = ((1 - v.y) / 2) * Hh;
-      g.strokeStyle = l.id === 'piso' ? 'rgba(240,69,14,.55)' : 'rgba(51,181,232,.55)';
-      g.setLineDash(l.id === 'piso' ? [] : [6, 5]); g.lineWidth = 1;
-      g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(W, y + 0.5); g.stroke();
-      g.fillStyle = 'rgba(51,181,232,.95)'; g.fillText(l.nombre, xEt, y - 2);
+    const pr = (v: THREE.Vector3) => { const p = v.clone().project(cam); return { x: ((p.x + 1) / 2) * W, y: ((1 - p.y) / 2) * Hh, z: p.z }; };
+    if (t!.lineas) {
+      // los nombres van a la IZQUIERDA del personaje (contra el borde los tapaba la barra del pincel)
+      const caja = new THREE.Box3().setFromObject(inst!.raiz);
+      let minX = Infinity;
+      for (const x of [caja.min.x, caja.max.x]) for (const y of [caja.min.y, caja.max.y]) for (const z of [caja.min.z, caja.max.z]) minX = Math.min(minX, pr(new THREE.Vector3(x, y, z)).x);
+      const centro = caja.getCenter(new THREE.Vector3());
+      const xEt = Math.max(70, minX - 12);
+      g.font = '600 10px system-ui, sans-serif'; g.textBaseline = 'bottom'; g.textAlign = 'right';
+      for (const l of inst!.alturas()) {
+        const p = pr(new THREE.Vector3(centro.x, l.y, centro.z));
+        if (p.z > 1) continue;
+        g.strokeStyle = l.id === 'piso' ? 'rgba(240,69,14,.55)' : 'rgba(51,181,232,.55)';
+        g.setLineDash(l.id === 'piso' ? [] : [6, 5]); g.lineWidth = 1;
+        g.beginPath(); g.moveTo(0, p.y + 0.5); g.lineTo(W, p.y + 0.5); g.stroke();
+        g.fillStyle = 'rgba(51,181,232,.95)'; g.fillText(l.nombre, xEt, p.y - 2);
+      }
+      g.setLineDash([]);
+    }
+    if (t!.modo === 'posar') {
+      for (const ctl of CONTROLES) {
+        const a = inst!.articulacion(ctl), b = inst!.punta(ctl);
+        if (!a) continue;
+        const pa = pr(a);
+        if (b) {
+          const pb = pr(b);
+          g.strokeStyle = 'rgba(20,20,22,.55)'; g.lineWidth = 3;
+          g.beginPath(); g.moveTo(pa.x, pa.y); g.lineTo(pb.x, pb.y); g.stroke();
+          g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1.2;
+          g.beginPath(); g.moveTo(pa.x, pa.y); g.lineTo(pb.x, pb.y); g.stroke();
+        }
+        const elegido = ctl === t!.control, encima = ctl === t!.encima;
+        g.fillStyle = elegido ? '#f0450e' : encima ? '#ffd166' : '#ffffff';
+        g.strokeStyle = 'rgba(20,20,22,.8)'; g.lineWidth = 1.5;
+        g.beginPath(); g.arc(pa.x, pa.y, elegido ? 6.5 : encima ? 6 : 4.5, 0, Math.PI * 2); g.fill(); g.stroke();
+      }
     }
   }
   static nombreVista(grados: number): string {
@@ -4379,22 +4666,26 @@ export class WebGLDesign3D {
    *  MISMO encuadre en todas las vistas (así las líneas de modelo coinciden),
    *  fondo transparente. Para mandar al 2D. */
   hojaDeModelo(W: number, H: number, grados: number[] = [0, 45, 90, 135, 180], op: { maniqui?: boolean } = {}):
-    { vistas: { grados: number; nombre: string; png: string }[]; abajo: number; arriba: number; lineas: LineaModelo[] } | null {
-    if (!this.taller || !(W > 0) || !(H > 0) || !grados.length) return null;
+    { vistas: { grados: number; nombre: string; png: string }[]; abajo: number; arriba: number; lineas: { id: string; nombre: string; y: number }[] } | null {
+    const inst = this.personajeDelTaller();
+    if (!this.taller || !inst || !(W > 0) || !(H > 0) || !grados.length) return null;
     this.detachRig();
-    const m = this.taller.m;
+    const conCuerpo = op.maniqui !== false;
+    const recs = this.strokes.filter((r) => r.kind !== 'guide' && (conCuerpo || !r.personajeDatos));
     const box = new THREE.Box3();
-    for (const r of this.strokes) if (r.kind !== 'guide' && (op.maniqui !== false || !r.maniqui)) { r.object.updateMatrixWorld(true); box.expandByObject(r.object); }
+    for (const r of recs) { r.object.updateMatrixWorld(true); box.expandByObject(r.object); }
     if (box.isEmpty()) return null;
-    let arriba = Math.max(box.max.y, m.alto) + m.alto * 0.06, abajo = Math.min(0, box.min.y) - m.alto * 0.04;
+    const altoP = inst.alto();
+    let arriba = Math.max(box.max.y, altoP) + altoP * 0.06, abajo = Math.min(0, box.min.y) - altoP * 0.04;
     let alto = arriba - abajo, ancho = alto * (W / H);
     const medio = (arriba + abajo) / 2;
     // el personaje GIRA: tiene que entrar de costado en todas las vistas (los
-    // brazos abiertos se cortaban en las vistas angostas de la hoja)
-    // (medido en los vértices: las esquinas de la caja lo exageraban y achicaban todo)
+    // brazos abiertos se cortaban en las vistas angostas de la hoja); medido en
+    // los vértices (las esquinas de la caja lo exageraban y achicaban todo)
     let radio = 0;
+    if (conCuerpo) { const pos = inst.posicionesMundo(); for (let i = 0; i < pos.length; i += 3) radio = Math.max(radio, Math.hypot(pos[i], pos[i + 2])); }
     const pv = new THREE.Vector3();
-    for (const r of this.strokes) if (r.kind !== 'guide' && (op.maniqui !== false || !r.maniqui)) r.object.traverse((o) => {
+    for (const r of recs) if (!r.personajeDatos) r.object.traverse((o) => {
       const pos = (o as THREE.Mesh).geometry?.getAttribute?.('position');
       if (!pos) return;
       for (let i = 0; i < pos.count; i++) { pv.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld); radio = Math.max(radio, Math.hypot(pv.x, pv.z)); }
@@ -4403,7 +4694,7 @@ export class WebGLDesign3D {
     const antes = new Map<THREE.Object3D, boolean>();
     for (const o of this.scene.children) { antes.set(o, o.visible); o.visible = o === this.strokesGroup || (o as THREE.Light).isLight === true; }
     const ocultos: THREE.Object3D[] = [];
-    if (op.maniqui === false) for (const r of this.strokes) if (r.maniqui && r.object.visible) { r.object.visible = false; ocultos.push(r.object); }
+    if (!conCuerpo) for (const r of this.strokes) if (r.personajeDatos && r.object.visible) { r.object.visible = false; ocultos.push(r.object); }
     const fondo = this.scene.background, niebla = this.scene.fog;
     this.scene.background = null; this.scene.fog = null;
     const rr = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -4426,7 +4717,7 @@ export class WebGLDesign3D {
       for (const o of ocultos) o.visible = true;
       this.scene.background = fondo; this.scene.fog = niebla;
     }
-    return { vistas, abajo, arriba, lineas: lineasDeModelo(m) };
+    return { vistas, abajo, arriba, lineas: inst.alturas() };
   }
 
   // ══ PIEZAS DE LA BIBLIOTECA (N) ═════════════════════════════════════════════
@@ -5103,7 +5394,7 @@ export class WebGLDesign3D {
     }
     let { points, pressures } = this.current;
     const apoyo = this.apoyoDe(this.current.drawPlane);
-    const { kind, baseNormal, noSupport, surfaceId, parte } = this.current;
+    const { kind, baseNormal, noSupport, surfaceId, parte, espejo } = this.current;
     this.current = null;
     if (points.length < 2) return;
 
@@ -5137,18 +5428,32 @@ export class WebGLDesign3D {
     const group = new THREE.Group();
     const a = this.buildTube(points, pressures);
     if (a) group.add(a);
-    for (const variant of this.mirroredVariants(points)) { const b = this.buildTube(variant, pressures); if (b) group.add(b); }
+    const enCuerpo = kind === 'stroke' && parte ? espejo : undefined;
+    if (!enCuerpo) for (const variant of this.mirroredVariants(points)) { const b = this.buildTube(variant, pressures); if (b) group.add(b); }
     const rec: StrokeRecord = {
       id: `stroke-${this.seq++}`, object: group, points, pressures, kind,
       layerId: this.activeLayerId(), baseOpacity: this.brush.opacity, brush: { ...this.brush },
       apoyo: kind === 'stroke' ? apoyo : undefined,
       parte: kind === 'stroke' ? parte : undefined,
+      sinEspejo: enCuerpo ? true : undefined,
     };
     group.userData.strokeId = rec.id;
     this.addStrokeRecord(rec);
+    // TALLER con espejo: el trazo espejado es OTRO trazo, pegado a la parte del
+    // otro lado del cuerpo (si no, al posar un brazo se llevaba los dos)
+    let par: StrokeRecord | null = null;
+    if (enCuerpo && parte) {
+      const pts2 = points.map((q) => q.clone().applyMatrix4(enCuerpo));
+      const g2 = new THREE.Group(), b2 = this.buildTube(pts2, pressures);
+      if (b2) g2.add(b2);
+      par = { id: `stroke-${this.seq++}`, object: g2, points: pts2, pressures: [...pressures], kind,
+        layerId: rec.layerId, baseOpacity: rec.baseOpacity, brush: { ...this.brush }, parte: ladoOpuesto(parte), sinEspejo: true };
+      g2.userData.strokeId = par.id;
+      this.addStrokeRecord(par);
+    }
     this.pushCmd({
-      undo: () => this.removeStrokeRecord(rec),
-      redo: () => this.addStrokeRecord(rec),
+      undo: () => { this.removeStrokeRecord(rec); if (par) this.removeStrokeRecord(par); },
+      redo: () => { this.addStrokeRecord(rec); if (par) this.addStrokeRecord(par); },
     });
   }
 
@@ -5156,6 +5461,8 @@ export class WebGLDesign3D {
    *  'select'). Descarta la malla vieja y crea una nueva con los mismos
    *  materiales/presión — más simple y robusto que mutar geometría en vivo. */
   private rebuildStrokeMesh(rec: StrokeRecord): void {
+    // un personaje no es un trazo: su cuerpo es suyo
+    if (rec.personajeDatos) return;
     // una calle se rearma con la red (sus cruces dependen de las otras)
     if (rec.calle) { this.regenerarCalles(); return; }
     while (rec.object.children.length) {
@@ -5178,7 +5485,7 @@ export class WebGLDesign3D {
     }
     const a = this.buildTube(rec.points, rec.pressures, rec.brush, !!rec.shape);
     if (a) rec.object.add(a);
-    for (const variant of this.mirroredVariants(rec.points)) {
+    for (const variant of rec.sinEspejo ? [] : this.mirroredVariants(rec.points)) {
       const b = this.buildTube(variant, rec.pressures, rec.brush, !!rec.shape); if (b) rec.object.add(b);
     }
     // figura con cara sólida: la cara se reconstruye junto al contorno, si no
@@ -7041,13 +7348,28 @@ export class WebGLDesign3D {
       groupId: rec.groupId || undefined, solid: rec.solid || undefined,
       shape: rec.shape || undefined, apoyo: rec.apoyo || undefined, caja: rec.kind === 'box' || undefined, hueco: (rec.kind === 'box' && rec.object.userData.hueco) || undefined,
       calle: rec.calle || undefined,
-      parte: rec.parte || undefined, maniqui: rec.maniqui || undefined,
+      parte: rec.parte || undefined, maniqui: rec.maniqui || undefined, sinEspejo: rec.sinEspejo || undefined,
+      ...(rec.personajeDatos ? { points: [[0, 0, 0], [0, 1, 0]], pressures: [1, 1], personaje: rec.personaje ? rec.personaje.aDatos() : rec.personajeDatos } : {}),
     };
   }
 
   /** De DATOS a un objeto listo para sumar a la escena (no lo suma). null si
    *  los datos no alcanzan. Lo usan abrir un proyecto y colocar una pieza. */
   private registroDeItem(item: ItemProyecto): StrokeRecord | null {
+    if (item.personaje) {
+      // un PERSONAJE: el grupo ya; el cuerpo, en cuanto esté cargado
+      const g = new THREE.Group();
+      g.position.fromArray(item.position || [0, 0, 0]);
+      g.quaternion.fromArray(item.quaternion || [0, 0, 0, 1]);
+      g.scale.fromArray(item.scale || [1, 1, 1]);
+      const rec: StrokeRecord = { id: item.id || `personaje-${this.seq++}`, object: g, points: [new THREE.Vector3(), new THREE.Vector3(0, 1, 0)], pressures: [1, 1],
+        kind: 'stroke', layerId: item.layerId || this.activeLayerId(), baseOpacity: 1, brush: item.brush ? { ...item.brush } : { ...this.brush },
+        personajeDatos: personajeValido(item.personaje), personaje: null };
+      g.userData.strokeId = rec.id;
+      rec.groupId = item.groupId || undefined;
+      this.ponerCuerpo(rec);
+      return rec;
+    }
     if (item.caja) {
       const obj = this.construirCaja(!!item.hueco);
       obj.position.fromArray(item.position || [0, 0, 0]);
@@ -7120,6 +7442,7 @@ export class WebGLDesign3D {
     rec.groupId = item.groupId || undefined;
     rec.parte = typeof item.parte === 'string' ? item.parte.slice(0, 40) : undefined;
     rec.maniqui = item.maniqui || undefined;
+    rec.sinEspejo = item.sinEspejo || undefined;
     if (Array.isArray(item.apoyo) && item.apoyo.length === 4 && item.apoyo.every((v: unknown) => Number.isFinite(Number(v))))
       rec.apoyo = item.apoyo.map(Number) as [number, number, number, number];
     return rec;

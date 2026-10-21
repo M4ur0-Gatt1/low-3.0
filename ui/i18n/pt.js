@@ -1,6 +1,16 @@
 /* Português · LOW. La clave es el texto en español tal cual aparece en la interfaz (ver i18n/idioma.js).
    «{}» en una clave es cualquier cosa, y se repite en la traducción en el mismo orden. */
 LOW_I18N.registrar("pt", "Português", {
+  "Espejar horizontal": "Espelhar horizontal",
+  "Espejar vertical": "Espelhar vertical",
+  "Espejar horizontal (lo elegido)": "Espelhar horizontal (a seleção)",
+  "Espejar vertical (lo elegido)": "Espelhar vertical (a seleção)",
+  "Elegí con la flecha lo que querés espejar (Ctrl+A elige todo)": "Escolha com a seta o que quer espelhar (Ctrl+A seleciona tudo)",
+  "⇋ Espejado en horizontal: {} objeto(s) · Ctrl+Z lo deshace": "⇋ Espelhado na horizontal: {} objeto(s) · Ctrl+Z desfaz",
+  "⇋ Espejado en vertical: {} objeto(s) · Ctrl+Z lo deshace": "⇋ Espelhado na vertical: {} objeto(s) · Ctrl+Z desfaz",
+  "Voltear": "Virar",
+  "Voltear horizontal": "Virar horizontal",
+  "Voltear vertical": "Virar vertical",
   "(desmarcá para probar sin grabar · Enter clava, Esc descarta)": "(desmarque para testar sem gravar · Enter fixa, Esc descarta)",
   "(sin atajo)": "(sem atalho)",
   "+ Capa": "+ Camada",
@@ -1609,5 +1619,22 @@ LOW_I18N.registrar("pt", "Português", {
  "Hoja de modelo · {}": "Folha de modelo · {}",
  "Giro · {}": "Giro · {}",
  "El giro de «{}»: {} vistas, una por cuadro, en la capa «{}» (al fondo) · Ctrl+Z la saca": "O giro de «{}»: {} vistas, uma por quadro, na camada «{}» (no fundo) · Ctrl+Z a remove",
- "La hoja de modelo de «{}» ({} vistas, con las líneas de modelo) está en la capa «{}» (al fondo, para calcar) · Ctrl+Z la saca": "A folha de modelo de «{}» ({} vistas, com as linhas de modelo) está na camada «{}» (no fundo, para decalcar) · Ctrl+Z a remove"
+ "La hoja de modelo de «{}» ({} vistas, con las líneas de modelo) está en la capa «{}» (al fondo, para calcar) · Ctrl+Z la saca": "A folha de modelo de «{}» ({} vistas, com as linhas de modelo) está na camada «{}» (no fundo, para decalcar) · Ctrl+Z a remove",
+ "Mostrar guías": "Mostrar guias",
+ "Bloquear guías": "Bloquear guias",
+ "Imantar a las guías": "Ajustar às guias",
+ "Borrar las guías": "Apagar as guias",
+ "Guía borrada · Ctrl+Z la vuelve": "Guia apagada · Ctrl+Z a traz de volta",
+ "Guía horizontal en y {} px · arrastrala para moverla, a la regla para borrarla · doble clic para escribir la posición": "Guia horizontal em y {} px · arraste para mover, até a régua para apagar · clique duplo para digitar a posição",
+ "Guía vertical en x {} px · arrastrala para moverla, a la regla para borrarla · doble clic para escribir la posición": "Guia vertical em x {} px · arraste para mover, até a régua para apagar · clique duplo para digitar a posição",
+ "Guías visibles": "Guias visíveis",
+ "Guías ocultas · Ctrl+Ñ las vuelve a mostrar": "Guias ocultas · Ctrl+Ç as mostra de novo",
+ "Guías bloqueadas: no se mueven ni se borran por accidente": "Guias bloqueadas: não se movem nem se apagam por acidente",
+ "Guías desbloqueadas": "Guias desbloqueadas",
+ "Imantar a las guías: lo que movés y dibujás se pega a ellas": "Ajustar às guias: o que você move e desenha gruda nelas",
+ "Sin imán de guías": "Sem ajuste às guias",
+ "Guías borradas · Ctrl+Z las vuelve": "Guias apagadas · Ctrl+Z as traz de volta",
+ "Posición de la guía (y, px)": "Posição da guia (y, px)",
+ "Posición de la guía (x, px)": "Posição da guia (x, px)",
+ "Reglas activas — arrastrá desde una regla para crear una guía (Ctrl+R oculta)": "Réguas ativas — arraste de uma régua para criar uma guia (Ctrl+R oculta)"
 });

@@ -46,7 +46,7 @@
 
   /* ── EL CATÁLOGO ─────────────────────────────────────────────────────────
      [acción, nombre, grupo, tecla de fábrica, botón cuya ayuda la anuncia] */
-  const GRUPOS = ["Herramientas", "Formas", "Vista", "Color", "Animación", "Cámara y esqueleto", "Espacios de trabajo"];
+  const GRUPOS = ["Herramientas", "Formas", "Edición", "Vista", "Color", "Animación", "Cámara y esqueleto", "Espacios de trabajo"];
   const CATALOGO = [
     ["select", "Seleccionar / mover", "Herramientas", "v", '[data-tool="select"]'],
     ["direct", "Selección directa (flecha blanca)", "Herramientas", "d", '[data-tool="direct"]'],
@@ -79,6 +79,9 @@
     ["star", "Estrella", "Formas", "s", "#dzAddStar"],
     ["line", "Línea", "Formas", "l", "#dzAddLine"],
     ["text", "Texto", "Formas", "t", "#dzAddText"],
+    // v3.37: espejar lo elegido (drawing/espejar.js); antes sólo estaba en el inspector
+    ["espejarh", "Espejar horizontal (lo elegido)", "Edición", "shift+h", null],
+    ["espejarv", "Espejar vertical (lo elegido)", "Edición", "shift+v", null],
     ["zoomin", "Acercar", "Vista", "+", null],
     ["zoomout", "Alejar", "Vista", "-", null],
     ["zoomcentro", "Acercar al centro de la mesa", "Vista", "z", null],
@@ -233,6 +236,8 @@
     camkey: () => (typeof global.dzCamKeyToggle === "function" ? global.dzCamKeyToggle() : clic("#tlCamKey")()),
     pincelopciones: () => global.LOW?.drawing?.pincelRapido?.abrirAqui?.(),
     rig: clic("#dzRigBtn"),
+    espejarh: () => typeof global.dzEspejar === "function" && global.dzEspejar("h"),
+    espejarv: () => typeof global.dzEspejar === "function" && global.dzEspejar("v"),
   };
   for (const id of ["drawing", "animation", "cleanup", "color", "composite", "camera", "3d"])
     ACCIONES["ws-" + id] = () => cambiarEspacio(id);

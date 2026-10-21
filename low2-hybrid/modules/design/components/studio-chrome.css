@@ -112,7 +112,9 @@
 }
 @media(prefers-reduced-motion:no-preference) { .studio-chrome button { transition:background .12s ease,color .12s ease; } }
 /* panel Perspectiva para layouts (PerspectivaPanel3D.tsx) */
-.persp3d { display:flex;flex-direction:column;gap:10px;padding:4px 2px 10px; }
+/* el contenido de los paneles con aire: los rótulos iban pegados al borde (Mauro: «le faltan margins y paddings») */
+.persp3d { display:flex;flex-direction:column;gap:10px;padding:12px 16px 16px; }
+.persp3d.studio-scene-section { padding:16px 14px; }
 .persp3d h3 { margin:6px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--studio-muted); }
 .persp3d-activa { display:flex;align-items:center;gap:8px;font-weight:600; }
 .persp3d-nota { margin:0;color:var(--studio-muted);font-size:11px;line-height:1.45; }
@@ -128,6 +130,8 @@
 .persp3d-repetir label { display:flex;flex-direction:column;gap:3px; }
 .persp3d-repetir select,.persp3d-repetir input { background:var(--studio-input);border:1px solid var(--studio-line);border-radius:8px;padding:5px;color:var(--studio-fg);width:100%; }
 .persp3d-boton { border:1px solid var(--studio-line);border-radius:8px;padding:6px 8px;cursor:pointer;background:var(--studio-input);color:var(--studio-fg); }
+/* `.studio-chrome button` (borde 0, fondo transparente) le ganaba: los botones se veían como texto suelto */
+.studio-chrome .persp3d-boton { border:1px solid var(--studio-line);background:var(--studio-input); }
 .toma3d-fila { display:flex;align-items:center;gap:8px;font-size:12px; }
 .toma3d-fila input { flex:1;min-width:0;background:var(--studio-input);border:1px solid var(--studio-line);border-radius:8px;padding:5px;color:var(--studio-fg); }
 .toma3d-linea { display:grid;grid-template-columns:1fr 64px;gap:8px;align-items:center; }
@@ -227,6 +231,12 @@
   border:1px solid var(--studio-line, #2c2e33); background:transparent; color:inherit; font:inherit; cursor:pointer; text-align:left; }
 .taller3d-presets button small { opacity:.65; font-size:10.5px; }
 .taller3d-presets button.on { border-color:#F0450E; background:rgba(240,69,14,.12); }
+.taller3d-modos, .taller3d-pinceles { display:flex; gap:4px; margin:2px 0 6px; }
+.taller3d-modos button, .taller3d-pinceles button { flex:1 1 0; padding:6px 4px; border-radius:7px; border:1px solid var(--studio-line, #2c2e33); background:transparent; color:inherit; font:inherit; font-size:12px; cursor:pointer; }
+.taller3d-pinceles button { font-size:11px; padding:5px 2px; }
+.taller3d-modos button.on, .taller3d-pinceles button.on { border-color:#F0450E; background:rgba(240,69,14,.14); font-weight:600; }
+.taller3d-ayuda { margin-top:0; }
+.taller3d-presets { grid-template-columns:1fr !important; }
 .taller3d-mios { display:flex; flex-wrap:wrap; gap:5px; margin:4px 0 10px; }
 .taller3d-mios button { padding:4px 9px; border-radius:999px; border:1px solid var(--studio-line, #2c2e33); background:transparent; color:inherit; font:inherit; cursor:pointer; }
 .taller3d-vistas { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 8px; }

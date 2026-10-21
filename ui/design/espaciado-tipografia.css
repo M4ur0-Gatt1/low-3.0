@@ -1,0 +1,157 @@
+/* ══ ESCALA DE LETRA Y DE AIRE ═══════════════════════════════════════════
+   Pedido de Mauro (oct-2026): «al diseño en general de todo el software le
+   faltan margins y paddings y el tamaño de la tipografía en muchos casos está
+   grande».
+
+   Lo medido (getComputedStyle sobre lo que de verdad se ve, a 1366×768 y a
+   1000×560, media pantalla): el estudio usaba DIECISIETE tamaños de letra,
+   de 8.5 a 19 px, puestos regla por regla a lo largo de seis capas de CSS.
+   Lo que se leía «grande» no era el tamaño base (12 px) sino las excepciones:
+   · botones y campos sin tamaño propio caían en el 13.33 px del navegador
+     («Importar ASE / ACO / GPL» partido en dos renglones, «Listo», los campos
+     de Preferencias);
+   · los botones de la línea de tiempo («Vacío», «Duplicar», «Reexponer») y
+     los nombres de capa en monoespaciada de 12 px, más anchos que el resto;
+   · los títulos de los modales a 17 px y su texto a 13.5 px;
+   · el panel del pincel (Shift+B) a 12.5 px y su cruz a 18 px.
+   Y faltaba aire donde el texto quedaba pegado: la barra de la X-sheet
+   (2 px entre botones), el inspector (8 px al borde), el título del panel
+   que se partía en dos renglones con «Otra pantalla», la cámara 2D con
+   «en el cuadro» en tres renglones, el botón «Listo» sin estilo.
+
+   LA ESCALA: cinco tamaños y cuatro pasos de aire. Cada componente usa el
+   que corresponde a su FUNCIÓN, no un número suelto:
+     --fs-chico   10 px  rótulos en mayúsculas, teclas (kbd), insignias
+     --fs-rotulo  11 px  rótulo de un control, chips, botones de barra, pestañas
+     --fs-control 12 px  menús, campos, filas de listas, texto de panel
+     --fs-texto   13 px  párrafos para leer (modales, ayudas)
+     --fs-titulo  15 px  título de un modal
+     --esp-1..4   4 / 8 / 12 / 16 px (los mismos pasos que --space-1..4)
+
+   Va al FINAL de ui/index.html: sólo toca font-size, padding, margin y gap.
+   NO pone `display` en ninguna clase (hay paneles que se esconden con el
+   atributo `hidden`, y un display de clase le gana) ni cambia las alturas
+   que miden las pruebas (barra y filas de la línea de tiempo, riel). */
+
+:root {
+  --fs-chico: 10px;
+  --fs-rotulo: 11px;
+  --fs-control: 12px;
+  --fs-texto: 13px;
+  --fs-titulo: 15px;
+  --esp-1: 4px;
+  --esp-2: 8px;
+  --esp-3: 12px;
+  --esp-4: 16px;
+}
+
+/* ── 1. la base ─────────────────────────────────────────────────────────
+   Un botón o un campo sin regla propia no hereda: el navegador le pone
+   13.33 px. :where() no pesa nada, así que cualquier regla de componente le
+   sigue ganando; sólo cubre a los que no tenían ninguna. */
+:where(button, input, select, textarea) { font-size: var(--fs-control); }
+#designView { font-size: var(--fs-control); }
+
+/* ── 2. menú, espacios de trabajo y solapas de documento ───────────────── */
+#designView .dz-menu { padding: 6px var(--esp-2); font-size: var(--fs-control); }
+#designView .dz-dd { padding: var(--esp-1); }
+#designView .dz-dd > span { padding: 6px var(--esp-3); font-size: var(--fs-control); }
+#designView .dz-dd kbd { font-size: var(--fs-chico); }
+#designView .dz-ws-tab { padding: 0 var(--esp-2); font-size: var(--fs-rotulo); }
+#designView .dz-document-tab { font-size: var(--fs-rotulo); }
+#designView .dz-document-close { font-size: var(--fs-texto); }
+
+/* ── 3. la barra de opciones de la herramienta ──────────────────────────── */
+#designView .dz-toolopts { font-size: var(--fs-rotulo); }
+#designView .dz-toolopts button:not(.ibtn) { font-size: var(--fs-rotulo); }
+#designView .dz-toolopts select { font-size: var(--fs-control); }
+/* los numéricos son angostos (44 px): a 12 px el «100» del zoom se cortaba */
+#designView .dz-toolopts input:not([type="range"]) { font-size: var(--fs-rotulo); }
+#designView .dz-toolopts input[type="number"] { padding-inline: var(--esp-1); }
+
+/* ── 4. los títulos de panel ────────────────────────────────────────────
+   «X-sheet · OpenToonz» y «Otra pantalla» se partían en dos renglones cada
+   uno (el título medía 39 px de alto en un panel de 240). El botón no se
+   parte y es un rótulo chico; el título (.dz-op-tit, en ui/index.html) queda
+   en un renglón y si no entra se corta él con «…», no la cruz de cerrar. */
+#designView .dz-op-head { padding: 6px 6px 6px 9px; gap: 5px; font-size: var(--fs-rotulo); }
+.dz-op-tit { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0; }
+#designView .dz-op-head .dz-external,
+#designView .dz-op-head .dz-redock { flex: 0 0 auto; padding: 0 5px; white-space: nowrap; font-size: var(--fs-chico); font-weight: 500; letter-spacing: 0; }
+#designView .dz-op-head > .dz-op-x { flex: 0 0 auto; min-width: 22px; }
+
+/* ── 5. el inspector ───────────────────────────────────────────────────── */
+#designView .dz-inspector { padding: 10px 10px var(--esp-3); }
+#designView .dz-hint { font-size: var(--fs-rotulo); }
+#designView .dz-field > label,
+#designView .dz-layers-h { font-size: var(--fs-rotulo); }
+#designView .dz-lay-head { font-size: var(--fs-chico); }
+#designView .dz-layer-t { font-size: var(--fs-rotulo); }
+#designView .dz-lt-blend label,
+#designView .dz-lt-op label { font-size: var(--fs-rotulo); }
+#designView .dz-chip { font-size: var(--fs-chico); }
+/* la paleta del nivel: el título a 13 px se cortaba («Paleta del ni…») al
+   lado de «Adoptar» y «+ Estilo»; es un encabezado de sección, como CAPAS */
+#designView .pal2-name { font-size: var(--fs-rotulo); }
+#designView .pal2-filebar button,
+#designView .pal2-targets button { font-size: var(--fs-rotulo); }
+
+/* ── 6. la línea de tiempo y la X-sheet ─────────────────────────────────
+   La monoespaciada de 12 px hacía los botones de texto anchos: a media
+   pantalla la barra se desbordaba antes. Mismas alturas que antes. */
+#designView .tl2-tools button.tl2-badge { font-size: var(--fs-rotulo); }
+#designView .tl2-name { font-size: var(--fs-rotulo); }
+#designView .tl2-name button { font-size: var(--fs-rotulo); }
+#designView .dz-tl-pestania { font-size: var(--fs-rotulo); }
+#designView .xs2-addcol { font-size: var(--fs-rotulo); }
+#designView .xs2-et { font-size: var(--fs-chico); }
+#designView .xs2-bar { gap: 3px; padding: 6px var(--esp-2); }
+#designView .xs2-tp { gap: var(--esp-1); padding: 6px var(--esp-2); }
+
+/* ── 7. la cámara 2D ──────────────────────────────────────────────────── */
+.cam2d { padding: var(--esp-3) var(--esp-3) 10px; font-size: var(--fs-rotulo); }
+.cam2d-cab b { font-size: var(--fs-control); }
+.cam2d button { font-size: var(--fs-rotulo); }
+.cam2d input[type="number"], .cam2d select { font-size: var(--fs-rotulo); }
+.cam2d h4 { margin: var(--esp-3) 0 6px; font-size: var(--fs-chico); }
+.cam2d h4 small { font-size: var(--fs-chico); }
+.cam2d .cam2d-chico { font-size: var(--fs-chico); }
+/* «en el cuadro [1]» se partía en tres renglones al lado del botón */
+.cam2d-pasos li small { font-size: var(--fs-chico); white-space: nowrap; }
+.cam2d-pasos li small input { width: 44px; }
+
+/* ── 8. el panel del pincel (Shift+B) ───────────────────────────────────── */
+.dz-pincel-rapido { padding: 10px var(--esp-3) var(--esp-3); font-size: var(--fs-control); }
+.dz-pincel-rapido .pr-cab { margin-bottom: var(--esp-2); }
+.dz-pincel-rapido .pr-x { font-size: var(--fs-titulo); }
+.dz-pincel-rapido .pr-pie { font-size: var(--fs-rotulo); }
+.dz-pincel-rapido kbd { font-size: var(--fs-chico); }
+
+/* ── 9. los modales ────────────────────────────────────────────────────── */
+.modal { font-size: var(--fs-texto); }
+.modal h2 { margin-bottom: var(--esp-1); font-size: var(--fs-titulo); }
+.modal .sub { font-size: var(--fs-control); }
+.modal kbd { font-size: var(--fs-chico); }
+.lap-pasos h3 { font-size: var(--fs-texto); }
+.lap-nota { font-size: var(--fs-control); }
+.atajos-grupo h3 { font-size: var(--fs-chico); }
+/* el «Listo» de la ayuda de la lapicera usaba una clase sin estilo y salía
+   como botón gris del sistema pegado al recuadro de prueba */
+.modal-actions { margin-top: var(--esp-4); text-align: right; }
+.modal-actions .ghost {
+  padding: 7px var(--esp-4); border: 1px solid var(--line); border-radius: 9px;
+  background: transparent; color: var(--mut); font: 500 var(--fs-control) Figtree, sans-serif;
+}
+.modal-actions .ghost:hover { color: var(--txt); border-color: var(--mut); }
+
+/* ── 10. la barra de estado y los números de capa ───────────────────────
+   Lo monoespaciado (herramienta, zoom, cuadro) es dato chico; el aviso de
+   la derecha es una frase para leer, en la letra del resto. */
+#designView .dz-statusbar { font-size: var(--fs-chico); }
+#designView .dz-statusbar .dz-sb-hint { font-size: var(--fs-rotulo); }
+#designView .dz-to-name { font-size: var(--fs-rotulo); }
+#designView .dz-lay-op, #designView .dz-lay-z { font-size: var(--fs-rotulo); }
+#designView #dzLayOpacityLbl { font-size: var(--fs-rotulo); }
+
+/* ── 11. la ayuda flotante de las herramientas ──────────────────────────── */
+.dz-tool-tooltip { padding: var(--esp-1) var(--esp-2); font-size: var(--fs-rotulo); }
