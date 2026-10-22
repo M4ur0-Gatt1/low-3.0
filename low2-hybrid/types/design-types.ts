@@ -39,8 +39,11 @@ export type SurfaceType = 'plane' | 'cylinder' | 'sphere' | 'torus' | 'loft';
 /** Configuración del pincel activo. */
 export interface BrushSettings {
   color: string;
-  /** Grosor en px (1–100). */
+  /** Grosor en px (0,5–100): lo que mide el trazo en pantalla al dibujarlo. */
   size: number;
+  /** Cuánto mundo mide un píxel donde arrancó el trazo (lo pone el trazo al
+   *  dibujarse; sin esto, los trazos de antes de la 3.43 usan su medida vieja). */
+  mundoPorPx?: number;
   /** Opacidad 0–1. */
   opacity: number;
   /** Dureza del borde 0–1: menos dureza = más transparencia/blur en el borde. */

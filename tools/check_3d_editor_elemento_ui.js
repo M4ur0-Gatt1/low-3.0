@@ -120,8 +120,13 @@ async function main() {
     await ev(`(()=>{ [...document.querySelectorAll(".biblio3d-grilla [data-pieza]")].find(b => b.textContent.trim() === "Kiosco").click(); return true; })()`); await w(200);
     await camara([0, 9, 14], [0, 1, 0]); await w(200);
     await clicMundo([0, 0, -3]);
-    const puesto = await ev(`(()=>{ const s = __low3d.strokes.filter(s => __low3d.groupNames.get(s.groupId) === "Kiosco"); return { n: s.length, macizo: s.filter(r => r.solid).length, y: Math.min(...s.map(r => { r.object.updateMatrixWorld(true); const b = new r.object.position.constructor(); return r.object.getWorldPosition(b).y; })) }; })()`);
-    if (puesto.n !== 2 || puesto.macizo !== 1 || Math.abs(puesto.y) > 0.05) mal("el elemento no se colocó con su cuerpo y su trazo en el piso", puesto);
+    // apoyado = lo MÁS BAJO de lo que se ve toca el piso (v3.43: con el grosor en
+    // píxeles, el caño del trazo tiene su radio y el elemento sube eso para no
+    // hundirse; medir el origen del objeto ya no dice si apoya)
+    const puesto = await ev(`(()=>{ const s = __low3d.strokes.filter(s => __low3d.groupNames.get(s.groupId) === "Kiosco"); let y = Infinity;
+      for (const r of s) { r.object.updateMatrixWorld(true); r.object.traverse(o => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld); y = Math.min(y, b.min.y); } }); }
+      return { n: s.length, macizo: s.filter(r => r.solid).length, y }; })()`);
+    if (puesto.n !== 2 || puesto.macizo !== 1 || Math.abs(puesto.y) > 0.02) mal("el elemento no se colocó con su cuerpo y su trazo en el piso", puesto);
 
     // ── 5. editar y cancelar
     const antes = (await estado()).n;

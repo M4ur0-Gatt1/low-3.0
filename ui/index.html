@@ -4,26 +4,26 @@
 <meta charset="utf-8">
 <title>LOW</title>
 <link rel="stylesheet" href="vendor/codemirror.min.css">
-<link rel="stylesheet" href="app.css?v=3.42.0">
-<link rel="stylesheet" href="ai/workbench.css?v=3.42.0">
-<link rel="stylesheet" href="design/studio-polish.css?v=3.42.0">
-<link rel="stylesheet" href="design/session-recorder.css?v=3.42.0">
-<link rel="stylesheet" href="design/mesa-de-luz.css?v=3.42.0">
-<link rel="stylesheet" href="design/camara-2d.css?v=3.42.0">
-<link rel="stylesheet" href="design/pantalla-inicial.css?v=3.42.0">
-<link rel="stylesheet" href="design/forma.css?v=3.42.0">
-<link rel="stylesheet" href="design/rhythm-lab.css?v=3.42.0">
-<link rel="stylesheet" href="design/estudio-moho.css?v=3.42.0">
-<link rel="stylesheet" href="design/panel-espejo.css?v=3.42.0">
-<link rel="stylesheet" href="design/mesa-sola.css?v=3.42.0">
-<link rel="stylesheet" href="design/lipsync-texto.css?v=3.42.0">
-<link rel="stylesheet" href="design/vista-previa-export.css?v=3.42.0">
-<link rel="stylesheet" href="design/perspectiva.css?v=3.42.0">
-<link rel="stylesheet" href="design/limpieza.css?v=3.42.0">
-<link rel="stylesheet" href="design/atajos.css?v=3.42.0">
-<link rel="stylesheet" href="design/pincel-rapido.css?v=3.42.0">
-<link rel="stylesheet" href="design/guias.css?v=3.42.0">
-<link rel="stylesheet" href="design/espaciado-tipografia.css?v=3.42.0">
+<link rel="stylesheet" href="app.css?v=3.43.0">
+<link rel="stylesheet" href="ai/workbench.css?v=3.43.0">
+<link rel="stylesheet" href="design/studio-polish.css?v=3.43.0">
+<link rel="stylesheet" href="design/session-recorder.css?v=3.43.0">
+<link rel="stylesheet" href="design/mesa-de-luz.css?v=3.43.0">
+<link rel="stylesheet" href="design/camara-2d.css?v=3.43.0">
+<link rel="stylesheet" href="design/pantalla-inicial.css?v=3.43.0">
+<link rel="stylesheet" href="design/forma.css?v=3.43.0">
+<link rel="stylesheet" href="design/rhythm-lab.css?v=3.43.0">
+<link rel="stylesheet" href="design/estudio-moho.css?v=3.43.0">
+<link rel="stylesheet" href="design/panel-espejo.css?v=3.43.0">
+<link rel="stylesheet" href="design/mesa-sola.css?v=3.43.0">
+<link rel="stylesheet" href="design/lipsync-texto.css?v=3.43.0">
+<link rel="stylesheet" href="design/vista-previa-export.css?v=3.43.0">
+<link rel="stylesheet" href="design/perspectiva.css?v=3.43.0">
+<link rel="stylesheet" href="design/limpieza.css?v=3.43.0">
+<link rel="stylesheet" href="design/atajos.css?v=3.43.0">
+<link rel="stylesheet" href="design/pincel-rapido.css?v=3.43.0">
+<link rel="stylesheet" href="design/guias.css?v=3.43.0">
+<link rel="stylesheet" href="design/espaciado-tipografia.css?v=3.43.0">
 </head>
 <body>
 <!-- Splash de arranque. Se desvanece por CSS y NUNCA intercepta clics: si la
@@ -134,6 +134,10 @@
   <symbol id="i-bucket" viewBox="0 0 24 24"><path d="M11 3l8 8-8 8-8-8z"/><path d="M3 11h16"/><path d="M20.5 14.5c1 1.3 1.5 2.2 1.5 3a2 2 0 11-4 0c0-.8.5-1.7 1.5-3z"/></symbol>
   <symbol id="i-pivot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></symbol>
   <symbol id="i-mirror" viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="3 3"/><path d="M9 7L4 12l5 5z"/><path d="M15 7l5 5-5 5z"/></symbol>
+  <symbol id="i-refent" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></symbol>
+  <symbol id="i-desfase" viewBox="0 0 24 24"><path d="M4 18C7 9 12 6 20 5"/><path d="M8 21C10 14 14 11 21 10" stroke-dasharray="3 2.5"/></symbol>
+  <symbol id="i-matriz" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="5"/><rect x="10" y="3" width="5" height="5"/><rect x="17" y="3" width="4" height="5"/><rect x="3" y="10" width="5" height="5"/><rect x="10" y="10" width="5" height="5"/><rect x="3" y="17" width="5" height="4"/></symbol>
+  <symbol id="i-igualar" viewBox="0 0 24 24"><path d="M14 3l7 7-9 9H5v-7z"/><path d="M3 21h8"/></symbol>
   <symbol id="i-paralelas" viewBox="0 0 24 24"><path d="M5 20C7 13 9 8 15 4"/><path d="M10 21C12 15 14 11 20 7"/><path d="M7.5 20.5C9.5 14 11.5 9.5 17.5 5.5" stroke-dasharray="2 2.5" opacity=".55"/></symbol>
   <symbol id="i-cam" viewBox="0 0 24 24"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 10.5l7-3.5v10l-7-3.5"/></symbol>
   <symbol id="i-stage" viewBox="0 0 24 24"><rect x="3" y="9" width="3.5" height="9"/><rect x="10" y="6" width="3.5" height="12"/><rect x="17" y="3" width="3.5" height="15"/><path d="M3 21h18"/></symbol>
@@ -570,6 +574,10 @@
       <button class="ibtn dz-toolbtn" data-tool="pivot" title="Pivote de rig (J): clic en un elemento fija su eje de rotación (posado cutout) · Alt+clic lo quita"><svg class="ico"><use href="#i-pivot"/></svg></button>
       <button class="ibtn" id="dzMirror" title="Modo espejo (M): lápiz, pincel y pluma dibujan también reflejados sobre el eje vertical del lienzo — ideal para personajes simétricos"><svg class="ico"><use href="#i-mirror"/></svg></button>
       <button class="ibtn" id="dzParalelas" aria-pressed="false" title="Paralelas (Shift+M): el lápiz y el pincel dibujan dos líneas a la vez, a la separación elegida; lo que dibujás es el centro (los dos lados de un brazo, una pierna, el torso)"><svg class="ico"><use href="#i-paralelas"/></svg></button>
+      <button class="ibtn" id="dzRefent" aria-pressed="false" title="Referencias a objetos (F3), como AutoCAD: los trazos arrancan y terminan exacto en el punto final, el medio, la intersección, el centro o la perpendicular de otra línea · clic derecho: elegir cuáles"><svg class="ico"><use href="#i-refent"/></svg></button>
+      <button class="ibtn" id="dzDesfase" title="Desfase (O), como AutoCAD: una copia paralela de lo elegido a la distancia que elijas; un clic dice de qué lado"><svg class="ico"><use href="#i-desfase"/></svg></button>
+      <button class="ibtn" id="dzMatriz" title="Matriz (AR), como AutoCAD: copias de lo elegido en filas y columnas, en círculo o a lo largo de un trayecto"><svg class="ico"><use href="#i-matriz"/></svg></button>
+      <button class="ibtn" id="dzIgualar" title="Igualar propiedades (MA), como AutoCAD: lo elegido pasa su color, grosor y trazo a lo que toques después"><svg class="ico"><use href="#i-igualar"/></svg></button>
       <div class="hsep"></div>
       <button class="ibtn" id="dzImg" title="Importar imagen como referencia/calco (nivel de OpenToonz)"><svg class="ico"><use href="#i-image"/></svg></button>
       <button class="ibtn" id="dzColor" title="Coloreado inteligente con IA: colorea/entinta el dibujo (FLUX Kontext en fal.ai, o SiliconFlow) preservando las líneas"><svg class="ico"><use href="#i-paint"/></svg></button>
@@ -1253,185 +1261,186 @@
 <script src="vendor/mode-htmlmixed.min.js?v=dev1787232053"></script>
 <script src="vendor/addon-closebrackets.min.js?v=dev1787232053"></script>
 <script src="vendor/addon-activeline.min.js?v=dev1787232053"></script>
-<script src="mock-api.js?v=3.42.0"></script><!-- inerte salvo ?mock=1: arnés de pruebas en navegador -->
+<script src="mock-api.js?v=3.43.0"></script><!-- inerte salvo ?mock=1: arnés de pruebas en navegador -->
 <!-- Núcleos desacoplados. El orden expresa sus dependencias. -->
-<script src="core/safe-mode.js?v=3.42.0"></script>
-<script src="core/history.js?v=3.42.0"></script>
-<script src="core/scroll-dentro.js?v=3.42.0"></script>
-<script src="core/pointer-controller.js?v=3.42.0"></script>
-<script src="application/mode-machine.js?v=3.42.0"></script>
-<script src="animation/ruta-de-salida.js?v=3.42.0"></script>
-<script src="animation/destino-export.js?v=3.42.0"></script>
-<script src="animation/vista-previa-export.js?v=3.42.0"></script>
-<script src="animation/toma-al-documento.js?v=3.42.0"></script>
-<script src="animation/palette.js?v=3.42.0"></script>
-<script src="animation/coloring.js?v=3.42.0"></script>
-<script src="animation/scene-model.js?v=3.42.0"></script>
-<script src="animation/rig-policy.js?v=3.42.0"></script>
-<script src="rigging/binding.js?v=3.42.0"></script>
-<script src="rigging/rig-input.js?v=3.42.0"></script>
-<script src="rigging/alambre-desde-pivotes.js?v=3.42.0"></script>
-<script src="rigging/rig-schematic.js?v=3.42.0"></script>
-<script src="animation/exposures.js?v=3.42.0"></script>
-<script src="animation/onion.js?v=3.42.0"></script>
-<script src="animation/mocap.js?v=3.42.0"></script>
-<script src="animation/document.js?v=3.42.0"></script>
-<script src="animation/rig-library.js?v=3.42.0"></script>
-<script src="animation/character-library.js?v=3.42.0"></script>
-<script src="animation/timeline.js?v=3.42.0"></script>
-<script src="animation/xsheet-view.js?v=3.42.0"></script>
-<script src="animation/timeline-view.js?v=3.42.0"></script>
-<script src="animation/level-strip.js?v=3.42.0"></script>
-<script src="animation/function-editor.js?v=3.42.0"></script>
-<script src="animation/premiere-xml.js?v=3.42.0"></script>
-<script src="animation/export-cuadros.js?v=3.42.0"></script>
-<script src="animation/escena-nueva.js?v=3.42.0"></script>
-<script src="animation/camara-guia.js?v=3.42.0"></script>
-<script src="animation/lipsync.js?v=3.42.0"></script>
-<script src="animation/lipsync-texto.js?v=3.42.0"></script>
-<script src="animation/lipsync-audio.js?v=3.42.0"></script>
-<script src="animation/arcs.js?v=3.42.0"></script>
-<script src="animation/palette-view.js?v=3.42.0"></script>
-<script src="animation/audio.js?v=3.42.0"></script>
-<script src="animation/shortcuts.js?v=3.42.0"></script>
-<script src="storyboard/shot-model.js?v=3.42.0"></script>
-<script src="storyboard/workflow.js?v=3.42.0"></script>
-<script src="storyboard/storyboarder-import.js?v=3.42.0"></script>
-<script src="storyboard/stage-view.js?v=3.42.0"></script>
-<script src="storyboard/board-view.js?v=3.42.0"></script>
-<script src="animation/model-tests.js?v=3.42.0"></script>
-<script src="animation/xsheet.js?v=3.42.0"></script>
-<script src="animation/playback.js?v=3.42.0"></script>
-<script src="animation/camera.js?v=3.42.0"></script>
-<script src="composition/multiplane-model.js?v=3.42.0"></script>
-<script src="composition/controller.js?v=3.42.0"></script>
-<script src="composition/multiplane-view.js?v=3.42.0"></script>
-<script src="drawing/stabilization.js?v=3.42.0"></script>
-<script src="drawing/presion.js?v=3.42.0"></script>
-<script src="drawing/selection.js?v=3.42.0"></script>
-<script src="drawing/transforms.js?v=3.42.0"></script>
-<script src="drawing/pointer-input.js?v=3.42.0"></script>
-<script src="drawing/brushes.js?v=3.42.0"></script>
-<script src="drawing/stroke-engine.js?v=3.42.0"></script>
-<script src="drawing/brush-engine-pro.js?v=3.42.0"></script>
-<script src="drawing/pincel-efectos.js?v=3.42.0"></script>
-<script src="drawing/pincel-bitmap.js?v=3.42.0"></script>
-<script src="drawing/pincel-vivo.js?v=3.42.0"></script>
-<script src="drawing/bibliotecas.js?v=3.42.0"></script>
-<script src="drawing/brush-studio.js?v=3.42.0"></script>
-<script src="drawing/mis-pinceles.js?v=3.42.0"></script>
-<script src="collaboration/session.js?v=3.42.0"></script>
-<script src="collaboration/transport.js?v=3.42.0"></script>
-<script src="workspace/panels.js?v=3.42.0"></script>
-<script src="workspace/workspaces.js?v=3.42.0"></script>
-<script src="workspace/windows.js?v=3.42.0"></script>
-<script src="workspace/layouts.js?v=3.42.0"></script>
-<script src="workspace/recovery.js?v=3.42.0"></script>
-<script src="workspace/rescate-escena.js?v=3.42.0"></script>
-<script src="ai/commands.js?v=3.42.0"></script>
-<script src="ai/task-runner.js?v=3.42.0"></script>
-<script src="ai/recovery.js?v=3.42.0"></script>
-<script src="ai/provider-settings.js?v=3.42.0"></script>
-<script src="ai/agent-workbench.js?v=3.42.0"></script>
+<script src="core/safe-mode.js?v=3.43.0"></script>
+<script src="core/history.js?v=3.43.0"></script>
+<script src="core/scroll-dentro.js?v=3.43.0"></script>
+<script src="core/pointer-controller.js?v=3.43.0"></script>
+<script src="application/mode-machine.js?v=3.43.0"></script>
+<script src="animation/ruta-de-salida.js?v=3.43.0"></script>
+<script src="animation/destino-export.js?v=3.43.0"></script>
+<script src="animation/vista-previa-export.js?v=3.43.0"></script>
+<script src="animation/toma-al-documento.js?v=3.43.0"></script>
+<script src="animation/palette.js?v=3.43.0"></script>
+<script src="animation/coloring.js?v=3.43.0"></script>
+<script src="animation/scene-model.js?v=3.43.0"></script>
+<script src="animation/rig-policy.js?v=3.43.0"></script>
+<script src="rigging/binding.js?v=3.43.0"></script>
+<script src="rigging/rig-input.js?v=3.43.0"></script>
+<script src="rigging/alambre-desde-pivotes.js?v=3.43.0"></script>
+<script src="rigging/rig-schematic.js?v=3.43.0"></script>
+<script src="animation/exposures.js?v=3.43.0"></script>
+<script src="animation/onion.js?v=3.43.0"></script>
+<script src="animation/mocap.js?v=3.43.0"></script>
+<script src="animation/document.js?v=3.43.0"></script>
+<script src="animation/rig-library.js?v=3.43.0"></script>
+<script src="animation/character-library.js?v=3.43.0"></script>
+<script src="animation/timeline.js?v=3.43.0"></script>
+<script src="animation/xsheet-view.js?v=3.43.0"></script>
+<script src="animation/timeline-view.js?v=3.43.0"></script>
+<script src="animation/level-strip.js?v=3.43.0"></script>
+<script src="animation/function-editor.js?v=3.43.0"></script>
+<script src="animation/premiere-xml.js?v=3.43.0"></script>
+<script src="animation/export-cuadros.js?v=3.43.0"></script>
+<script src="animation/escena-nueva.js?v=3.43.0"></script>
+<script src="animation/camara-guia.js?v=3.43.0"></script>
+<script src="animation/lipsync.js?v=3.43.0"></script>
+<script src="animation/lipsync-texto.js?v=3.43.0"></script>
+<script src="animation/lipsync-audio.js?v=3.43.0"></script>
+<script src="animation/arcs.js?v=3.43.0"></script>
+<script src="animation/palette-view.js?v=3.43.0"></script>
+<script src="animation/audio.js?v=3.43.0"></script>
+<script src="animation/shortcuts.js?v=3.43.0"></script>
+<script src="storyboard/shot-model.js?v=3.43.0"></script>
+<script src="storyboard/workflow.js?v=3.43.0"></script>
+<script src="storyboard/storyboarder-import.js?v=3.43.0"></script>
+<script src="storyboard/stage-view.js?v=3.43.0"></script>
+<script src="storyboard/board-view.js?v=3.43.0"></script>
+<script src="animation/model-tests.js?v=3.43.0"></script>
+<script src="animation/xsheet.js?v=3.43.0"></script>
+<script src="animation/playback.js?v=3.43.0"></script>
+<script src="animation/camera.js?v=3.43.0"></script>
+<script src="composition/multiplane-model.js?v=3.43.0"></script>
+<script src="composition/controller.js?v=3.43.0"></script>
+<script src="composition/multiplane-view.js?v=3.43.0"></script>
+<script src="drawing/stabilization.js?v=3.43.0"></script>
+<script src="drawing/presion.js?v=3.43.0"></script>
+<script src="drawing/selection.js?v=3.43.0"></script>
+<script src="drawing/transforms.js?v=3.43.0"></script>
+<script src="drawing/pointer-input.js?v=3.43.0"></script>
+<script src="drawing/brushes.js?v=3.43.0"></script>
+<script src="drawing/stroke-engine.js?v=3.43.0"></script>
+<script src="drawing/brush-engine-pro.js?v=3.43.0"></script>
+<script src="drawing/pincel-efectos.js?v=3.43.0"></script>
+<script src="drawing/pincel-bitmap.js?v=3.43.0"></script>
+<script src="drawing/pincel-vivo.js?v=3.43.0"></script>
+<script src="drawing/bibliotecas.js?v=3.43.0"></script>
+<script src="drawing/brush-studio.js?v=3.43.0"></script>
+<script src="drawing/mis-pinceles.js?v=3.43.0"></script>
+<script src="collaboration/session.js?v=3.43.0"></script>
+<script src="collaboration/transport.js?v=3.43.0"></script>
+<script src="workspace/panels.js?v=3.43.0"></script>
+<script src="workspace/workspaces.js?v=3.43.0"></script>
+<script src="workspace/windows.js?v=3.43.0"></script>
+<script src="workspace/layouts.js?v=3.43.0"></script>
+<script src="workspace/recovery.js?v=3.43.0"></script>
+<script src="workspace/rescate-escena.js?v=3.43.0"></script>
+<script src="ai/commands.js?v=3.43.0"></script>
+<script src="ai/task-runner.js?v=3.43.0"></script>
+<script src="ai/recovery.js?v=3.43.0"></script>
+<script src="ai/provider-settings.js?v=3.43.0"></script>
+<script src="ai/agent-workbench.js?v=3.43.0"></script>
 <!-- dzCanvasInner ANTES de app.js: el arranque (dzWsInit → dzDocInit) la usa y, cargada después, a veces todavía no existía («dzCanvasInner is not defined», puerta 3.11.1) -->
-<script src="animation/canvas-content.js?v=3.42.0"></script>
-<script src="app.js?v=3.42.0"></script>
-<script src="drawing/perspectiva.js?v=3.42.0"></script>
-<script src="drawing/seleccion-opciones.js?v=3.42.0"></script>
-<script src="drawing/seleccion-grupo.js?v=3.42.0"></script>
-<script src="animation/layout-3d.js?v=3.42.0"></script>
-<script src="animation/exportar-capacidades.js?v=3.42.0"></script>
-<script src="core/editor-resiliente.js?v=3.42.0"></script>
-<script src="application/herramienta-y-modo.js?v=3.42.0"></script>
-<script src="panels/marco-seleccion.js?v=3.42.0"></script>
-<script src="panels/superposiciones-mesa.js?v=3.42.0"></script>
-<script src="panels/mesa-tiene-dibujo.js?v=3.42.0"></script>
-<script src="panels/safe-mode-view.js?v=3.42.0"></script>
-<script src="core/version-badge.js?v=3.42.0"></script>
-<script src="core/session-recorder.js?v=3.42.0"></script>
-<script src="drawing/mesa-de-luz.js?v=3.42.0"></script>
-<script src="animation/camara-2d.js?v=3.42.0"></script>
-<script src="animation/camara-tutorial.js?v=3.42.0"></script>
-<script src="drawing/pincel-actual.js?v=3.42.0"></script>
-<script src="drawing/mano.js?v=3.42.0"></script>
-<script src="vector/esculpir-nucleo.js?v=3.42.0"></script>
-<script src="vector/esculpir.js?v=3.42.0"></script>
-<script src="vector/limpieza-nucleo.js?v=3.42.0"></script>
-<script src="vector/limpieza.js?v=3.42.0"></script>
-<script src="drawing/capa-bitmap.js?v=3.42.0"></script>
-<script src="drawing/pulsacion-larga.js?v=3.42.0"></script>
-<script src="drawing/unir-puntas.js?v=3.42.0"></script>
-<script src="drawing/pincel-rapido.js?v=3.42.0"></script>
-<script src="drawing/imagenes.js?v=3.42.0"></script>
-<script src="drawing/mesa-sin-desplazar.js?v=3.42.0"></script>
-<script src="application/pantalla-inicial.js?v=3.42.0"></script>
-<script src="panels/onion-scroll-guard.js?v=3.42.0"></script>
-<script src="drawing/hit-test.js?v=3.42.0"></script>
-<script src="drawing/brush-render.js?v=3.42.0"></script>
-<script src="drawing/element-edit.js?v=3.42.0"></script>
-<script src="panels/corner-editor.js?v=3.42.0"></script>
-<script src="panels/element-inspector.js?v=3.42.0"></script>
-<script src="panels/tool-help.js?v=3.42.0"></script>
-<script src="vector/brush-width.js?v=3.42.0"></script>
-<script src="drawing/text-tool.js?v=3.42.0"></script>
-<script src="drawing/fill-geometry.js?v=3.42.0"></script>
-<script src="drawing/forma-pincel.js?v=3.42.0"></script>
-<script src="vector/node-editor.js?v=3.42.0"></script>
-<script src="vector/warp-cage.js?v=3.42.0"></script>
-<script src="vector/escala-geometrica.js?v=3.42.0"></script>
-<script src="vector/puntos-linea.js?v=3.42.0"></script>
-<script src="vector/inflar-linea.js?v=3.42.0"></script>
-<script src="panels/shape-tool.js?v=3.42.0"></script>
-<script src="panels/composition-panel.js?v=3.42.0"></script>
-<script src="panels/composition-camera.js?v=3.42.0"></script>
-<script src="panels/arcs-view.js?v=3.42.0"></script>
-<script src="panels/colab-panel.js?v=3.42.0"></script>
-<script src="rigging/flexible-limb.js?v=3.42.0"></script>
-  <script src="rigging/smart-action-ui.js?v=3.42.0"></script>
-  <script src="rigging/control-sets.js?v=3.42.0"></script>
-  <script src="rigging/view-set-ui.js?v=3.42.0"></script>
-  <script src="rigging/control-sets-ui.js?v=3.42.0"></script>
-  <script src="rigging/rig-export.js?v=3.42.0"></script>
-<script src="rigging/mesh-ui.js?v=3.42.0"></script>
-<script src="rigging/flexible-limb-ui.js?v=3.42.0"></script>
-<script src="rigging/limb-corrective-ui.js?v=3.42.0"></script>
-<script src="rigging/rig-control-ui.js?v=3.42.0"></script>
-<script src="rigging/ids-persistentes.js?v=3.42.0"></script>
-<script src="panels/linea-de-tiempo-pestania.js?v=3.42.0"></script>
-<script src="panels/paneles-plegables.js?v=3.42.0"></script>
-<script src="workspace/panel-espejo.js?v=3.42.0"></script>
-<script src="animation/sostener-personaje.js?v=3.42.0"></script>
-<script src="animation/clave-en-el-uno.js?v=3.42.0"></script>
-<script src="animation/cebolla-de-poses.js?v=3.42.0"></script>
-<script src="animation/nueva-capa.js?v=3.42.0"></script>
-<script src="animation/cambiar-capa.js?v=3.42.0"></script>
-<script src="animation/capas-en-mesa.js?v=3.42.0"></script>
-<script src="animation/capas-propiedades.js?v=3.42.0"></script>
-<script src="animation/reproduccion-fluida.js?v=3.42.0"></script>
-<script src="panels/capas-tope.js?v=3.42.0"></script>
-<script src="animation/cebolla-al-reproducir.js?v=3.42.0"></script>
-<script src="animation/navegar-cuadros.js?v=3.42.0"></script>
-<script src="animation/interpolar-transform.js?v=3.42.0"></script>
-<script src="animation/color-elegido.js?v=3.42.0"></script>
-<script src="workspace/mesa-sola.js?v=3.42.0"></script>
-<script src="animation/capa-menu.js?v=3.42.0"></script>
-<script src="drawing/cortar-pegar.js?v=3.42.0"></script>
-<script src="drawing/espejar.js?v=3.42.0"></script>
-<script src="drawing/paralelas.js?v=3.42.0"></script>
-<script src="drawing/guias.js?v=3.42.0"></script>
-<script src="animation/acompanar.js?v=3.42.0"></script>
-<script src="animation/lipsync-texto-panel.js?v=3.42.0"></script>
-<script src="animation/clave-de-dibujo.js?v=3.42.0"></script>
-<script src="panels/atajos.js?v=3.42.0"></script>
-<script src="drawing/forma-rapida.js?v=3.42.0"></script>
-<script src="drawing/flechas.js?v=3.42.0"></script>
-<script src="animation/recorrido.js?v=3.42.0"></script>
-<script src="animation/capa-oculta.js?v=3.42.0"></script>
-<script src="rigging/sostener-ui.js?v=3.42.0"></script>
-<script src="animation/rhythm-lab.js?v=3.42.0"></script>
-<script src="panels/rhythm-lab-view.js?v=3.42.0"></script>
-<script src="i18n/idioma.js?v=3.42.0"></script>
-<script src="i18n/en.js?v=3.42.0"></script>
-<script src="i18n/pt.js?v=3.42.0"></script>
+<script src="animation/canvas-content.js?v=3.43.0"></script>
+<script src="app.js?v=3.43.0"></script>
+<script src="drawing/perspectiva.js?v=3.43.0"></script>
+<script src="drawing/seleccion-opciones.js?v=3.43.0"></script>
+<script src="drawing/seleccion-grupo.js?v=3.43.0"></script>
+<script src="animation/layout-3d.js?v=3.43.0"></script>
+<script src="animation/exportar-capacidades.js?v=3.43.0"></script>
+<script src="core/editor-resiliente.js?v=3.43.0"></script>
+<script src="application/herramienta-y-modo.js?v=3.43.0"></script>
+<script src="panels/marco-seleccion.js?v=3.43.0"></script>
+<script src="panels/superposiciones-mesa.js?v=3.43.0"></script>
+<script src="panels/mesa-tiene-dibujo.js?v=3.43.0"></script>
+<script src="panels/safe-mode-view.js?v=3.43.0"></script>
+<script src="core/version-badge.js?v=3.43.0"></script>
+<script src="core/session-recorder.js?v=3.43.0"></script>
+<script src="drawing/mesa-de-luz.js?v=3.43.0"></script>
+<script src="animation/camara-2d.js?v=3.43.0"></script>
+<script src="animation/camara-tutorial.js?v=3.43.0"></script>
+<script src="drawing/pincel-actual.js?v=3.43.0"></script>
+<script src="drawing/mano.js?v=3.43.0"></script>
+<script src="vector/esculpir-nucleo.js?v=3.43.0"></script>
+<script src="vector/esculpir.js?v=3.43.0"></script>
+<script src="vector/limpieza-nucleo.js?v=3.43.0"></script>
+<script src="vector/limpieza.js?v=3.43.0"></script>
+<script src="drawing/capa-bitmap.js?v=3.43.0"></script>
+<script src="drawing/pulsacion-larga.js?v=3.43.0"></script>
+<script src="drawing/unir-puntas.js?v=3.43.0"></script>
+<script src="drawing/pincel-rapido.js?v=3.43.0"></script>
+<script src="drawing/imagenes.js?v=3.43.0"></script>
+<script src="drawing/mesa-sin-desplazar.js?v=3.43.0"></script>
+<script src="application/pantalla-inicial.js?v=3.43.0"></script>
+<script src="panels/onion-scroll-guard.js?v=3.43.0"></script>
+<script src="drawing/hit-test.js?v=3.43.0"></script>
+<script src="drawing/brush-render.js?v=3.43.0"></script>
+<script src="drawing/element-edit.js?v=3.43.0"></script>
+<script src="panels/corner-editor.js?v=3.43.0"></script>
+<script src="panels/element-inspector.js?v=3.43.0"></script>
+<script src="panels/tool-help.js?v=3.43.0"></script>
+<script src="vector/brush-width.js?v=3.43.0"></script>
+<script src="drawing/text-tool.js?v=3.43.0"></script>
+<script src="drawing/fill-geometry.js?v=3.43.0"></script>
+<script src="drawing/forma-pincel.js?v=3.43.0"></script>
+<script src="vector/node-editor.js?v=3.43.0"></script>
+<script src="vector/warp-cage.js?v=3.43.0"></script>
+<script src="vector/escala-geometrica.js?v=3.43.0"></script>
+<script src="vector/puntos-linea.js?v=3.43.0"></script>
+<script src="vector/inflar-linea.js?v=3.43.0"></script>
+<script src="panels/shape-tool.js?v=3.43.0"></script>
+<script src="panels/composition-panel.js?v=3.43.0"></script>
+<script src="panels/composition-camera.js?v=3.43.0"></script>
+<script src="panels/arcs-view.js?v=3.43.0"></script>
+<script src="panels/colab-panel.js?v=3.43.0"></script>
+<script src="rigging/flexible-limb.js?v=3.43.0"></script>
+  <script src="rigging/smart-action-ui.js?v=3.43.0"></script>
+  <script src="rigging/control-sets.js?v=3.43.0"></script>
+  <script src="rigging/view-set-ui.js?v=3.43.0"></script>
+  <script src="rigging/control-sets-ui.js?v=3.43.0"></script>
+  <script src="rigging/rig-export.js?v=3.43.0"></script>
+<script src="rigging/mesh-ui.js?v=3.43.0"></script>
+<script src="rigging/flexible-limb-ui.js?v=3.43.0"></script>
+<script src="rigging/limb-corrective-ui.js?v=3.43.0"></script>
+<script src="rigging/rig-control-ui.js?v=3.43.0"></script>
+<script src="rigging/ids-persistentes.js?v=3.43.0"></script>
+<script src="panels/linea-de-tiempo-pestania.js?v=3.43.0"></script>
+<script src="panels/paneles-plegables.js?v=3.43.0"></script>
+<script src="workspace/panel-espejo.js?v=3.43.0"></script>
+<script src="animation/sostener-personaje.js?v=3.43.0"></script>
+<script src="animation/clave-en-el-uno.js?v=3.43.0"></script>
+<script src="animation/cebolla-de-poses.js?v=3.43.0"></script>
+<script src="animation/nueva-capa.js?v=3.43.0"></script>
+<script src="animation/cambiar-capa.js?v=3.43.0"></script>
+<script src="animation/capas-en-mesa.js?v=3.43.0"></script>
+<script src="animation/capas-propiedades.js?v=3.43.0"></script>
+<script src="animation/reproduccion-fluida.js?v=3.43.0"></script>
+<script src="panels/capas-tope.js?v=3.43.0"></script>
+<script src="animation/cebolla-al-reproducir.js?v=3.43.0"></script>
+<script src="animation/navegar-cuadros.js?v=3.43.0"></script>
+<script src="animation/interpolar-transform.js?v=3.43.0"></script>
+<script src="animation/color-elegido.js?v=3.43.0"></script>
+<script src="workspace/mesa-sola.js?v=3.43.0"></script>
+<script src="animation/capa-menu.js?v=3.43.0"></script>
+<script src="drawing/cortar-pegar.js?v=3.43.0"></script>
+<script src="drawing/espejar.js?v=3.43.0"></script>
+<script src="drawing/paralelas.js?v=3.43.0"></script>
+<script src="drawing/autocad.js?v=3.43.0"></script>
+<script src="drawing/guias.js?v=3.43.0"></script>
+<script src="animation/acompanar.js?v=3.43.0"></script>
+<script src="animation/lipsync-texto-panel.js?v=3.43.0"></script>
+<script src="animation/clave-de-dibujo.js?v=3.43.0"></script>
+<script src="panels/atajos.js?v=3.43.0"></script>
+<script src="drawing/forma-rapida.js?v=3.43.0"></script>
+<script src="drawing/flechas.js?v=3.43.0"></script>
+<script src="animation/recorrido.js?v=3.43.0"></script>
+<script src="animation/capa-oculta.js?v=3.43.0"></script>
+<script src="rigging/sostener-ui.js?v=3.43.0"></script>
+<script src="animation/rhythm-lab.js?v=3.43.0"></script>
+<script src="panels/rhythm-lab-view.js?v=3.43.0"></script>
+<script src="i18n/idioma.js?v=3.43.0"></script>
+<script src="i18n/en.js?v=3.43.0"></script>
+<script src="i18n/pt.js?v=3.43.0"></script>
 </body>
 </html>

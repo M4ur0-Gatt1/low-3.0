@@ -347,6 +347,10 @@ export class WebGLDesign3D {
     kind: 'stroke' | 'guide';
     line?: THREE.Line;
     mirrorLine?: THREE.Line;
+    /** cuánto mundo mide un píxel donde arrancó el trazo (el grosor es en px, como en el 2D) */
+    mundoPorPx?: number;
+    /** el trazo con su grosor de verdad mientras se dibuja (no una línea de 1 px) */
+    vivo?: THREE.Mesh; vivoCuadro?: number;
     /** normal de la superficie sobre la que se apoyó el primer punto — para
      *  que una guía nueva salga PERPENDICULAR al plano en el que se estaba
      *  dibujando (ver buildGuideSurface), no siempre de cara a la cámara. */
@@ -3128,7 +3132,7 @@ export class WebGLDesign3D {
       this.smoothed = hit.point.clone();
       this.current = {
         points: [hit.point], pressures: [this.samplePressure(e)], kind: 'stroke', line, mirrorLine,
-        baseNormal: hit.normal.clone(), noSupport: false,
+        baseNormal: hit.normal.clone(), noSupport: false, mundoPorPx: this.mundoPorPxEn(hit.point),
       };
       this.updatePreview();
       return;
@@ -3193,7 +3197,7 @@ export class WebGLDesign3D {
     this.smoothed = hit.point.clone(); // sin retraso en el primer punto
     this.current = {
       points: [hit.point], pressures: [this.samplePressure(e)], kind, line, mirrorLine,
-      baseNormal: hit.normal.clone(),
+      baseNormal: hit.normal.clone(), mundoPorPx: kind === 'stroke' ? this.mundoPorPxEn(hit.point) : undefined,
       // No se "engancha" a un trazo ya dibujado: si el gesto arranca encima de
       // una línea existente, seguir su tubo torcía todo el trazo. Solo se
       // sigue la malla de una guía/superficie real (curvas incluidas).
@@ -3509,6 +3513,19 @@ export class WebGLDesign3D {
   private updatePreview(): void {
     if (!this.current) return;
     this.current.line?.geometry.setFromPoints(this.current.points);
+    // EN VIVO, el trazo con su grosor de verdad (antes, una línea de 1 px que recién
+    // al soltar mostraba el ancho): una vez por cuadro de pantalla
+    const c = this.current;
+    if (c.kind === 'stroke' && c.line && c.points.length >= 2 && !c.vivoCuadro) {
+      c.vivoCuadro = requestAnimationFrame(() => {
+        if (this.current !== c || !c.line) return;
+        c.vivoCuadro = 0;
+        const m = this.buildTube(c.points, c.pressures, this.pincelEn(c.mundoPorPx));
+        if (c.vivo) { c.line.remove(c.vivo); c.vivo.geometry.dispose(); (c.vivo.material as THREE.Material).dispose(); }
+        c.vivo = m ?? undefined;
+        if (m) { c.line.add(m); (c.line.material as THREE.Material).visible = false; }
+      });
+    }
     const esp = this.current.espejo;
     if (this.current.mirrorLine) this.current.mirrorLine.geometry.setFromPoints(esp ? this.current.points.map((q) => q.clone().applyMatrix4(esp)) : this.mirroredVariants(this.current.points)[0] || []);
   }
@@ -3516,13 +3533,32 @@ export class WebGLDesign3D {
   private strokeRadius(size: number = this.brush.size): number {
     return 0.01 + (size / 100) * 0.12;
   }
+  /** EL GROSOR EN PÍXELES, COMO EN EL 2D. Antes el grosor 1 era un caño de 2,2 cm
+   *  de diámetro (y el 100, de 26 cm): sobre un personaje de 1,8 m, una soga. Ahora
+   *  el grosor N mide N píxeles en el momento de dibujar, a la profundidad donde
+   *  arranca el trazo, y queda fijo en el mundo (como la tinta sobre el objeto: al
+   *  acercarse engorda, igual que al hacer zoom en el 2D; a lo lejos se afina con la
+   *  perspectiva, como en Grease Pencil). Los trazos de antes no tienen esta medida
+   *  y se ven como siempre. */
+  private mundoPorPxEn(p: THREE.Vector3): number {
+    const cam = this.camera as THREE.Camera, h = Math.max(1, this.canvas.clientHeight);
+    const o = cam as THREE.OrthographicCamera;
+    if (o.isOrthographicCamera) return (o.top - o.bottom) / (o.zoom || 1) / h;
+    const pc = cam as THREE.PerspectiveCamera, frente = pc.getWorldDirection(new THREE.Vector3());
+    const d = Math.max(pc.near, p.clone().sub(pc.position).dot(frente));
+    return (2 * d * Math.tan((pc.fov * Math.PI) / 360)) / (pc.zoom || 1) / h;
+  }
+  /** El pincel de ahora con la escala del lugar donde arranca el trazo. */
+  private pincelEn(mundoPorPx: number | undefined): BrushSettings {
+    return mundoPorPx && Number.isFinite(mundoPorPx) ? { ...this.brush, mundoPorPx } : { ...this.brush };
+  }
 
   /** Radio en el punto de índice `i` (0..n-1) según su presión: con
    *  `pressureSensitivity` en 0 el ancho es constante (comportamiento de
    *  antes); en 1 llega a angostarse hasta ~15% del ancho con presión mínima.
    *  El piso evita que el trazo desaparezca del todo con presión 0. */
   private radiusAt(pressure: number, brush: BrushSettings = this.brush): number {
-    const base = this.strokeRadius(brush.size);
+    const base = brush.mundoPorPx ? Math.max(1e-5, brush.size * 0.5 * brush.mundoPorPx) : this.strokeRadius(brush.size);
     const sens = THREE.MathUtils.clamp(brush.pressureSensitivity ?? 0, 0, 1);
     const floor = THREE.MathUtils.lerp(1, 0.15, sens);
     return base * THREE.MathUtils.lerp(floor, 1, THREE.MathUtils.clamp(pressure, 0, 1));
@@ -5870,11 +5906,12 @@ export class WebGLDesign3D {
     const group = new THREE.Group();
     const conContorno = this.shapeStyle !== 'fill';
     const conRelleno = this.shapeStyle !== 'stroke';
+    const pincelFig = this.pincelEn(this.mundoPorPxEn(s.start));
     if (conContorno) {
-      const tube = this.buildTube(pts, pressures, this.brush, true);
+      const tube = this.buildTube(pts, pressures, pincelFig, true);
       if (tube) group.add(tube);
       for (const variant of this.mirroredVariants(pts)) {
-        const b = this.buildTube(variant, pressures, this.brush, true); if (b) group.add(b);
+        const b = this.buildTube(variant, pressures, pincelFig, true); if (b) group.add(b);
       }
     }
     if (conRelleno) {
@@ -5893,7 +5930,7 @@ export class WebGLDesign3D {
       // para que el STL no la cuente como cuerpo
       fill: conContorno ? undefined : true,
       filled: conRelleno && conContorno ? true : undefined,
-      layerId: this.activeLayerId(), baseOpacity: this.brush.opacity, brush: { ...this.brush },
+      layerId: this.activeLayerId(), baseOpacity: this.brush.opacity, brush: { ...pincelFig },
       apoyo: this.apoyoDe(s.plane),
     };
     group.userData.strokeId = rec.id;
@@ -5915,9 +5952,12 @@ export class WebGLDesign3D {
       l.geometry.dispose();
       (l.material as THREE.Material).dispose();
     }
+    if (this.current.vivoCuadro) cancelAnimationFrame(this.current.vivoCuadro);
+    if (this.current.vivo) { this.current.vivo.geometry.dispose(); (this.current.vivo.material as THREE.Material).dispose(); }
     let { points, pressures } = this.current;
     const apoyo = this.apoyoDe(this.current.drawPlane);
     const { kind, baseNormal, noSupport, surfaceId, parte, espejo } = this.current;
+    const pincel = this.pincelEn(this.current.mundoPorPx);
     this.current = null;
     if (points.length < 2) return;
 
@@ -5949,13 +5989,13 @@ export class WebGLDesign3D {
       }
     }
     const group = new THREE.Group();
-    const a = this.buildTube(points, pressures);
+    const a = this.buildTube(points, pressures, pincel);
     if (a) group.add(a);
     const enCuerpo = kind === 'stroke' && parte ? espejo : undefined;
-    if (!enCuerpo) for (const variant of this.mirroredVariants(points)) { const b = this.buildTube(variant, pressures); if (b) group.add(b); }
+    if (!enCuerpo) for (const variant of this.mirroredVariants(points)) { const b = this.buildTube(variant, pressures, pincel); if (b) group.add(b); }
     const rec: StrokeRecord = {
       id: `stroke-${this.seq++}`, object: group, points, pressures, kind,
-      layerId: this.activeLayerId(), baseOpacity: this.brush.opacity, brush: { ...this.brush },
+      layerId: this.activeLayerId(), baseOpacity: this.brush.opacity, brush: { ...pincel },
       apoyo: kind === 'stroke' ? apoyo : undefined,
       parte: kind === 'stroke' ? parte : undefined,
       sinEspejo: enCuerpo ? true : undefined,
@@ -5967,10 +6007,10 @@ export class WebGLDesign3D {
     let par: StrokeRecord | null = null;
     if (enCuerpo && parte) {
       const pts2 = points.map((q) => q.clone().applyMatrix4(enCuerpo));
-      const g2 = new THREE.Group(), b2 = this.buildTube(pts2, pressures);
+      const g2 = new THREE.Group(), b2 = this.buildTube(pts2, pressures, pincel);
       if (b2) g2.add(b2);
       par = { id: `stroke-${this.seq++}`, object: g2, points: pts2, pressures: [...pressures], kind,
-        layerId: rec.layerId, baseOpacity: rec.baseOpacity, brush: { ...this.brush }, parte: ladoOpuesto(parte), sinEspejo: true };
+        layerId: rec.layerId, baseOpacity: rec.baseOpacity, brush: { ...pincel }, parte: ladoOpuesto(parte), sinEspejo: true };
       g2.userData.strokeId = par.id;
       this.addStrokeRecord(par);
     }

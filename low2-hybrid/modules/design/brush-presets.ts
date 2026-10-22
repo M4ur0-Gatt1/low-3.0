@@ -12,3 +12,17 @@ export const BRUSH_PRESETS: { id: string; label: string; values: Omit<BrushSetti
   { id: 'brush', label: 'Pincel', values: { size: 22, opacity: 0.92, hardness: 0.15, pressureSensitivity: 0.55, stabilization: 0.35 } },
   { id: 'charcoal', label: 'Carboncillo', values: { size: 28, opacity: 0.8, hardness: 0.05, pressureSensitivity: 0.8, stabilization: 0.35 } },
 ];
+
+/** El deslizador del GROSOR va en escala logarítmica, de 0,5 a 100 px: en uno
+ *  lineal de 1 a 100, los grosores finos (de 1 a 10, los de entintar) ocupaban
+ *  apenas la décima parte de abajo y no se podían elegir. */
+export const GROSOR_MIN = 0.5, GROSOR_MAX = 100;
+export function grosorDeDeslizador(s: number): number {
+  const v = GROSOR_MIN * Math.pow(GROSOR_MAX / GROSOR_MIN, Math.max(0, Math.min(1000, s)) / 1000);
+  return v < 10 ? Math.round(v * 2) / 2 : Math.round(v);
+}
+export function deslizadorDeGrosor(g: number): number {
+  const v = Math.max(GROSOR_MIN, Math.min(GROSOR_MAX, Number(g) || 1));
+  return Math.round((1000 * Math.log(v / GROSOR_MIN)) / Math.log(GROSOR_MAX / GROSOR_MIN));
+}
+export const grosorTexto = (g: number): string => (g < 10 ? String(Math.round(g * 2) / 2).replace('.', ',') : String(Math.round(g)));

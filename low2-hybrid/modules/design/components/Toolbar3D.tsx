@@ -17,7 +17,7 @@ import { ToolType, SurfaceType, GizmoMode, BrushSettings } from '../../../types/
 import { ColorWheel } from './ColorWheel';
 import { LOW_ACCENT } from '../theme';
 
-import { BRUSH_PRESETS } from '../brush-presets';
+import { BRUSH_PRESETS, deslizadorDeGrosor, grosorDeDeslizador } from '../brush-presets';
 
 
 const Icons = {
@@ -284,9 +284,9 @@ export const Toolbar3D: React.FC<Toolbar3DProps> = ({ engine }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginTop: 4 }}>
           <button ref={swatchRef} onClick={toggleWheel} title="Color del pincel (círculo cromático)"
             style={{ width: 40, height: 40, border: showWheel ? `2px solid ${LOW_ACCENT}` : '2px solid transparent', borderRadius: 6, cursor: 'pointer', backgroundColor: brushSettings.color }} />
-          <input type="range" min="1" max="100" value={brushSettings.size}
-            onChange={(e) => setBrushSettings({ ...brushSettings, size: Number(e.target.value) })}
-            title="Tamaño del pincel" style={{ flex: 1, accentColor: LOW_ACCENT }} />
+          <input type="range" min="0" max="1000" value={deslizadorDeGrosor(brushSettings.size)}
+            onChange={(e) => setBrushSettings({ ...brushSettings, size: grosorDeDeslizador(Number(e.target.value)) })}
+            title="Tamaño del pincel (px, como en el 2D)" style={{ flex: 1, accentColor: LOW_ACCENT }} />
         </div>
       </Section>
 

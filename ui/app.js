@@ -2735,7 +2735,7 @@ function dzToolsBarInit(rail, primarias) {
   const more = document.createElement("button");
   more.className = "ibtn dz-tools-more"; more.id = "dzToolsMore";
   more.textContent = "⋯";
-  more.title = "Más herramientas: vectores, esculpir trazos, pivote, espejo, paralelas, imagen, cámara, esqueleto y escenario";
+  more.title = "Más herramientas: vectores, esculpir trazos, pivote, espejo, paralelas, lo de AutoCAD (referencias, desfase, matriz, igualar), imagen, cámara, esqueleto y escenario";
   more.setAttribute("aria-haspopup", "true");
   rail.appendChild(more);
   more.onclick = (event) => {
@@ -3539,7 +3539,7 @@ function dzDeselect() {
   const rot = $("#dzRotate"); if (rot) rot.hidden = true;
   const pv = $("#dzPivot"); if (pv) pv.hidden = true;
   dzBuildLayers();
-  $("#dzPrompt").placeholder = "Pedile un cambio a LOW… ej: «hacé el título más grande y centralo»";
+  $("#dzPrompt").placeholder = "Pedile un cambio a LOW… ej: «hacé el título más grande y centralo» · o un comando: O, AR, MA, REFENT";
 }
 /* ubica el tirador de resize (esquina inferior-derecha) y el pin de comentario
    (esquina superior-izquierda) sobre el elemento seleccionado */

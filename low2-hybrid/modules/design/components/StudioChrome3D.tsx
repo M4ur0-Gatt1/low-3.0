@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { deslizadorDeGrosor, grosorDeDeslizador, grosorTexto } from '../brush-presets';
 import { useLowStore } from '../../../store/low-store';
 import type { ToolType } from '../../../types/design-types';
 import type { WebGLDesign3D, ViewName } from '../engine/webgl-design3d';
@@ -171,7 +172,7 @@ export function StudioChrome3D({engine,dark,onTheme,onClose,onNew,onOpen,onSave,
    </aside>}
    <aside className="studio-sidebar studio-brush-strip studio-surface" aria-label="Pincel e historia">
      <input type="color" aria-label="Color del pincel" title="Color del pincel" value={state.brushSettings.color} onChange={e=>state.setBrushSettings({...state.brushSettings,color:e.target.value})}/>
-     <label className="studio-vertical" title="Tamaño del pincel"><input aria-label="Tamaño del pincel" type="range" min="1" max="100" value={state.brushSettings.size} onChange={e=>state.setBrushSettings({...state.brushSettings,size:Number(e.target.value)})}/><output>{state.brushSettings.size}</output></label>
+     <label className="studio-vertical" title="Tamaño del pincel"><input aria-label="Tamaño del pincel" type="range" min="0" max="1000" value={deslizadorDeGrosor(state.brushSettings.size)} onChange={e=>state.setBrushSettings({...state.brushSettings,size:grosorDeDeslizador(Number(e.target.value))})}/><output>{grosorTexto(state.brushSettings.size)}</output></label>
      <label className="studio-vertical" title="Opacidad del pincel"><input aria-label="Opacidad del pincel" type="range" min="5" max="100" value={Math.round(state.brushSettings.opacity*100)} onChange={e=>state.setBrushSettings({...state.brushSettings,opacity:Number(e.target.value)/100})}/><output>{Math.round(state.brushSettings.opacity*100)}%</output></label>
      <button className="studio-fuga" aria-pressed={fuga} aria-label="Rectas a los ejes" title={fuga?'Rectas a los ejes: una línea casi recta, al soltarla, va exacta por la arista o el eje de su superficie y fuga sola. Shift o apagarlo: queda como la dibujaste':'Rectas a los ejes apagado: las líneas quedan como las dibujaste'}
        onClick={()=>{const e=engine.current;if(e){e.setImanFuga(!fuga);setFuga(!fuga);}}}><StudioIcon name="rect"/><span>Ejes</span></button>
