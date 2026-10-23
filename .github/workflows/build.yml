@@ -84,6 +84,7 @@ jobs:
           python tools/check_servidor_rafaga_backend.py
           python tools/check_recientes_backend.py
           python tools/check_brush_import_backend.py
+          python tools/check_almacen3d_backend.py
       - name: Contratos críticos de interacción 2D
         run: python tools/check_2d_interaction_contracts.py
       - name: Recorridos reales — dibujo, rigging, composición y storyboard
@@ -218,6 +219,9 @@ jobs:
           node tools/check_3d_cara_cuerpo_ui.js
           node tools/check_3d_modelado_ui.js
           node tools/check_3d_grosor_ui.js
+          node tools/check_almacen_3d_ui.js
+          node tools/check_personajes_2d_disco_ui.js
+          node tools/check_rescate_aviso_ui.js
           node tools/check_taller_hoja_2d_ui.js
           node tools/check_3d_terreno_ui.js
           node tools/check_3d_rectas_fuga_ui.js

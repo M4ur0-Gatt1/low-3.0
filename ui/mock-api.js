@@ -99,6 +99,36 @@
       return { id: reg.id, name: reg.name, count: reg.brushes.length };
     },
     export_brush_library: async (id) => impl.__pinceles[id] ? (impl.__exportada = JSON.parse(JSON.stringify(impl.__pinceles[id])), { path: "C:\mock\\" + id + ".lowbrush", count: impl.__pinceles[id].brushes.length }) : { error: "no existe " + id },
+    // ESTUDIO 3D en archivos (almacen3d.py en la app real): acá sobrevive a recargar
+    // la página (sessionStorage). Una prueba simula un disco lleno con
+    // window.__est3dFalla = "No queda espacio en el disco".
+    est3d_leer: async (nombre) => {
+      if (!/^(biblioteca|autoguardado)$/.test(nombre)) return { error: "nombre desconocido: " + nombre };
+      // un disco lento (una biblioteca de 27 MB tarda unos 2 s en la app real); sobrevive a recargar
+      const demora = +(sessionStorage.getItem("mock.est3d.demora") || 0);
+      if (demora) await new Promise((r) => setTimeout(r, demora));
+      try { const v = sessionStorage.getItem("mock.est3d." + nombre); return { json: v == null ? null : v }; } catch (e) { return { error: String(e) }; }
+    },
+    est3d_guardar: async (nombre, texto) => {
+      if (!/^(biblioteca|autoguardado)$/.test(nombre)) return { error: "nombre desconocido: " + nombre };
+      if (window.__est3dFalla) return { error: window.__est3dFalla };
+      try { JSON.parse(texto); } catch (e) { return { error: "no es JSON válido" }; }
+      try { sessionStorage.setItem("mock.est3d." + nombre, texto); impl.__est3dGuardados = (impl.__est3dGuardados || 0) + 1; return { ok: true, bytes: texto.length }; }
+      catch (e) { return { error: String(e) }; }
+    },
+    obra2d_leer: async (nombre) => {
+      if (nombre !== "personajes2d") return { error: "nombre desconocido: " + nombre };
+      const demora = +(sessionStorage.getItem("mock.obra2d.demora") || 0);
+      if (demora) await new Promise((r) => setTimeout(r, demora));
+      try { const v = sessionStorage.getItem("mock.obra2d." + nombre); return { json: v == null ? null : v }; } catch (e) { return { error: String(e) }; }
+    },
+    obra2d_guardar: async (nombre, texto) => {
+      if (nombre !== "personajes2d") return { error: "nombre desconocido: " + nombre };
+      if (window.__est3dFalla) return { error: window.__est3dFalla };
+      try { JSON.parse(texto); } catch (e) { return { error: "no es JSON válido" }; }
+      try { sessionStorage.setItem("mock.obra2d." + nombre, texto); return { ok: true, bytes: texto.length }; } catch (e) { return { error: String(e) }; }
+    },
+    est3d_borrar: async (nombre) => { try { sessionStorage.removeItem("mock.est3d." + nombre); return { ok: true }; } catch (e) { return { error: String(e) }; } },
     pick_image: async () => window.__mockImagen || null,
     history: async () => [],
     ollama_models: async () => [],

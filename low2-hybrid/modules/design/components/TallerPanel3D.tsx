@@ -104,9 +104,10 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
     cargarAnimaciones().then(() => setAnimaciones(engine.current?.animacionesDelTaller() ?? []));
     window.addEventListener('low3d:taller', oir);
     window.addEventListener('low3d:edicion', oir);
+    window.addEventListener('low3d:kits', oir);   // la biblioteca llegó del disco: «Mis personajes»
     window.addEventListener('message', alMensaje);
     if (enLOW()) window.parent.postMessage({ type: 'low:pedir-encuadre' }, '*');
-    return () => { window.removeEventListener('low3d:taller', oir); window.removeEventListener('low3d:edicion', oir); window.removeEventListener('message', alMensaje); };
+    return () => { window.removeEventListener('low3d:taller', oir); window.removeEventListener('low3d:edicion', oir); window.removeEventListener('low3d:kits', oir); window.removeEventListener('message', alMensaje); };
   }, [engine]);
 
   /* ── FUERA DEL TALLER: elegir cuerpo o personaje ── */

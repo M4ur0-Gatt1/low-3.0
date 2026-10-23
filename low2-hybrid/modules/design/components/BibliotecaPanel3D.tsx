@@ -53,6 +53,8 @@ export function BibliotecaPanel3D({ engine }: { engine: React.MutableRefObject<W
   };
   // al abrir el panel, el estilo de las calles y del paisaje es el de la escenografía en uso
   useEffect(() => { engine.current?.setEstiloCalles(kit.estilo); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // la biblioteca propia llega del DISCO al abrir el estudio (engine/biblioteca3d.ts)
+  useEffect(() => { const f = () => setPropios(cargarKitsPropios()); window.addEventListener('low3d:kits', f); return () => window.removeEventListener('low3d:kits', f); }, []);
   // el editor se prende y se apaga desde el motor
   useEffect(() => {
     const oir = () => { const ed = engine.current?.enEdicion() ?? null; setEdicion(ed); if (ed) { setEdNombre(ed.nombre); setEdCat(ed.categoria); } };

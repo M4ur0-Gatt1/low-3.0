@@ -8268,16 +8268,7 @@ function dzRigLibraryAdd(keyArg) {
   dzSetStatus(`${ids.length} huesos colocados ${sobreElDibujo?"encima del dibujo":"en el centro de la hoja (no hay dibujo que medir)"} · ajustá articulaciones y tocá Repartir para pegarlos al personaje`);
 }
 
-const DZ_CHARACTER_LIBRARY_KEY = "low.2d.characters.v1";
-function dzCharacterLibraryRead() {
-  try {
-    const list = JSON.parse(localStorage.getItem(DZ_CHARACTER_LIBRARY_KEY) || "[]");
-    return Array.isArray(list) ? list.map(x => LOW.animation.characterLibrary.read(x)) : [];
-  } catch (_) { return []; }
-}
-function dzCharacterLibraryWrite(list) {
-  localStorage.setItem(DZ_CHARACTER_LIBRARY_KEY, JSON.stringify(list.slice(0, 40)));
-}
+// dzCharacterLibraryRead/Write: core/personajes-2d-disco.js (la biblioteca vive en disco desde la 3.44)
 function dzCharacterLibraryRender(selectedId) {
   const select = $("#rigCharacterLibrary"); if (!select || !LOW.animation.characterLibrary) return;
   const list = dzCharacterLibraryRead();

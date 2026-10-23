@@ -52,7 +52,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.43.0"
+LOW_VERSION = "3.44.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -1946,6 +1946,30 @@ class Api:
             return B.exportar(str(lib_id), Path(r[0] if isinstance(r, (list, tuple)) else str(r)))
         except (OSError, ValueError, brush_import.ErrorDeFormato) as e:
             return {"error": str(e)}
+
+    # ── ESTUDIO 3D: la biblioteca y el autoguardado, en archivos (almacen3d.py) ──
+    def est3d_leer(s, nombre):
+        """Lo guardado del Estudio 3D ("biblioteca" o "autoguardado"): {"json"} o {"error"}."""
+        import almacen3d
+        return almacen3d.Almacen3D(data_dir() / "estudio3d").leer(str(nombre))
+
+    def est3d_guardar(s, nombre, texto):
+        """Escribe atómico, con el anterior como respaldo. {"ok", "bytes"} o {"error"}."""
+        import almacen3d
+        return almacen3d.Almacen3D(data_dir() / "estudio3d").guardar(str(nombre), texto)
+
+    def est3d_borrar(s, nombre):
+        import almacen3d
+        return almacen3d.Almacen3D(data_dir() / "estudio3d").borrar(str(nombre))
+
+    # la biblioteca de personajes del 2D (antes en el navegador): %APPDATA%/LOW/obra/
+    def obra2d_leer(s, nombre):
+        import almacen3d
+        return almacen3d.Almacen3D(data_dir() / "obra", almacen3d.NOMBRES_2D).leer(str(nombre))
+
+    def obra2d_guardar(s, nombre, texto):
+        import almacen3d
+        return almacen3d.Almacen3D(data_dir() / "obra", almacen3d.NOMBRES_2D).guardar(str(nombre), texto)
 
     def remove_brush_library(s, lib_id):
         """Quita una biblioteca instalada (borra su archivo)."""

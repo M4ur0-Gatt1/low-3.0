@@ -13,7 +13,7 @@ a = Analysis(
            ('low.ico', '.'), ('ui', 'ui'), ('tools', 'tools'), ('low_anim.py', '.'),
            ('self_improvement.py', '.'), ('animation_engine', 'animation_engine'),
            ('social', 'social')] + _FFMPEG,
-    hiddenimports=['imageio_ffmpeg', 'fondos_archivo', 'providers', 'providers.transport', 'providers.nvidia_provider',
+    hiddenimports=['imageio_ffmpeg', 'fondos_archivo', 'almacen3d', 'providers', 'providers.transport', 'providers.nvidia_provider',
                    'code_runner', 'webview.platforms.winforms',
                    'webview.platforms.edgechromium', 'webview.platforms.cocoa',
                    'webview.platforms.qt',

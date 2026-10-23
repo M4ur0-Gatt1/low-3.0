@@ -23,6 +23,7 @@ import { ESTILO_BASE, type EstiloKit, type Pieza, type Categoria } from './bibli
 import { Personaje3D, personajeNuevo, personajeValido, cargarCuerpo, cargarPoses, cuerpoListo, posesDeFabrica, controlDeHueso, nombreControl, ladoOpuesto,
   CONTROLES, cargarAnimaciones, animacionesDeFabrica, dialesDe, EXPRESIONES, VISEMAS, CONTEXTURAS, CARA_NEUTRA, type Cara, type Forma, type BaseCuerpo, type PersonajeDatos, type Proporciones, type ModoTaller, type PincelEscultura, type FiltroEscultura, PARTES_MASCARA } from './personaje3d';
 import { CAIDAS, type CaidaPincel, type Pieza as PiezaPersonaje } from './modelado3d';
+import { enLOW, pedir, guardarEnDisco } from './almacen3d';
 import { Terreno, LADO as LADO_TERRENO, PINCEL_INICIAL, type PincelTerreno, type Parche } from './terreno3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -2117,6 +2118,7 @@ export class WebGLDesign3D {
   /** Un aviso que SE VE (lo muestra el estudio arriba de la vista). Antes los
    *  avisos iban al `title` del lienzo: un tooltip que casi nunca aparece, y
    *  por eso «arrastrar y que no pase nada» no decía por qué. */
+  /** los avisos del disco (la biblioteca que no se pudo guardar, engine/almacen3d.ts) */
   avisar(texto: string): void {
     window.dispatchEvent(new CustomEvent('low3d:aviso', { detail: texto }));
   }
@@ -7637,24 +7639,59 @@ export class WebGLDesign3D {
   private static readonly AUTOSAVE_KEY = 'low3d:autosave';
   private autosaveTimer?: number;
 
-  /** Guarda el proyecto (con retraso, para no serializar en cada trazo). */
+  /** el último error del autoguardado avisado (no repetir el mismo aviso en cada trazo) */
+  private autosaveFalla = '';
+  /** Guarda el proyecto (con retraso, para no serializar en cada trazo). Adentro
+   *  de LOW va a un ARCHIVO (engine/almacen3d.ts): antes iba al almacenamiento
+   *  del navegador y, lleno, fallaba en silencio. Si falla, se AVISA. */
   private scheduleAutosave(): void {
     if (this.disposed) return;
     if (this.autosaveTimer) window.clearTimeout(this.autosaveTimer);
     this.autosaveTimer = window.setTimeout(() => {
+      let json: string;
       try {
         // editando un elemento, lo que se resguarda es TU ESCENA (la que espera
         // afuera), no el elemento a medio hacer
-        const datos = this.edicion ? this.edicion.escena : this.exportProject();
-        window.localStorage.setItem(WebGLDesign3D.AUTOSAVE_KEY, JSON.stringify(datos));
-      } catch {
-        // sin espacio o storage bloqueado: no romper el dibujo por esto
+        json = JSON.stringify(this.edicion ? this.edicion.escena : this.exportProject());
+      } catch (e) { this.fallaAutosave('no se pudo armar: ' + (e instanceof Error ? e.message : String(e))); return; }
+      if (enLOW()) {
+        void guardarEnDisco('autoguardado', json).then((r) => {
+          if (r.ok) { this.autosaveFalla = ''; try { window.localStorage.removeItem(WebGLDesign3D.AUTOSAVE_KEY); } catch { /* sin almacén */ } }
+          else this.fallaAutosave(r.error || 'sin respuesta');
+        });
+        return;
       }
+      try { window.localStorage.setItem(WebGLDesign3D.AUTOSAVE_KEY, json); this.autosaveFalla = ''; }
+      catch (e) { this.fallaAutosave(e instanceof Error ? e.message : 'no entró en el almacenamiento'); }
     }, 900);
   }
+  private fallaAutosave(motivo: string): void {
+    if (this.autosaveFalla === motivo) return;
+    this.autosaveFalla = motivo;
+    this.avisar('El autoguardado del 3D falló (' + motivo + '): guardá el proyecto con Guardar para no perder lo que hiciste');
+  }
 
-  /** Restaura el último proyecto autoguardado. Devuelve true si había algo. */
+  /** Restaura el último proyecto autoguardado. Adentro de LOW lo lee del disco (sin
+   *  esperar: llega enseguida y sólo se pone si todavía no se empezó a dibujar);
+   *  la primera vez pasa al disco lo que había en el navegador. Devuelve true si
+   *  puso algo ya (fuera de LOW). */
   restoreAutosave(): boolean {
+    if (enLOW()) {
+      void pedir('leer', 'autoguardado').then((r) => {
+        if (this.disposed) return;
+        if (r.error && !r.sinApp) { this.avisar('No se pudo leer el autoguardado del 3D: ' + r.error); return; }
+        let local: string | null = null;
+        try { local = window.localStorage.getItem(WebGLDesign3D.AUTOSAVE_KEY); } catch { /* sin almacén */ }
+        const raw = typeof r.json === 'string' ? r.json : local;
+        const intacto = !this.undoStack.length && !this.strokes.length;
+        if (raw && intacto) { try { this.importProject(JSON.parse(raw)); } catch (e) { this.avisar('El autoguardado del 3D está dañado: ' + (e instanceof Error ? e.message : String(e))); } }
+        if (r.json == null && local && !r.sinApp) {
+          void guardarEnDisco('autoguardado', local).then((g) => { if (g.ok) { try { window.localStorage.removeItem(WebGLDesign3D.AUTOSAVE_KEY); } catch { /* sin almacén */ } } });
+        }
+        window.dispatchEvent(new Event('low3d:history'));
+      });
+      return false;
+    }
     try {
       const raw = window.localStorage.getItem(WebGLDesign3D.AUTOSAVE_KEY);
       if (!raw) return false;
@@ -7665,9 +7702,10 @@ export class WebGLDesign3D {
     }
   }
 
-  /** Descarta el autoguardado (proyecto nuevo). */
+  /** Descarta el autoguardado (proyecto nuevo). En disco queda el respaldo. */
   private clearAutosave(): void {
     try { window.localStorage.removeItem(WebGLDesign3D.AUTOSAVE_KEY); } catch { /* noop */ }
+    if (enLOW()) void pedir('borrar', 'autoguardado');
   }
 
   private pushCmd(cmd: Command): void {

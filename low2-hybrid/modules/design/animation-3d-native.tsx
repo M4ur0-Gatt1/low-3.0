@@ -9,6 +9,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { iniciarBiblioteca, cargarKitsPropios, guardarKitsPropios } from './engine/biblioteca3d';
 import { WebGLDesign3D, type Theme } from './engine/webgl-design3d';
 import { lowStore } from '../../store/low-store';
 import { StudioChrome3D } from './components/StudioChrome3D';
@@ -43,6 +44,10 @@ export const Animation3DNative: React.FC<Props> = ({ projectId = 'default', onRe
     // último proyecto (los botones Guardar/Abrir siguen siendo para archivos
     // .low3d propios, esto es la red por si cerraste sin guardar).
     engine.restoreAutosave();
+    // la biblioteca propia, del disco (y el pase de lo que estaba en el navegador)
+    void iniciarBiblioteca();
+    // para las pruebas (como __low3d): la biblioteca propia
+    (window as unknown as { __low3dBiblioteca?: unknown }).__low3dBiblioteca = { cargarKitsPropios, guardarKitsPropios };
     engineRef.current = engine;
     (window as unknown as { __low3d?: WebGLDesign3D }).__low3d = engine;
     (window as unknown as { __lowStore?: typeof lowStore }).__lowStore = lowStore;

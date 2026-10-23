@@ -23,6 +23,7 @@
    como nubes de puntos (volúmenes) y polilíneas (líneas). */
 import type { ItemProyecto } from './webgl-design3d';
 import { personajeNuevo, type BaseCuerpo } from './personaje3d';
+import { enLOW, pedir, guardarEnDisco, avisar as avisarAlmacen } from './almacen3d';
 
 export type Categoria = 'edificio' | 'casa' | 'arbol' | 'vegetacion' | 'calle' | 'roca' | 'otro' | 'personaje';
 export const CATEGORIAS: { id: Categoria; nombre: string }[] = [
@@ -234,15 +235,95 @@ export function kitValido(x: unknown): Kit | null {
     piezas: (Array.isArray(o.piezas) ? o.piezas : []).map(piezaValida).filter((p): p is Pieza => !!p),
   };
 }
+/* LA BIBLIOTECA PROPIA, EN DISCO (v3.44, fase 1 del camino a la estabilidad).
+   Adentro de LOW vive en un archivo (engine/almacen3d.ts → almacen3d.py); acá
+   queda en memoria para leerla al instante. Lo que había en el almacenamiento
+   del navegador pasa al disco la primera vez y recién se borra de ahí cuando
+   el disco confirma. Un navegador suelto (las pruebas) sigue con su almacén. */
+const desdeTexto = (txt: string | null | undefined): Kit[] => {
+  try { const raw = JSON.parse(txt || '[]'); return (Array.isArray(raw) ? raw : []).map(kitValido).filter((k): k is Kit => !!k); } catch { return []; }
+};
+let enMemoria: Kit[] | null = null;
 export function cargarKitsPropios(): Kit[] {
-  try {
-    const raw = JSON.parse(window.localStorage.getItem(CLAVE) || '[]');
-    return (Array.isArray(raw) ? raw : []).map(kitValido).filter((k): k is Kit => !!k);
-  } catch { return []; }
+  if (enMemoria) return enMemoria.slice();
+  try { enMemoria = desdeTexto(window.localStorage.getItem(CLAVE)); } catch { enMemoria = []; }
+  return enMemoria.slice();
 }
-/** false si no entró (el navegador da ~5 MB): el kit se puede exportar igual. */
+/* NO PISAR EL DISCO SIN HABERLO LEÍDO. Una biblioteca grande tarda segundos en
+   leerse (27 MB: unos 2 s en la app real) y en ese rato el estudio muestra la
+   lista del arranque, casi vacía. Si ahí se guardaba un personaje, esa lista
+   reemplazaba el archivo: diez personajes perdidos por uno nuevo. Ahora lo que
+   se guarda mientras se lee ESPERA y después se suma a lo del disco; y si el
+   disco no se pudo leer, no se escribe en él (queda la copia de emergencia). */
+let estadoDisco: 'sin-leer' | 'leyendo' | 'listo' | 'ilegible' | 'fuera' = 'sin-leer';
+let enEspera: Kit[] | null = null;
+let lectura: Promise<void> | null = null;
+/** base con nuevos encima: el mismo id se reemplaza, lo demás se agrega. */
+const juntar = (base: Kit[], nuevos: Kit[]): Kit[] => {
+  const out = base.slice();
+  for (const k of nuevos) { const i = out.findIndex((x) => x.id === k.id); if (i >= 0) out[i] = k; else out.push(k); }
+  return out;
+};
+function copiaDeEmergencia(json: string, motivo: string): void {
+  let copia = false;
+  try { window.localStorage.setItem(CLAVE, json); copia = true; } catch { /* tampoco entró */ }
+  avisarAlmacen('No se pudo guardar la biblioteca en el disco: ' + motivo + (copia ? ' · quedó una copia de emergencia en el estudio' : ' · exportá la escenografía (.lowkit) para no perderla'));
+}
+/** Guarda la biblioteca propia. Fuera de LOW: false si no entró (el navegador da ~5 MB).
+ *  Adentro: true (va al disco en cola); si el disco falla, se AVISA y se intenta
+ *  dejar una copia de emergencia en el navegador. */
 export function guardarKitsPropios(kits: Kit[]): boolean {
-  try { window.localStorage.setItem(CLAVE, JSON.stringify(kits.filter((k) => !k.fabrica))); return true; } catch { return false; }
+  const propios = kits.filter((k) => !k.fabrica), json = JSON.stringify(propios);
+  enMemoria = propios.slice();
+  if (!enLOW() || estadoDisco === 'fuera') { try { window.localStorage.setItem(CLAVE, json); return true; } catch { return false; } }
+  if (estadoDisco === 'sin-leer' || estadoDisco === 'leyendo') { enEspera = propios.slice(); void iniciarBiblioteca(); return true; }
+  if (estadoDisco === 'ilegible') { copiaDeEmergencia(json, 'no se pudo leer el archivo, y escribirlo borraría lo que tiene'); return true; }
+  void guardarEnDisco('biblioteca', json).then((r) => {
+    if (r.ok) { try { window.localStorage.removeItem(CLAVE); } catch { /* sin almacén */ } return; }
+    copiaDeEmergencia(json, r.error || 'sin respuesta');
+  });
+  return true;
+}
+/** Al abrir el estudio adentro de LOW: la biblioteca del disco (y, la primera
+ *  vez, el pase de lo que estaba en el navegador). Avisa con «low3d:kits». */
+export function iniciarBiblioteca(): Promise<void> {
+  if (!enLOW()) return Promise.resolve();
+  return (lectura ??= leerBiblioteca());
+}
+async function leerBiblioteca(): Promise<void> {
+  estadoDisco = 'leyendo';
+  const r = await pedir('leer', 'biblioteca');
+  const espera = enEspera; enEspera = null;
+  if (r.sinApp) {   // una app sin el puente al disco: como un navegador suelto
+    estadoDisco = 'fuera';
+    if (espera) guardarKitsPropios(espera);
+    return;
+  }
+  if (r.error) {
+    estadoDisco = 'ilegible';
+    avisarAlmacen('No se pudo leer la biblioteca del disco: ' + r.error + ' · lo que guardes queda en el estudio, sin tocar el archivo');
+    if (espera) guardarKitsPropios(espera);
+    window.dispatchEvent(new Event('low3d:kits'));
+    return;
+  }
+  let local: string | null = null;
+  try { local = window.localStorage.getItem(CLAVE); } catch { /* sin almacén */ }
+  estadoDisco = 'listo';
+  if (typeof r.json === 'string') {
+    const delDisco = desdeTexto(r.json);
+    // una copia de emergencia de una falla anterior: se suma lo que el disco no tenga
+    const extra = desdeTexto(local).filter((k) => !delDisco.some((x) => x.id === k.id));
+    const lista = juntar(juntar(delDisco, extra), espera || []);
+    if (extra.length || espera) guardarKitsPropios(lista);
+    else { enMemoria = lista; if (local) { try { window.localStorage.removeItem(CLAVE); } catch { /* sin almacén */ } } }
+  } else if (local || espera) {
+    // EL PASE: lo del navegador va al disco; se borra del navegador sólo si el disco confirma
+    enMemoria = juntar(desdeTexto(local), espera || []);
+    const g = await guardarEnDisco('biblioteca', JSON.stringify(enMemoria));
+    if (g.ok) { try { window.localStorage.removeItem(CLAVE); } catch { /* sin almacén */ } }
+    else avisarAlmacen('No se pudo pasar la biblioteca al disco: ' + (g.error || 'sin respuesta') + ' · sigue en el estudio');
+  } else enMemoria = [];
+  window.dispatchEvent(new Event('low3d:kits'));
 }
 /** Un .lowkit: el kit con una marca de formato. */
 export function kitAArchivo(k: Kit): string {

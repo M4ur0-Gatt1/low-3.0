@@ -44,6 +44,27 @@ Trabajos:
 - llenar el disco o negar permisos muestra un aviso;
 - cero datos de obra en el almacenamiento del navegador.
 
+### Estado (v3.44.0, 22-oct-2026)
+
+Hecho y medido:
+
+- **Biblioteca 3D y autoguardado del 3D en disco** (`%APPDATA%/LOW/estudio3d/`), con pase automático y avisos. Criterio cumplido en la app real: 10 personajes «Muy alta» (26,7 MB, tres veces lo que entra en el navegador) y la escena sobreviven a un **cierre forzado** (`tools/check_almacen_3d_real.js`, local: necesita WebView2).
+- **Biblioteca de personajes del 2D en disco** (`%APPDATA%/LOW/obra/`). No estaba en el plan; apareció en el inventario.
+- **Escritura atómica sin hueco:** el respaldo se hace con un enlace duro, así el archivo principal no falta ni un instante.
+
+Defectos que aparecieron al hacerlo (todos con su prueba):
+
+- guardar mientras el disco todavía se estaba leyendo (unos 2 s con 27 MB) reemplazaba la biblioteca entera por la lista vacía del arranque, tanto en el 3D como en el 2D;
+- en el 2D, un personaje dañado vaciaba la lista, y el próximo «Guardar» pisaba todo;
+- en el 2D, el personaje número 41 borraba al más viejo;
+- el aviso del 3D se llamaba a sí mismo (recursión infinita).
+
+**Inventario del almacenamiento del navegador**, lo que queda después de la 3.44:
+
+- **Preferencias** (pueden quedar): `low3d:theme`, `low3d:guia-fondos`, `low3d:kit-activo`, `low3d:calle-tipo`, `low3d:iman-fuga`, `low3d:pincel-escultura`, `low.2d.panelLayout`, `low.2d.dockSizes`, `low.panels.v1`, `low.layouts.v1`, `low.toolbar.v1`, `low.workspace.*`, `low.timeline.*`, `low.onion.v2`, `low.camara*`, `low.refent*`, `low.paralelas.mm`, `low.desfase.mm`, `low.matriz`, `low.mesa.v1`, `low.esculpir.v1`, `low.limpieza.v1`, `low.bitmap.v1`, `low.coloring.v1`, `low.color.recent.v1`, `low.palette.*`, `low.brush.actual`, `low.brush.favorites`, `low.dz*`, `low.idioma` y similares.
+- **Pinceles propios** (`low.brushes.v1`): son ajustes, pocos KB; las bibliotecas importadas ya van a disco.
+- **Pendiente, es obra:** el **rescate ante caídas** (`low.document.recovery.*`, `low.scene.recovery.v2.*`). Desde la 3.44 ya no falla en silencio: si no entra, avisa una vez por documento. **Llevarlo al disco es lo que falta para cerrar la fase 1** (v3.45).
+
 ## Fase 2 · Pruebas en las que se pueda confiar
 
 Hoy cada puerta trae de 4 a 12 pruebas «intermitentes» (pasan solas), y una, la de reproducción fluida, falla siempre en esta máquina. Una prueba que falla a veces termina sin mirarse, y ahí se cuelan los defectos.
