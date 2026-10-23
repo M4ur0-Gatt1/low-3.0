@@ -116,6 +116,22 @@
       try { sessionStorage.setItem("mock.est3d." + nombre, texto); impl.__est3dGuardados = (impl.__est3dGuardados || 0) + 1; return { ok: true, bytes: texto.length }; }
       catch (e) { return { error: String(e) }; }
     },
+    // el rescate ante caídas en «disco» (sessionStorage, sobrevive a recargar).
+    // `mock.rescate.navegador` = como una app sin el puente: el rescate se queda
+    // en el navegador (las pruebas del tope del navegador)
+    rescate_leer_todo: async () => {
+      if (sessionStorage.getItem("mock.rescate.navegador")) return { sinApp: true, error: "sin disco (mock)" };
+      const demora = +(sessionStorage.getItem("mock.rescate.demora") || 0);   // un disco lento
+      if (demora) await new Promise((r) => setTimeout(r, demora));
+      const registros = {};
+      for (const k of Object.keys(sessionStorage)) if (k.indexOf("mock.rescate.d.") === 0) registros[k.slice(15)] = sessionStorage.getItem(k);
+      return { registros, rotos: 0 };
+    },
+    rescate_guardar: async (clave, texto) => {
+      if (window.__est3dFalla) return { error: window.__est3dFalla };
+      try { sessionStorage.setItem("mock.rescate.d." + clave, texto); return { ok: true, bytes: texto.length }; } catch (e) { return { error: String(e) }; }
+    },
+    rescate_borrar: async (clave) => { try { sessionStorage.removeItem("mock.rescate.d." + clave); return { ok: true }; } catch (e) { return { error: String(e) }; } },
     obra2d_leer: async (nombre) => {
       if (nombre !== "personajes2d") return { error: "nombre desconocido: " + nombre };
       const demora = +(sessionStorage.getItem("mock.obra2d.demora") || 0);

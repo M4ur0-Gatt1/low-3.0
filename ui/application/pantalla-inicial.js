@@ -82,12 +82,16 @@
     // El del documento no se puede listar: `DocumentRecovery` indexa por hash de
     // la ruta y sólo ofrece `get(path)`. Pero cada valor guarda su propia ruta
     // adentro, así que se recorren las claves con su prefijo.
+    // Desde la 3.45 el rescate vive en disco (workspace/rescate-disco.js): se
+    // lee del almacén de los rescates, que tiene la forma del del navegador.
     let mejor = null;
     try {
-      for (const clave of Object.keys(localStorage)) {
+      const doc = global.LOW && global.LOW.workspace && global.LOW.workspace.recovery;
+      const st = (doc && doc.storage) || localStorage;
+      for (const clave of (typeof st.keys === "function" ? st.keys() : Object.keys(st))) {
         if (clave.indexOf("low.document.recovery.") !== 0) continue;
         let v = null;
-        try { v = JSON.parse(localStorage.getItem(clave) || "null"); } catch (_) { continue; }
+        try { v = JSON.parse(st.getItem(clave) || "null"); } catch (_) { continue; }
         if (!v || !v.path || !v.content) continue;
         if (!mejor || (v.savedAt || 0) > (mejor.savedAt || 0))
           mejor = { tipo: "documento", ruta: v.path, savedAt: v.savedAt };

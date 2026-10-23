@@ -29,6 +29,9 @@ async function main() {
     if (r.exceptionDetails) throw Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result?.value; };
   await send("Page.navigate", { url });
   for (let i = 0; i < 90; i++) { if (await ev('document.readyState==="complete"&&typeof dzSetStatus==="function"&&!!LOW.workspace.rescateAviso').catch(() => false)) break; await w(300); }
+  // 1–4 son el tope del NAVEGADOR (el respaldo cuando no hay puente al disco)
+  await ev(`sessionStorage.setItem("mock.rescate.navegador", "1"); location.reload(); true`); await w(600);
+  for (let i = 0; i < 90; i++) { if (await ev('document.readyState==="complete"&&typeof dzSetStatus==="function"&&!!LOW.workspace.rescateAviso&&LOW.workspace.rescateDisco.estado()==="navegador"').catch(() => false)) break; await w(300); }
   await w(800);
   // contar avisos: se mira lo que llega a la barra de estado
   await ev(`window.__avisos = []; const _st = window.dzSetStatus; window.dzSetStatus = function (t) { if (/rescate ante caídas/.test(t)) __avisos.push(t); return _st.apply(this, arguments); }; true`);
@@ -55,7 +58,26 @@ async function main() {
   av = await ev(`__avisos`);
   if (av.length !== 3) mal("después de volver a entrar, dejar de entrar no avisó otra vez", { n: av.length });
   if (errores.length) mal("errores de la página", errores);
-  console.log("OK check_rescate_aviso_ui:", JSON.stringify({ avisos: av.length }));
+
+  // 5. EN DISCO (v3.45): el de 2,6 MB entra (el «disco» del mock es sessionStorage, ~5 MB); si el disco falla, se avisa con el motivo
+  await ev(`sessionStorage.removeItem("mock.rescate.navegador"); location.reload(); true`); await w(600);
+  for (let i = 0; i < 90; i++) { if (await ev('document.readyState==="complete"&&typeof dzSetStatus==="function"&&!!LOW.workspace.rescateDisco&&LOW.workspace.rescateDisco.estado()==="disco"').catch(() => false)) break; await w(300); }
+  await w(500);
+  await ev(`window.__avisos = []; const _st2 = window.dzSetStatus; window.dzSetStatus = function (t) { if (/rescate ante caídas/.test(t)) __avisos.push(t); return _st2.apply(this, arguments); }; true`);
+  const enDisco = await ev(`LOW.workspace.recovery.saveNow("C:/mock/enorme.svg", "<svg>" + "x".repeat(2600000) + "</svg>", {})`);
+  for (let i = 0; i < 40 && await ev(`LOW.workspace.rescateDisco.escribiendo()`); i++) await w(100);
+  if (enDisco !== true || !(await ev(`(sessionStorage.getItem("mock.rescate.d." + LOW.workspace.recovery.key("C:/mock/enorme.svg")) || "").length > 2600000`)))
+    mal("con el rescate en disco, un documento de 2,6 MB (más que el tope del navegador) no se rescató", { enDisco });
+  if ((await ev(`__avisos`)).length) mal("con el rescate en disco hubo un aviso de que no entra", await ev(`__avisos`));
+  await ev(`window.__est3dFalla = "No queda espacio en el disco"; LOW.workspace.recovery.saveNow("C:/mock/otro.svg", "<svg>chico</svg>", {}); true`);
+  for (let i = 0; i < 40 && await ev(`LOW.workspace.rescateDisco.escribiendo()`); i++) await w(100);
+  av = await ev(`__avisos`);
+  if (av.length !== 1 || !/no se pudo guardar en el disco/.test(av[0]) || !/No queda espacio/.test(av[0])) mal("con el disco lleno, el rescate falló en silencio", av);
+  if (!(await ev(`!!localStorage.getItem(LOW.workspace.recovery.key("C:/mock/otro.svg"))`))) mal("con el disco lleno no quedó la copia del rescate en el navegador", {});
+  await ev(`window.__est3dFalla = ""; LOW.workspace.recovery.clear("C:/mock/enorme.svg"); LOW.workspace.recovery.clear("C:/mock/otro.svg"); true`);
+  for (let i = 0; i < 40 && await ev(`LOW.workspace.rescateDisco.escribiendo()`); i++) await w(100);
+  if (errores.length) mal("errores de la página", errores);
+  console.log("OK check_rescate_aviso_ui:", JSON.stringify({ avisos: av.length, enDisco }));
   ws.close(); try { await fetch(endpoint + "/json/close/" + target.id); } catch (_) { }
 }
 main().catch((e) => { console.error(e.message || e); process.exit(1); });

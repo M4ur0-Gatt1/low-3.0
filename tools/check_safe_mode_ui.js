@@ -44,7 +44,7 @@ async function main() {
   }
   const evaluated = await send("Runtime.evaluate", { awaitPromise: true, returnByValue: true, expression: `(async()=>{
     const before={workspace:localStorage.getItem("low.workspace.active"),keys:localStorage.getItem("low.dzkeys"),
-      brushes:localStorage.getItem("low.brushes.v1"),recovery:localStorage.getItem("low.document.recovery.keep")};
+      brushes:localStorage.getItem("low.brushes.v1"),recovery:LOW.workspace.recovery.storage.getItem("low.document.recovery.keep")};
     dzKeysLoad();
     const startup={active:LOW.safeMode.active,state:S.safeMode,ws:S.ws,label:document.querySelector("#ver").textContent,
       room:LOW.workspace.workspaces.lastUsed(),pencil:DZ.keymap.pencil,
@@ -55,7 +55,7 @@ async function main() {
     document.querySelector('[data-reset-domain="shortcuts"]').click();
     document.querySelector("#configResetApply").click();
     const afterReset={keys:localStorage.getItem("low.dzkeys"),brushes:localStorage.getItem("low.brushes.v1"),
-      workspace:localStorage.getItem("low.workspace.active"),recovery:localStorage.getItem("low.document.recovery.keep"),
+      workspace:localStorage.getItem("low.workspace.active"),recovery:LOW.workspace.recovery.storage.getItem("low.document.recovery.keep"),
       overlay:document.querySelector("#overlay").hidden};
     return {before,startup,afterCancel,afterReset};
   })()` });

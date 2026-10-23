@@ -144,7 +144,28 @@ def obra_2d():
     assert "error" in A.guardar("personajes2d", "[]"), "el almacén del 3D aceptó un nombre del 2D"
 
 
+def rescate():
+    R = almacen3d.AlmacenRescate(carpeta / "rescate")
+    assert R.leer_todo() == {"registros": {}, "rotos": 0}, "sin carpeta tiene que devolver vacío"
+    doc = "low.document.recovery.abc123"
+    grande = json.dumps({"path": "C:/x.svg", "content": "<svg>" + "x" * (8 * 1024 * 1024) + "</svg>", "savedAt": 1})
+    assert R.guardar(doc, grande).get("ok"), "un rescate de 8 MB (antes no entraba) no se guardó"
+    assert R.guardar("low.scene.recovery.v2.index", '["path:c:/a.low"]').get("ok")
+    assert "error" in R.guardar("low.brushes.v1", "[]"), "aceptó una clave que no es de rescate"
+    assert "error" in R.guardar("../../x", "{}"), "aceptó una clave armada"
+    todo = R.leer_todo()["registros"]
+    assert todo.get(doc) == grande and todo.get("low.scene.recovery.v2.index") == '["path:c:/a.low"]', "no volvió lo guardado"
+    # un archivo roto se lee de su respaldo
+    R.guardar(doc, '{"v": 2}')
+    ruta = next(p for p in (carpeta / "rescate").glob("*.json") if json.loads(p.read_text(encoding="utf-8")).get("clave") == doc)
+    ruta.write_text('{"clave": "low.document.recovery.abc123", "tex', encoding="utf-8")
+    r = R.leer_todo()
+    assert r["registros"].get(doc) == grande and r["rotos"] == 0, "con el principal roto no se leyó el respaldo"
+    assert R.borrar(doc).get("ok") and doc not in R.leer_todo()["registros"], "borrar no borró (ni su respaldo)"
+
+
 prueba("guardar y leer de vuelta (incluida una de 30 MB)", ida_y_vuelta)
+prueba("el rescate ante caídas: claves propias, grande, respaldo, borrar", rescate)
 prueba("el principal no falta ni un instante al guardar", principal_siempre)
 prueba("el almacén del 2D sólo guarda lo suyo", obra_2d)
 prueba("un corte a mitad de escritura no toca el archivo bueno", corte_a_medias)

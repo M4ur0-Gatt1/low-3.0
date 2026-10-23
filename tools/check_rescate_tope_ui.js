@@ -45,6 +45,16 @@ async function main() {
     if (await ev('!!window.LOW?.workspace?.sceneRecovery').catch(() => false) === true) break;
     await w(400);
   }
+  // ESTA prueba es la del tope del NAVEGADOR: desde la 3.45 el rescate va a
+  // disco, y el navegador queda como respaldo cuando no hay puente. Se la corre
+  // en ese modo (mock.rescate.navegador).
+  await ev('(()=>{ sessionStorage.setItem("mock.rescate.navegador", "1"); location.reload(); return true; })()');
+  await w(600);
+  for (let i = 0; i < 90; i++) {
+    if (await ev('document.readyState==="complete" && !!window.LOW?.workspace?.rescateDisco && LOW.workspace.rescateDisco.estado()==="navegador" && !!window.LOW?.workspace?.sceneRecovery').catch(() => false) === true) break;
+    await w(300);
+  }
+  await w(500);
   await ev('(()=>{ try{localStorage.clear()}catch(e){} return true; })()');
 
   // ── 1. GUARDAR MUCHAS NO DEJA UN HISTORIAL INFINITO ──────────────────────
@@ -96,6 +106,16 @@ async function main() {
     mal("con el almacenamiento lleno, LOW deja de guardar el punto de recuperación y " +
       "no lo dice: el día que se cierra mal no hay nada que recuperar", conCuota);
 
+  // ESTA prueba es la del tope del NAVEGADOR: desde la 3.45 el rescate va a
+  // disco, y el navegador queda como respaldo cuando no hay puente. Se la corre
+  // en ese modo (mock.rescate.navegador).
+  await ev('(()=>{ sessionStorage.setItem("mock.rescate.navegador", "1"); location.reload(); return true; })()');
+  await w(600);
+  for (let i = 0; i < 90; i++) {
+    if (await ev('document.readyState==="complete" && !!window.LOW?.workspace?.rescateDisco && LOW.workspace.rescateDisco.estado()==="navegador" && !!window.LOW?.workspace?.sceneRecovery').catch(() => false) === true) break;
+    await w(300);
+  }
+  await w(500);
   await ev('(()=>{ try{localStorage.clear()}catch(e){} return true; })()');
   ws.close();
   try { await fetch(endpoint + "/json/close/" + target.id); } catch (_) { }

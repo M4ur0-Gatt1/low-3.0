@@ -63,7 +63,23 @@ Defectos que aparecieron al hacerlo (todos con su prueba):
 
 - **Preferencias** (pueden quedar): `low3d:theme`, `low3d:guia-fondos`, `low3d:kit-activo`, `low3d:calle-tipo`, `low3d:iman-fuga`, `low3d:pincel-escultura`, `low.2d.panelLayout`, `low.2d.dockSizes`, `low.panels.v1`, `low.layouts.v1`, `low.toolbar.v1`, `low.workspace.*`, `low.timeline.*`, `low.onion.v2`, `low.camara*`, `low.refent*`, `low.paralelas.mm`, `low.desfase.mm`, `low.matriz`, `low.mesa.v1`, `low.esculpir.v1`, `low.limpieza.v1`, `low.bitmap.v1`, `low.coloring.v1`, `low.color.recent.v1`, `low.palette.*`, `low.brush.actual`, `low.brush.favorites`, `low.dz*`, `low.idioma` y similares.
 - **Pinceles propios** (`low.brushes.v1`): son ajustes, pocos KB; las bibliotecas importadas ya van a disco.
-- **Pendiente, es obra:** el **rescate ante caídas** (`low.document.recovery.*`, `low.scene.recovery.v2.*`). Desde la 3.44 ya no falla en silencio: si no entra, avisa una vez por documento. **Llevarlo al disco es lo que falta para cerrar la fase 1** (v3.45).
+- ~~Pendiente, es obra:~~ resuelto en la 3.45 (abajo): el **rescate ante caídas** (`low.document.recovery.*`, `low.scene.recovery.v2.*`). Desde la 3.44 ya no falla en silencio: si no entra, avisa una vez por documento. **Llevarlo al disco es lo que falta para cerrar la fase 1** (v3.45).
+
+### Cierre (v3.45.0, 22-oct-2026) · fase 1 TERMINADA
+
+- **El rescate ante caídas va al disco** (`%APPDATA%/LOW/rescate/`, un archivo por documento o escena, escritura atómica con respaldo). Un almacén con la forma del del navegador (`workspace/rescate-disco.js`) reemplaza al navegador en los dos rescates sin tocar su lógica.
+- **Sin el tope de 2,5 MB:** un documento grande ahora tiene rescate.
+- **Abrir espera a la lectura:** un documento abierto en el primer instante (doble clic en un .low, «Abrir…») ve su rescate. Antes, con la lectura asíncrona, se abría sin ofrecerlo y el autoguardado lo pisaba.
+- **La pantalla inicial se repinta** cuando llega el disco: se pinta antes de que exista el puente, y un rescate que estaba sólo en el disco no se ofrecía.
+- **Si el disco falla:** copia en el navegador y aviso con el motivo. Sin el puente al disco, el navegador como antes (con su tope y su poda).
+
+**Criterios cumplidos, medidos en la app real (WebView2) con cierre forzado:**
+- 10 personajes «Muy alta» (26,7 MB) y la escena 3D vuelven (`tools/check_almacen_3d_real.js`);
+- el rescate de un documento de 3 MB y el de una escena vuelven y se ofrecen al arrancar (`tools/check_rescate_real.js`);
+- el almacenamiento del navegador queda sin obra (las dos pruebas lo comprueban);
+- llenar el disco o no poder leerlo muestra un aviso (`check_almacen_3d_ui`, `check_personajes_2d_disco_ui`, `check_rescate_aviso_ui`).
+
+Las dos pruebas de la app real son locales (necesitan WebView2): se corren antes de publicar algo que toque el guardado. Pasan a la tanda de humo de la fase 2.
 
 ## Fase 2 · Pruebas en las que se pueda confiar
 

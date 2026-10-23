@@ -222,6 +222,7 @@ jobs:
           node tools/check_almacen_3d_ui.js
           node tools/check_personajes_2d_disco_ui.js
           node tools/check_rescate_aviso_ui.js
+          node tools/check_rescate_disco_ui.js
           node tools/check_taller_hoja_2d_ui.js
           node tools/check_3d_terreno_ui.js
           node tools/check_3d_rectas_fuga_ui.js

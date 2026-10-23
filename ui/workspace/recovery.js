@@ -6,17 +6,19 @@
   const TOPE = 12;
 
   class DocumentRecovery {
-    constructor(storage = global.localStorage) { this.storage = storage; this.prefix = "low.document.recovery."; this.timers = new Map(); }
+    /* `tope`: en el navegador (~5 MB por origen) un rescate de más de 2,5 MB no
+       entra; con el rescate en disco (workspace/rescate-disco.js) sube. */
+    constructor(storage = global.localStorage) { this.storage = storage; this.prefix = "low.document.recovery."; this.timers = new Map(); this.tope = 2_500_000; }
     key(path) { let hash = 2166136261; for (const c of String(path)) { hash ^= c.charCodeAt(0); hash = Math.imul(hash, 16777619); }
       return this.prefix + (hash >>> 0).toString(36); }
     saveNow(path, content, metadata = {}) {
-      if (!path || !content || content.length > 2_500_000) return false;
+      if (!path || !content || content.length > this.tope) return false;
       try {
         this.storage?.setItem(this.key(path), JSON.stringify({ path, content, metadata, savedAt: Date.now() }));
         return true;
       } catch (_) { return false; }
     }
-    checkpoint(path, content, metadata = {}) { if (!path || !content || content.length > 2_500_000) return false;
+    checkpoint(path, content, metadata = {}) { if (!path || !content || content.length > this.tope) return false;
       clearTimeout(this.timers.get(path)); this.timers.set(path, setTimeout(() => {
         this.timers.delete(path); this.saveNow(path, content, metadata);
       }, 450)); return true; }

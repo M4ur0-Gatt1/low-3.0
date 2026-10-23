@@ -52,7 +52,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.44.0"
+LOW_VERSION = "3.45.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -1961,6 +1961,19 @@ class Api:
     def est3d_borrar(s, nombre):
         import almacen3d
         return almacen3d.Almacen3D(data_dir() / "estudio3d").borrar(str(nombre))
+
+    # el rescate ante caídas (antes en el navegador): %APPDATA%/LOW/rescate/
+    def rescate_leer_todo(s):
+        import almacen3d
+        return almacen3d.AlmacenRescate(data_dir() / "rescate").leer_todo()
+
+    def rescate_guardar(s, clave, texto):
+        import almacen3d
+        return almacen3d.AlmacenRescate(data_dir() / "rescate").guardar(str(clave), texto)
+
+    def rescate_borrar(s, clave):
+        import almacen3d
+        return almacen3d.AlmacenRescate(data_dir() / "rescate").borrar(str(clave))
 
     # la biblioteca de personajes del 2D (antes en el navegador): %APPDATA%/LOW/obra/
     def obra2d_leer(s, nombre):

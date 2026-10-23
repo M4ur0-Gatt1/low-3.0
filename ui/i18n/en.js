@@ -1719,4 +1719,5 @@ LOW_I18N.registrar("en", "English", {
  "⚠ No se pudo leer la biblioteca de personajes del disco: {} · lo que guardes queda en el navegador, sin tocar el archivo": "⚠ Couldn't read the character library from disk: {} · what you save stays in the browser, without touching the file",
  "⚠ El rescate ante caídas no entra en el almacenamiento ({}): si LOW se cierra mal no vas a poder recuperar lo último · guardá seguido (Ctrl+S)": "⚠ The crash rescue doesn't fit in storage ({}): if LOW closes unexpectedly you won't be able to recover your latest work · save often (Ctrl+S)",
  "⚠ El rescate ante caídas no entra en el almacenamiento: si LOW se cierra mal no vas a poder recuperar lo último · guardá seguido (Ctrl+S)": "⚠ The crash rescue doesn't fit in storage: if LOW closes unexpectedly you won't be able to recover your latest work · save often (Ctrl+S)",
+ "⚠ El rescate ante caídas no se pudo guardar en el disco ({}): si LOW se cierra mal no vas a poder recuperar lo último · guardá seguido (Ctrl+S)": "⚠ The crash rescue couldn't be saved to disk ({}): if LOW closes unexpectedly you won't be able to recover your latest work · save often (Ctrl+S)",
 });

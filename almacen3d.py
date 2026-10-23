@@ -28,6 +28,45 @@ NOMBRES_2D = {"personajes2d"}
 TOPE = 400 * 1024 * 1024
 
 
+def _respaldar(ruta):
+    """El de antes pasa a `.bak` SIN que el principal desaparezca ni un
+    instante: un segundo nombre para el mismo archivo (enlace duro) y el
+    reemplazo de después sólo cambia a qué apunta el principal. Donde no hay
+    enlaces duros, una copia."""
+    bak = ruta.with_suffix(".json.bak")
+    try:
+        bak.unlink()
+    except FileNotFoundError:
+        pass
+    try:
+        os.link(ruta, bak)
+    except OSError:
+        import shutil
+        shutil.copyfile(ruta, bak)
+
+
+def escribir_atomico(carpeta, ruta, datos):
+    """Primero a un archivo aparte, forzado al disco, y recién ahí reemplaza al
+    de antes (que queda como `.bak`). Un corte no deja nada a medias."""
+    tmp = ruta.with_suffix(".json.tmp")
+    try:
+        Path(carpeta).mkdir(parents=True, exist_ok=True)
+        with open(tmp, "wb") as f:
+            f.write(datos)
+            f.flush()
+            os.fsync(f.fileno())
+        if ruta.exists():
+            _respaldar(ruta)
+        os.replace(tmp, ruta)
+        return {"ok": True, "bytes": len(datos), "ruta": str(ruta)}
+    except OSError as e:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return {"error": e.strerror or str(e)}
+
+
 class Almacen3D:
     def __init__(self, carpeta, nombres=None):
         self.carpeta = Path(carpeta)
@@ -73,40 +112,7 @@ class Almacen3D:
             json.loads(texto)
         except ValueError as e:
             return {"error": "no es JSON válido: " + str(e)}
-        try:
-            self.carpeta.mkdir(parents=True, exist_ok=True)
-            tmp = ruta.with_suffix(".json.tmp")
-            with open(tmp, "wb") as f:
-                f.write(datos)
-                f.flush()
-                os.fsync(f.fileno())
-            if ruta.exists():
-                self._respaldar(ruta)
-            os.replace(tmp, ruta)
-            return {"ok": True, "bytes": len(datos), "ruta": str(ruta)}
-        except OSError as e:
-            try:
-                tmp.unlink()
-            except (OSError, UnboundLocalError):
-                pass
-            return {"error": e.strerror or str(e)}
-
-    @staticmethod
-    def _respaldar(ruta):
-        """El de antes pasa a `.bak` SIN que el principal desaparezca ni un
-        instante: un segundo nombre para el mismo archivo (enlace duro) y el
-        reemplazo de después sólo cambia a qué apunta el principal. Donde no hay
-        enlaces duros, una copia."""
-        bak = ruta.with_suffix(".json.bak")
-        try:
-            bak.unlink()
-        except FileNotFoundError:
-            pass
-        try:
-            os.link(ruta, bak)
-        except OSError:
-            import shutil
-            shutil.copyfile(ruta, bak)
+        return escribir_atomico(self.carpeta, ruta, datos)
 
     def borrar(self, nombre):
         """Para el autoguardado (proyecto nuevo): el principal se va, el
@@ -118,3 +124,70 @@ class Almacen3D:
             return {"ok": True}
         except (ValueError, OSError) as e:
             return {"error": str(e)}
+
+
+# ── EL RESCATE ANTE CAÍDAS (v3.45) ─────────────────────────────────────────
+# Lo sin guardar de cada documento y de cada escena, por si LOW se cierra mal.
+# Vivía en el almacenamiento del navegador (~5 MB): un documento de más de
+# 2,5 MB, o el almacén lleno, y no había rescate. Acá, un archivo por clave en
+# %APPDATA%/LOW/rescate/. Las claves son las mismas que usaba la página; sólo
+# se aceptan las de los dos rescates, y el nombre del archivo es un resumen de
+# la clave (nada armado por la página llega a una ruta).
+PREFIJOS_RESCATE = ("low.document.recovery.", "low.scene.recovery.v2.")
+
+
+class AlmacenRescate:
+    def __init__(self, carpeta):
+        self.carpeta = Path(carpeta)
+
+    def _ruta(self, clave):
+        clave = str(clave)
+        if not clave.startswith(PREFIJOS_RESCATE) or len(clave) > 600:
+            raise ValueError("clave de rescate desconocida")
+        import hashlib
+        return self.carpeta / (hashlib.sha1(clave.encode("utf-8")).hexdigest() + ".json")
+
+    def guardar(self, clave, texto):
+        try:
+            ruta = self._ruta(clave)
+        except ValueError as e:
+            return {"error": str(e)}
+        if not isinstance(texto, str):
+            return {"error": "lo que llegó no es texto"}
+        datos = json.dumps({"clave": str(clave), "texto": texto}, ensure_ascii=False).encode("utf-8")
+        if len(datos) > TOPE:
+            return {"error": "demasiado grande (%d MB)" % (len(datos) // (1024 * 1024))}
+        return escribir_atomico(self.carpeta, ruta, datos)
+
+    def borrar(self, clave):
+        try:
+            ruta = self._ruta(clave)
+            for p in (ruta, ruta.with_suffix(".json.bak")):
+                if p.exists():
+                    p.unlink()
+            return {"ok": True}
+        except (ValueError, OSError) as e:
+            return {"error": str(e)}
+
+    def leer_todo(self):
+        """{"registros": {clave: texto}}. Un archivo roto se lee de su respaldo;
+        si ninguno sirve, se cuenta en "rotos" (y se deja, por si se puede
+        recuperar a mano)."""
+        registros, rotos = {}, 0
+        if not self.carpeta.is_dir():
+            return {"registros": registros, "rotos": 0}
+        for ruta in sorted(self.carpeta.glob("*.json")):
+            leido = None
+            for p in (ruta, ruta.with_suffix(".json.bak")):
+                try:
+                    d = json.loads(p.read_text(encoding="utf-8"))
+                    if isinstance(d, dict) and isinstance(d.get("texto"), str) and str(d.get("clave", "")).startswith(PREFIJOS_RESCATE):
+                        leido = d
+                        break
+                except (OSError, ValueError):
+                    continue
+            if leido is None:
+                rotos += 1
+            else:
+                registros[leido["clave"]] = leido["texto"]
+        return {"registros": registros, "rotos": rotos}

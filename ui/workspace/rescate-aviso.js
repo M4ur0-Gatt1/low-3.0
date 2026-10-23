@@ -18,11 +18,14 @@
   "use strict";
   const avisados = new Set();
   const mb = (n) => (n / 1048576).toFixed(1).replace(".", ",") + " MB";
-  function avisar(clave, tam) {
+  /** `motivo`: la falla del disco (workspace/rescate-disco.js); sin él, no entró. */
+  function avisar(clave, tam, motivo) {
     if (avisados.has(clave)) return;
     avisados.add(clave);
-    const texto = "⚠ El rescate ante caídas no entra en el almacenamiento" + (tam ? " (" + mb(tam) + ")" : "") +
-      ": si LOW se cierra mal no vas a poder recuperar lo último · guardá seguido (Ctrl+S)";
+    const texto = motivo
+      ? "⚠ El rescate ante caídas no se pudo guardar en el disco (" + motivo + "): si LOW se cierra mal no vas a poder recuperar lo último · guardá seguido (Ctrl+S)"
+      : "⚠ El rescate ante caídas no entra en el almacenamiento" + (tam ? " (" + mb(tam) + ")" : "") +
+        ": si LOW se cierra mal no vas a poder recuperar lo último · guardá seguido (Ctrl+S)";
     try { (global.dzSetStatus || console.warn)(texto); } catch (_) { console.warn(texto); }
     try { console.warn("[rescate] " + texto); } catch (_) { /* */ }
   }
@@ -48,5 +51,5 @@
   }
   instalar();
   if (global.document && global.document.readyState !== "complete") global.addEventListener("load", instalar);
-  global.LOW = global.LOW || {}; (global.LOW.workspace = global.LOW.workspace || {}).rescateAviso = { avisados };
+  global.LOW = global.LOW || {}; (global.LOW.workspace = global.LOW.workspace || {}).rescateAviso = { avisados, avisar };
 })(typeof window !== "undefined" ? window : globalThis);
