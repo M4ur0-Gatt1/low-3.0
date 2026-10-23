@@ -167,6 +167,7 @@
     for (const b of doc.querySelectorAll("#dzRefent")) { b.classList.toggle("active", !!on); b.setAttribute("aria-pressed", String(!!on)); }
     if (!on) marca(null);
     const activos = TIPOS.filter((t) => modos[t.id]).map((t) => t.nombre.toLowerCase());
+    insigniaRefent();
     estado(on ? `⌖ Referencias a objetos: los trazos arrancan y terminan exacto en ${activos.join(", ")} (F3 apaga · «REFENT» elige cuáles)` : "⌖ Referencias a objetos apagadas (F3 las prende)");
   }
   /** El punto de enganche más conveniente cerca de un punto de pantalla. `desde`
@@ -338,9 +339,19 @@
     engancharLineaDeComandos();
     engancharModos();
     ponerRefentSilencioso();
+    tituloEnElCajon();
+    // la insignia y la tarjeta siguen a la mesa: otro documento, la vista
+    // escondida (IA, 3D) o la ventana que cambia de tamaño
+    const mesa = doc.querySelector("#dzCanvas"), vista = doc.querySelector("#designView");
+    if (global.MutationObserver) {
+      if (mesa) new MutationObserver(() => insigniaRefent()).observe(mesa, { childList: true });
+      if (vista) new MutationObserver(() => { insigniaRefent(); if ($hidden() && modo) terminarModo(); }).observe(vista, { attributes: true, attributeFilter: ["hidden"] });
+    }
+    if (mesa && global.ResizeObserver) new ResizeObserver(ubicarTarjetas).observe(mesa);
+    global.addEventListener("resize", ubicarTarjetas);
   }
   let forma0 = null;
-  function ponerRefentSilencioso() { const on = refentActivo(); for (const b of doc.querySelectorAll("#dzRefent")) { b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on)); } }
+  function ponerRefentSilencioso() { const on = refentActivo(); for (const b of doc.querySelectorAll("#dzRefent")) { b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on)); } insigniaRefent(); }
 
   /** «REFENT»: qué se engancha (el cuadro de Parámetros de dibujo de AutoCAD). */
   function dialogoRefent() {
@@ -361,17 +372,115 @@
     };
   }
 
+  /* ══ QUE SE VEA QUÉ ESTÁ PASANDO (v3.46) ══
+     Revisado en la app real (oct-2026): las cuatro herramientas andaban, pero
+     no se entendían. Apretar Desfase, Matriz o Igualar sin nada elegido no
+     hacía nada visible (el cajón se cerraba y el aviso salía en la barra de
+     estado, abajo de todo); con F3 prendido nada en la hoja lo decía. Ahora:
+     - una TARJETA sobre la hoja dice el comando, el paso y cómo salir;
+     - sin nada elegido, el comando PIDE tocar el elemento (como AutoCAD:
+       primero el comando, después el objeto);
+     - prendidas, las referencias tienen su insignia, como las paralelas. */
+  const ESTILO_TARJETA = `.dz-cad-tarjeta{position:fixed;z-index:66;display:flex;align-items:center;gap:10px;padding:7px 8px 7px 14px;border-radius:12px;
+      background:rgba(24,24,26,.94);color:#f4f1ec;font-family:inherit;font-size:13px;line-height:1.35;box-shadow:0 4px 18px rgba(0,0,0,.3);max-width:min(720px,80vw);transform:translateX(-50%)}
+    .dz-cad-tarjeta[hidden],.dz-cad-refent[hidden]{display:none!important}
+    .dz-cad-tarjeta b{color:#ffb38f;font-weight:700;white-space:nowrap}
+    .dz-cad-tarjeta input{width:56px;padding:2px 4px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:inherit;font:inherit;text-align:right}
+    .dz-cad-tarjeta button,.dz-cad-refent button{border:0;background:rgba(255,255,255,.1);color:inherit;font:inherit;cursor:pointer;padding:3px 9px;border-radius:999px;white-space:nowrap}
+    .dz-cad-tarjeta button:hover,.dz-cad-refent button:hover{background:rgba(255,255,255,.2)}
+    .dz-cad-refent{position:fixed;z-index:66;display:flex;align-items:center;gap:4px;padding:4px 6px 4px 10px;border-radius:999px;
+      background:rgba(28,28,30,.9);color:#f4f1ec;font-family:inherit;font-size:12px;line-height:1.2;box-shadow:0 2px 10px rgba(0,0,0,.25);user-select:none}
+    .dz-cad-refent button{background:transparent;padding:2px 6px}
+    .dz-tools-drawer .dz-cad-titulo{grid-column:1/-1;font-family:inherit;font-weight:600;font-size:10px;line-height:1.25;letter-spacing:.03em;opacity:.75;padding:4px 2px 0;white-space:normal}`;
+  function estiloTarjeta() {
+    if (doc.querySelector("#dzCadEstilo")) return;
+    const st = doc.createElement("style"); st.id = "dzCadEstilo"; st.textContent = ESTILO_TARJETA; doc.head.appendChild(st);
+  }
+  const aislar = (el) => { for (const t of ["pointerdown", "mousedown", "click", "dblclick", "wheel"]) el.addEventListener(t, (e) => e.stopPropagation()); };
+  let tarjetaEl = null;
+  /** La tarjeta del comando: `{ titulo, paso, mm? }`, o null para sacarla. */
+  function tarjeta(info) {
+    if (!info) { if (tarjetaEl) tarjetaEl.hidden = true; return; }
+    estiloTarjeta();
+    if (!tarjetaEl) {
+      tarjetaEl = doc.createElement("div"); tarjetaEl.className = "dz-cad-tarjeta"; tarjetaEl.id = "dzCadTarjeta";
+      tarjetaEl.setAttribute("role", "status");
+      aislar(tarjetaEl); doc.body.appendChild(tarjetaEl);
+      global.addEventListener("resize", ubicarTarjetas);
+    }
+    tarjetaEl.innerHTML = `<b></b><span data-cad-paso></span>` + (info.mm != null ? `<label style="white-space:nowrap"><input type="number" min="0.5" max="500" step="0.5" data-cad-mm aria-label="Distancia en milímetros"> mm</label>` : "")
+      + `<button type="button" data-cad-cancelar title="Termina el comando (Esc)">${info.listo ? "Listo" : "Cancelar"} · Esc</button>`;
+    tarjetaEl.querySelector("b").textContent = info.titulo;
+    tarjetaEl.querySelector("[data-cad-paso]").textContent = info.paso;
+    const inp = tarjetaEl.querySelector("[data-cad-mm]");
+    if (inp) {
+      inp.value = String(info.mm);
+      inp.addEventListener("change", () => { const v = Number(String(inp.value).replace(",", ".")); if (v > 0 && modo && modo.tipo === "desfase") { modo.mm = v; guardarMm(CLAVE_DESFASE, v); } });
+      inp.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); e.stopPropagation(); inp.dispatchEvent(new Event("change")); inp.blur(); } });
+    }
+    tarjetaEl.querySelector("[data-cad-cancelar]").addEventListener("click", () => terminarModo(modo && modo.tipo === "igualar" ? "Igualar propiedades: listo" : "Cancelado"));
+    tarjetaEl.hidden = false;
+    ubicarTarjetas();
+  }
+  let refentEl = null;
+  function insigniaRefent() {
+    const on = refentActivo() && !!doc.querySelector("#dzCanvas > svg") && !$hidden();
+    if (!on) { if (refentEl) refentEl.hidden = true; return; }
+    estiloTarjeta();
+    if (!refentEl) {
+      refentEl = doc.createElement("div"); refentEl.className = "dz-cad-refent"; refentEl.id = "dzCadRefent";
+      refentEl.title = "Los trazos arrancan y terminan exacto en las puntas, cruces, medios y centros de otras líneas. F3 las apaga.";
+      refentEl.innerHTML = `<button type="button" data-cad-refent-elegir title="Elegir a qué puntos se enganchan (REFENT)">⌖ Referencias a objetos</button>`
+        + `<button type="button" data-cad-refent-apagar aria-label="Apagar las referencias a objetos (F3)" title="Apagar (F3)">✕</button>`;
+      aislar(refentEl);
+      refentEl.querySelector("[data-cad-refent-elegir]").addEventListener("click", dialogoRefent);
+      refentEl.querySelector("[data-cad-refent-apagar]").addEventListener("click", () => ponerRefent(false));
+      doc.body.appendChild(refentEl);
+    }
+    refentEl.hidden = false;
+    ubicarTarjetas();
+  }
+  function ubicarTarjetas() {
+    const r = doc.querySelector("#dzCanvas")?.getBoundingClientRect();
+    for (const el of [tarjetaEl, refentEl]) if (el) el.style.visibility = r && r.width ? "" : "hidden";
+    if (!r || !r.width) return;
+    if (tarjetaEl && !tarjetaEl.hidden) { tarjetaEl.style.left = Math.round(r.left + r.width / 2) + "px"; tarjetaEl.style.top = Math.round(r.top + 14) + "px"; }
+    if (refentEl && !refentEl.hidden) {
+      // debajo de la insignia de las paralelas si está a la vista
+      const par = doc.querySelector("#dzParalelasInsignia"), corrida = par && !par.hidden ? 36 : 0;
+      refentEl.style.left = Math.round(r.left + 28) + "px"; refentEl.style.top = Math.round(r.top + 28 + corrida) + "px";
+    }
+  }
+  /** «Como AutoCAD» arriba de sus cuatro botones en el cajón de herramientas. */
+  function tituloEnElCajon() {
+    const b = doc.querySelector("#dzRefent"); if (!b || !b.parentNode || doc.querySelector(".dz-cad-titulo")) return;
+    estiloTarjeta();
+    const t = doc.createElement("div"); t.className = "dz-cad-titulo";
+    t.textContent = "Como AutoCAD (F3 · O · AR · MA)";
+    t.title = "Referencias a objetos (F3), Desfase (O), Matriz (AR), Igualar propiedades (MA). Los comandos también se escriben en la barra de abajo (Ctrl+K); «?» los lista.";
+    b.parentNode.insertBefore(t, b);
+  }
+
   /* ══ LOS MODOS DE CLIC (desfase: de qué lado; igualar: a quién) ══ */
-  let modo = null;   // { tipo: "desfase" | "igualar" | "centro", ... }
-  function empezarModo(m, texto) {
+  let modo = null;   // { tipo: "desfase" | "igualar" | "centro" | "elegir-matriz", ... }
+  function empezarModo(m, texto, info) {
     modo = m; marca(null);
     const c = doc.querySelector("#dzCanvas"); if (c) c.style.cursor = "crosshair";
     estado(texto);
+    tarjeta(info || { titulo: "", paso: texto });
   }
   function terminarModo(texto) {
     modo = null;
     const c = doc.querySelector("#dzCanvas"); if (c) c.style.cursor = "";
+    tarjeta(null);
     if (texto) estado(texto);
+  }
+  /** Un paso nuevo del mismo comando: la barra de estado y la tarjeta. */
+  function paso(texto, info) { estado(texto); tarjeta(info); }
+  /** El elemento bajo el puntero, para los comandos que piden tocar algo. */
+  function tocado(e) {
+    const el = typeof dzHitTest === "function" ? dzHitTest(e.clientX, e.clientY) : null;
+    return el && el.isConnected && !el.closest?.("defs") ? el : null;
   }
   function engancharModos() {
     global.addEventListener("pointerdown", (e) => {
@@ -379,10 +488,31 @@
       const c = doc.querySelector("#dzCanvas"); if (!c || !c.contains(e.target)) return;
       e.preventDefault(); e.stopImmediatePropagation();
       const m = modo;
-      if (m.tipo === "desfase") { const p = toUserCrudo(e.clientX, e.clientY); terminarModo(); hacerDesfase(m.els, m.mm, [p.x, p.y], e.shiftKey); }
-      else if (m.tipo === "igualar") {
-        const el = typeof dzHitTest === "function" ? dzHitTest(e.clientX, e.clientY) : null;
+      if (m.tipo === "desfase" && !m.els) {
+        // primero el comando, después la línea (como AutoCAD)
+        const el = tocado(e), els = el ? piezas([el]) : [];
+        if (!els.length) { paso("Desfase: ahí no hay una línea · tocá la línea que querés desfasar", { titulo: "Desfase", paso: "Ahí no hay una línea: tocá la línea que querés desfasar", mm: m.mm }); return; }
+        m.els = els; global.dzSelect?.(el); global.dzPositionHandle?.();
+        paso(`Desfase de ${fmt(m.mm)} mm: hacé clic del lado donde va la copia (Shift+clic: de los dos lados · Esc: cancelar)`, { titulo: "Desfase", paso: "Ahora hacé clic del lado donde va la copia (Shift+clic: de los dos lados)", mm: m.mm });
+      } else if (m.tipo === "desfase") {
+        const p = toUserCrudo(e.clientX, e.clientY);
+        if (!m.repetir) { terminarModo(); hacerDesfase(m.els, m.mm, [p.x, p.y], e.shiftKey); return; }
+        // empezado sin nada elegido: sigue pidiendo líneas hasta Esc (como AutoCAD)
+        const hechos = hacerDesfase(m.els, m.mm, [p.x, p.y], e.shiftKey);
+        m.els = null;
+        tarjeta({ titulo: "Desfase", paso: (hechos.length ? "Hecho. " : "") + "Tocá otra línea para desfasar, o terminá", mm: m.mm, listo: true });
+      } else if (m.tipo === "igualar" && !m.fuente) {
+        const el = tocado(e);
+        if (!el) { paso("Igualar propiedades: tocá el elemento que DA sus propiedades", { titulo: "Igualar propiedades", paso: "Ahí no hay nada: tocá el elemento que DA el color, el grosor y el trazo" }); return; }
+        m.fuente = el; global.dzSelect?.(el); global.dzPositionHandle?.();
+        paso("Igualar propiedades: tocá los elementos que toman el color, el grosor y el trazo de lo elegido (Esc o Enter termina)", { titulo: "Igualar propiedades", paso: "Ahora tocá los elementos que TOMAN esas propiedades", listo: true });
+      } else if (m.tipo === "igualar") {
+        const el = tocado(e);
         if (el && el !== m.fuente && !m.fuente.contains(el)) igualar(m.fuente, el);
+      } else if (m.tipo === "elegir-matriz") {
+        const el = tocado(e);
+        if (!el) { paso("Matriz: tocá lo que querés repetir", { titulo: "Matriz", paso: "Ahí no hay nada: tocá lo que querés repetir" }); return; }
+        terminarModo(); global.dzSelect?.(el); global.dzPositionHandle?.(); dialogoMatriz();
       } else if (m.tipo === "centro") { const p = toUserCrudo(e.clientX, e.clientY); terminarModo(); m.listo([p.x, p.y]); }
     }, true);
     global.addEventListener("contextmenu", (e) => { if (modo && doc.querySelector("#dzCanvas")?.contains(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); terminarModo(modo.tipo === "igualar" ? "Igualar propiedades: listo" : "Cancelado"); } }, true);
@@ -462,10 +592,16 @@
   function caminoRecto(P, cerrada) { return P.map((p, i) => (i ? "L " : "M ") + p[0].toFixed(2) + " " + p[1].toFixed(2)).join(" ") + (cerrada ? " Z" : ""); }
   function comenzarDesfase(mm) {
     const els = piezas(elegidos());
-    if (!els.length) { estado("Desfase: primero elegí con la flecha la línea (o las líneas) a desfasar"); return false; }
     const v = mm > 0 ? mm : leerMm(CLAVE_DESFASE, 6);
     guardarMm(CLAVE_DESFASE, v);
-    empezarModo({ tipo: "desfase", els, mm: v }, `Desfase de ${fmt(v)} mm: hacé clic del lado donde va la copia (Shift+clic: de los dos lados · Esc: cancelar) · otra distancia: «O 10»`);
+    if (!els.length) {
+      // nada elegido: se pide la línea (antes: un aviso abajo y nada más)
+      empezarModo({ tipo: "desfase", els: null, mm: v, repetir: true }, `Desfase de ${fmt(v)} mm: tocá la línea que querés desfasar (Esc: cancelar) · otra distancia: «O 10»`,
+        { titulo: "Desfase", paso: "Tocá la línea que querés desfasar", mm: v });
+      return true;
+    }
+    empezarModo({ tipo: "desfase", els, mm: v }, `Desfase de ${fmt(v)} mm: hacé clic del lado donde va la copia (Shift+clic: de los dos lados · Esc: cancelar) · otra distancia: «O 10»`,
+      { titulo: "Desfase", paso: "Hacé clic del lado donde va la copia (Shift+clic: de los dos lados)", mm: v });
     return true;
   }
   function hacerDesfase(els, mm, clic, ambos) {
@@ -533,6 +669,15 @@
     c.setAttribute("transform", (extra + (own ? " " + own : "")).trim());
     return c;
   }
+  /** El tamaño de lo elegido, en unidades del dibujo. */
+  function cajaDibujo(els) {
+    const s = hoja(), M = s?.getScreenCTM(); if (!M) return null;
+    let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+    for (const el of els) { const q = el.getBoundingClientRect(); if (!q.width && !q.height) continue; l = Math.min(l, q.left); t = Math.min(t, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom); }
+    if (!Number.isFinite(l)) return null;
+    const k = Math.hypot(M.a, M.b) || 1, o = aplicar(M.inverse(), l, t);
+    return { x: o[0], y: o[1], w: (r - l) / k, h: (b - t) / k };
+  }
   /** El centro de lo elegido, en el dibujo. */
   function centroDe(els) {
     const s = hoja(), M = s?.getScreenCTM(); if (!M) return [0, 0];
@@ -545,11 +690,30 @@
   function opcionesMatriz() { try { return { tipo: "rect", filas: 2, cols: 4, dx: 20, dy: 20, n: 8, angulo: 360, rotar: true, centro: "seleccion", m: 6, alinear: true, ...JSON.parse(almacen()?.getItem(CLAVE_MATRIZ) || "{}") }; } catch (_) { return { tipo: "rect", filas: 2, cols: 4, dx: 20, dy: 20, n: 8, angulo: 360, rotar: true, centro: "seleccion", m: 6, alinear: true }; } }
   function dialogoMatriz() {
     const els = elegidos();
-    if (!els.length) { estado("Matriz: primero elegí con la flecha lo que querés repetir"); return false; }
-    const o = opcionesMatriz();
+    if (!els.length) {
+      empezarModo({ tipo: "elegir-matriz" }, "Matriz: tocá lo que querés repetir (Esc: cancelar)", { titulo: "Matriz", paso: "Tocá lo que querés repetir" });
+      return true;
+    }
+    const o = opcionesMatriz(), elegidoAntes = { filas: o.filas, cols: o.cols };
+    /* LA SEPARACIÓN SALE DEL TAMAÑO DE LO ELEGIDO, como en AutoCAD. Con un
+       número fijo (20 mm) las copias de algo más grande se pisaban y el
+       resultado parecía un error. Un cuarto más que su ancho y su alto. */
+    const caja = cajaDibujo(els), mmDe = (px) => Math.max(1, Math.round((px / PX_POR_MM) * 1.25 * 2) / 2);
+    if (caja) {
+      o.dx = mmDe(caja.w); o.dy = mmDe(caja.h);
+      // y que las copias ENTREN en la hoja (sin pasar de lo que se eligió la vez anterior)
+      const vb = hoja()?.viewBox?.baseVal;
+      if (vb && vb.width) {
+        // cuántas entran desde donde está el objeto hasta el borde de la hoja
+        const caben = (libre, tam, paso) => Math.max(1, Math.floor((libre - tam) / (paso * PX_POR_MM) + 1e-6) + 1);
+        o.cols = Math.max(1, Math.min(o.cols, caben(vb.x + vb.width - caja.x, caja.w, o.dx)));
+        o.filas = Math.max(1, Math.min(o.filas, caben(vb.y + vb.height - caja.y, caja.h, o.dy)));
+        if (o.cols * o.filas < 2) o.cols = 2;
+      }
+    }
     const campo = (id, nombre, v, extra = "") => `<label style="display:flex;justify-content:space-between;gap:10px;align-items:center">${nombre} <input type="number" id="${id}" value="${v}" ${extra} class="dz-win" style="width:84px"></label>`;
     openModal(`<h2>▦ Matriz</h2>
-      <div class="sub">Copias de lo elegido (${els.length} elemento${els.length > 1 ? "s" : ""}), como la matriz de AutoCAD. Un solo Ctrl+Z las saca.</div>
+      <div class="sub">Copias de lo elegido (${els.length} elemento${els.length > 1 ? "s" : ""}${caja ? `, ${fmt(Math.round(caja.w / PX_POR_MM))} × ${fmt(Math.round(caja.h / PX_POR_MM))} mm` : ""}), como la matriz de AutoCAD. Un solo Ctrl+Z las saca.</div>
       <div role="radiogroup" aria-label="Tipo de matriz" style="display:flex;gap:6px;margin:12px 0">
         ${[["rect", "▦ Rectangular"], ["polar", "◎ Polar"], ["trayecto", "∿ En trayecto"]].map(([v, n]) => `<label class="ghost" style="flex:1;text-align:center;padding:6px;border:1px solid var(--line,#444);border-radius:8px"><input type="radio" name="matrizTipo" value="${v}" ${o.tipo === v ? "checked" : ""}> ${n}</label>`).join("")}
       </div>
@@ -569,9 +733,12 @@
       const v = (id) => Number(doc.querySelector("#" + id)?.value);
       const op = { tipo: doc.querySelector('input[name="matrizTipo"]:checked')?.value || "rect", filas: v("mzFilas"), cols: v("mzCols"), dx: v("mzDx"), dy: v("mzDy"),
         n: v("mzN"), angulo: v("mzAng"), rotar: !!doc.querySelector("#mzRotar")?.checked, centro: doc.querySelector("#mzCentro")?.value || "seleccion", m: v("mzM"), alinear: !!doc.querySelector("#mzAlinear")?.checked };
-      try { almacen()?.setItem(CLAVE_MATRIZ, JSON.stringify(op)); } catch (_) { /* sin almacenamiento */ }
+      // lo que se achicó para que entre en la hoja no pasa a ser la preferencia
+      // (si no, el tope bajaba a 1 y nunca volvía a subir)
+      const guardado = { ...op, filas: op.filas === o.filas ? elegidoAntes.filas : op.filas, cols: op.cols === o.cols ? elegidoAntes.cols : op.cols };
+      try { almacen()?.setItem(CLAVE_MATRIZ, JSON.stringify(guardado)); } catch (_) { /* sin almacenamiento */ }
       global.closeModal?.();
-      if (op.tipo === "polar" && op.centro === "clic") { empezarModo({ tipo: "centro", listo: (c) => hacerMatriz(els, { ...op, c }) }, "Matriz polar: hacé clic donde va el centro (Esc: cancelar)"); return; }
+      if (op.tipo === "polar" && op.centro === "clic") { empezarModo({ tipo: "centro", listo: (c) => hacerMatriz(els, { ...op, c }) }, "Matriz polar: hacé clic donde va el centro (Esc: cancelar)", { titulo: "Matriz polar", paso: "Hacé clic donde va el centro" }); return; }
       hacerMatriz(els, op);
     };
     return true;
@@ -668,8 +835,14 @@
   }
   function comenzarIgualar() {
     const d = D(), f = d?.sel?.isConnected ? d.sel : null;
-    if (!f) { estado("Igualar propiedades: primero elegí con la flecha el elemento que da sus propiedades"); return false; }
-    empezarModo({ tipo: "igualar", fuente: f }, "Igualar propiedades: tocá los elementos que toman el color, el grosor y el trazo de lo elegido (Esc o Enter termina)");
+    if (!f) {
+      empezarModo({ tipo: "igualar", fuente: null }, "Igualar propiedades: tocá el elemento que DA sus propiedades (Esc: cancelar)",
+        { titulo: "Igualar propiedades", paso: "Tocá el elemento que DA el color, el grosor y el trazo" });
+      ultimoComando = "MA";
+      return true;
+    }
+    empezarModo({ tipo: "igualar", fuente: f }, "Igualar propiedades: tocá los elementos que toman el color, el grosor y el trazo de lo elegido (Esc o Enter termina)",
+      { titulo: "Igualar propiedades", paso: "Tocá los elementos que TOMAN el color, el grosor y el trazo de lo elegido", listo: true });
     ultimoComando = "MA";
     return true;
   }
@@ -698,9 +871,12 @@
       case "REFENT": dialogoRefent(); break;
       case "F3": ponerRefent(!refentActivo()); break;
       case "PARALELAS": global.dzParalelasToggle?.(); break;
-      case "AYUDA":
-        estado("Comandos: O (desfase, «O 6» = 6 mm) · AR (matriz) · MA (igualar propiedades) · REFENT (referencias a objetos) · F3 · PAR (paralelas) · Enter vacío repite el último");
+      case "AYUDA": {
+        const lista = "O (desfase, «O 6» = 6 mm) · AR (matriz) · MA (igualar propiedades) · REFENT (referencias a objetos) · F3 · PAR (paralelas) · Enter vacío repite el último";
+        estado("Comandos: " + lista);
+        if (!modo) { tarjeta({ titulo: "Comandos", paso: lista, listo: true }); clearTimeout(comando.reloj); comando.reloj = setTimeout(() => { if (!modo) tarjeta(null); }, 15000); }
         break;
+      }
       default: return false;
     }
     return true;
@@ -720,6 +896,13 @@
       const ta = e.target;
       if (!ta || ta.id !== "dzPrompt" || e.key !== "Enter" || e.shiftKey) return;
       correr(ta, e);
+    }, true);
+    // mientras se escribe: si es un comando, se dice cuál va a correr Enter
+    const NOMBRES = { DESFASE: "Desfase", MATRIZ: "Matriz", IGUALARPROP: "Igualar propiedades", REFENT: "Referencias a objetos (qué puntos)", F3: "prender/apagar las referencias", PARALELAS: "Paralelas", AYUDA: "la lista de comandos" };
+    global.addEventListener("input", (e) => {
+      const ta = e.target; if (!ta || ta.id !== "dzPrompt") return;
+      const c = ALIAS[(ta.value.trim().split(/\s+/)[0] || "").toUpperCase().replace(/^_/, "")];
+      if (c && ta.value.trim().length <= 24) estado(`Comando de AutoCAD · Enter: ${NOMBRES[c] || c}`);
     }, true);
     global.addEventListener("click", (e) => {
       if (!e.target.closest || !e.target.closest("#dzSend")) return;

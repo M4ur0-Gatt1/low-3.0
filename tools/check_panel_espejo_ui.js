@@ -88,7 +88,10 @@ async function main() {
       ventanas.push(p);
       const ok = await hasta(p, `!!window.__lowEspejo && document.querySelectorAll("#espejo *").length > 20`, 6000);
       assert.ok(ok, "la ventana separada «" + kind + "» no muestra el panel de verdad (sigue el dibujo a mano)");
-      await wait(400);
+      // medir con los estilos del estudio CARGADOS (antes: 400 ms fijos, y bajo
+      // carga medía texto negro sin hoja)
+      const estilos = await hasta(p, `(() => { const l = [...document.querySelectorAll("link[data-espejo-css]")]; return l.length > 0 && l.every((x) => x.sheet) && !document.querySelector("style[data-espejo-cargando]"); })()`, 8000);
+      assert.ok(estilos, "las hojas de estilo del estudio no cargaron en la ventana separada «" + kind + "»");
       return p;
     };
 
@@ -123,6 +126,17 @@ async function main() {
     assert.ok(elegida, "un clic en una fila de la ventana separada no eligió esa capa en el estudio");
     const marcada = await hasta(capas, `document.querySelector("#espejo .dz-lay-row.sel .dz-layer-t")?.textContent === ${JSON.stringify(otra)}`);
     assert.ok(marcada, "la ventana separada no muestra la capa elegida");
+    // LAS HOJAS DE ESTILO NO SE TOCAN EN CADA FOTO. Se borraban y volvían a
+    // poner en cada cambio del estudio: mientras cargaban, la ventana quedaba sin
+    // estilos (texto negro, un parpadeo; intermitente en la puerta, oct-2026).
+    await capas.ev(`window.__hojas = 0; new MutationObserver((ms) => { for (const m of ms) for (const n of [...m.removedNodes, ...m.addedNodes])
+      if (n.matches && n.matches("[data-espejo-css]")) __hojas++; }).observe(document.head, { childList: true }); true`);
+    for (const nombre of [acoplada.nombres[0], otra, acoplada.nombres[0]]) {
+      await capas.clic(`[...document.querySelectorAll("#espejo .dz-layer-t")].find(e => e.textContent === ${JSON.stringify(nombre)})`);
+      await hasta(capas, `document.querySelector("#espejo .dz-lay-row.sel .dz-layer-t")?.textContent === ${JSON.stringify(nombre)}`);
+    }
+    const hojas = await capas.ev(`__hojas`);
+    assert.equal(hojas, 0, "con el estudio cambiando, la ventana separada borró y volvió a poner sus hojas de estilo " + hojas + " veces (parpadea sin estilos)");
 
     // ── 2. Herramientas ───────────────────────────────────────────────────
     await est.ev(`dzDetachPanel("tools")`); await wait(300);

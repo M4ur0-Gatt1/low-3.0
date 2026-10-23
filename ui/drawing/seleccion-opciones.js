@@ -234,7 +234,7 @@
   let poli = null;
   function poligono(e) {
     e.preventDefault();
-    poli = { pts: [aLaHoja(e.clientX, e.clientY)], ultimoClic: performance.now(), shift: !!e.shiftKey, alt: !!e.altKey };
+    poli = { pts: [aLaHoja(e.clientX, e.clientY)], ultimoClic: e.timeStamp || performance.now(), shift: !!e.shiftKey, alt: !!e.altKey };
     dibujarGuia(poli.pts, false);
     aviso("Polígono: clic por punto · clic en el primero, doble clic o Enter lo cierra · Esc cancela");
   }
@@ -250,7 +250,7 @@
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
     const p = aLaHoja(e.clientX, e.clientY), svg = hoja();
     const k = Math.hypot(svg.getScreenCTM().a, svg.getScreenCTM().b) || 1;
-    const primero = poli.pts[0], ahora = performance.now();
+    const primero = poli.pts[0], ahora = e.timeStamp || performance.now();   // la hora de la entrada, no la de atenderla
     if (poli.pts.length >= 3 && (Math.hypot(p[0] - primero[0], p[1] - primero[1]) * k < 9 || ahora - poli.ultimoClic < 300)) return cerrarPoligono(e.altKey);
     poli.pts.push(p); poli.ultimoClic = ahora;
     dibujarGuia(poli.pts, false);

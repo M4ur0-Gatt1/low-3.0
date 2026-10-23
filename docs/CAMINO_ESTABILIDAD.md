@@ -94,6 +94,17 @@ Hoy cada puerta trae de 4 a 12 pruebas «intermitentes» (pasan solas), y una, l
 
 **Criterio:** tres puertas completas seguidas sin intermitentes y el humo en WebView2 en verde.
 
+### Avance (v3.46.0, 23-oct-2026)
+
+Banco de estrés: la prueba corre N veces en su Chrome mientras otros carriles corren el resto, igual que en la puerta, y cada falla queda entera.
+
+Intermitentes resueltas, las dos con la causa en el **programa** (no en la prueba):
+
+- **`check_guias_regla_ui`**: la guía medía el doble clic con la hora de *atender* el evento (`performance.now()`), no con la de la entrada. Con la máquina ocupada, dos clics rápidos llegaban a más de 450 ms y no contaban como doble clic. Le pasaba igual a una persona. Ahora usa `e.timeStamp`, y también el polígono de selección. La prueba lo reproduce siempre: dos clics a 100 ms con el hilo ocupado 600 ms en medio.
+- **`check_panel_espejo_ui`**: la ventana separada borraba y volvía a poner sus hojas de estilo en **cada** cambio del estudio. Mientras cargaban, quedaba sin estilos y, por el `* { transition: color }` del estudio, se desvanecía desde el negro: un parpadeo en cada cambio. Ahora las hojas no se tocan si no cambiaron, y la ventana no se muestra hasta que cargan.
+
+Quedan: `check_perf_budgets`, `check_reproduccion_fluida_ui` (miden tiempos), `check_rig_skeleton_ui` y `check_tomas_ui`.
+
 ## Fase 3 · Que el código no se rompa solo
 
 Hoy cada función nueva se cuelga **envolviendo funciones globales**. El final de un trazo pasa por varios envoltorios encadenados (paralelas, AutoCAD, unir puntas, espejo, pincel en vivo) y el resultado depende del orden en que cargan los archivos. `app.js` está clavado en su techo de 16 886 líneas y el motor 3D es una sola clase de unas 8000.

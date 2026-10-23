@@ -48,6 +48,13 @@
     // el sprite viejo de esta página repite ids (#i-cursor…) con otro dibujo, y
     // un <use> toma el PRIMERO del documento: escondido no alcanza, se va
     document.querySelectorAll(".icon-sprite").forEach((n) => n.remove());
+    // HASTA QUE CARGUEN LAS HOJAS DEL ESTUDIO, el panel no se ve ni anima
+    // colores: aparecía sin estilos y, por el `* { transition: color }` del
+    // estudio, se desvanecía de negro al color de verdad. Lo quita estilos().
+    const cargando = document.createElement("style");
+    cargando.dataset.espejoCargando = "1";
+    cargando.textContent = "#espejo{visibility:hidden!important}*{transition:none!important}";
+    document.head.appendChild(cargando);
     const base = document.createElement("style");
     base.dataset.espejoBase = "1";
     base.textContent =
@@ -92,16 +99,33 @@
     const t = document.createElement("template"); t.innerHTML = html;
     return t.content.firstElementChild;
   }
+  /* LAS HOJAS NO SE TOCAN SI NO CAMBIARON. Antes se borraban y se volvían a
+     poner en CADA foto: mientras cargaban, la ventana quedaba sin estilos
+     (texto negro, un parpadeo en cada cambio del estudio). Si cambian, las
+     nuevas entran primero y las viejas se van recién cuando las nuevas cargaron. */
+  let cssPuesto = "";
   function estilos(css) {
-    document.querySelectorAll("[data-espejo-css]").forEach((n) => n.remove());
+    const clave = JSON.stringify(css);
+    if (clave === cssPuesto) return;
+    cssPuesto = clave;
+    const viejas = [...document.querySelectorAll("[data-espejo-css]")];
     const ancla = document.querySelector("style[data-espejo-base]");
+    const cargando = [];
     (css.links || []).forEach((href) => {
       const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.dataset.espejoCss = "1";
+      cargando.push(new Promise((listo) => { l.onload = l.onerror = listo; }));
       document.head.insertBefore(l, ancla);
     });
     (css.textos || []).forEach((txt) => {
       const s = document.createElement("style"); s.textContent = txt; s.dataset.espejoCss = "1";
       document.head.insertBefore(s, ancla);
+    });
+    // las viejas se van cuando cargaron las nuevas (o a los 3 s, por las dudas);
+    // la primera vez, recién ahí se muestra el panel
+    Promise.race([Promise.all(cargando), new Promise((r) => setTimeout(r, 3000))]).then(() => {
+      viejas.forEach((n) => n.remove());
+      const tapa = document.querySelector("style[data-espejo-cargando]");
+      if (tapa) requestAnimationFrame(() => requestAnimationFrame(() => tapa.remove()));
     });
   }
   function copiarAtributos(n, attrs, extra) {

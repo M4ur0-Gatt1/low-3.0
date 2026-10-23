@@ -217,6 +217,62 @@ async function main() {
     assert.ok(/Igualar propiedades: tocá/.test(await ev(`(document.querySelector("#sbHint")?.textContent || "") + (document.querySelector("#dzStatus")?.textContent || "")`)), "Enter con la línea vacía no repitió «MA»");
     await tecla("Escape", "Escape", 27);
 
+    // ── 9b. QUE SE ENTIENDA (v3.46): sin nada elegido, el botón GUÍA ──
+    // Revisado en la app real: apretar Desfase/Matriz/Igualar sin nada elegido
+    // no hacía nada visible (un aviso abajo de todo) y parecían rotas.
+    const tarjetaTxt = () => ev(`(() => { const t = document.querySelector("#dzCadTarjeta"); return t && !t.hidden ? t.textContent : ""; })()`);
+    const botonDelCajon = async (sel) => {
+      const donde = () => ev(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return r.width ? [r.x + r.width / 2, r.y + r.height / 2] : null; })()`);
+      let c = await donde();
+      if (!c) {   // el cajón cerrado: se abre con un clic en «⋯»
+        await clic(await ev(`(() => { const r = document.querySelector("#dzToolsMore").getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`));
+        await wait(300); c = await donde();
+      }
+      assert.ok(c, "el botón " + sel + " no se ve al abrir el cajón");
+      await clic(c);
+    };
+    assert.ok(/Como AutoCAD/.test(await ev(`document.querySelector("#dzToolsDrawer .dz-cad-titulo")?.textContent || ""`)), "el cajón no dice cuáles son las herramientas de AutoCAD");
+    await nuevo();
+    await trazo(P(-200, 0), P(100, 0), 24);
+    await ev(`(()=>{ dzSetTool("select"); return true; })()`); await wait(200);
+    await ev(`(()=>{ dzClearMulti?.(); DZ.sel = null; document.querySelectorAll(".dz-sel").forEach(e => e.classList.remove("dz-sel")); return true; })()`);
+    const antesG = (await lineas()).length;
+    await botonDelCajon("#dzDesfase");
+    assert.ok(/Desfase/.test(await tarjetaTxt()) && /Tocá la línea/.test(await tarjetaTxt()), "Desfase sin nada elegido no pidió la línea sobre la hoja: «" + await tarjetaTxt() + "»");
+    await clic(P(-50, 0));
+    assert.ok(/del lado/.test(await tarjetaTxt()), "tocada la línea, la tarjeta no pidió el lado: «" + await tarjetaTxt() + "»");
+    await clic(P(-50, -60));
+    assert.strictEqual((await lineas()).length, antesG + 1, "el desfase guiado no dejó la copia");
+    assert.ok(/otra línea/.test(await tarjetaTxt()), "después de la copia, la tarjeta no ofrece seguir: «" + await tarjetaTxt() + "»");
+    await tecla("Escape", "Escape", 27);
+    assert.strictEqual(await tarjetaTxt(), "", "Esc no sacó la tarjeta del desfase");
+    // igualar guiado: primero el que da, después el que toma
+    await ev(`(()=>{ DZ.drawColor = "#2a7de1"; DZ.drawW = 7; dzSetTool("pencil"); return true; })()`); await wait(150);
+    await trazo(P(-200, 120), P(0, 120));
+    await ev(`(()=>{ dzSetTool("select"); dzClearMulti?.(); DZ.sel = null; return true; })()`); await wait(200);
+    await botonDelCajon("#dzIgualar");
+    assert.ok(/DA/.test(await tarjetaTxt()), "Igualar sin nada elegido no pidió el elemento que da: «" + await tarjetaTxt() + "»");
+    await clic(P(-100, 120));
+    assert.ok(/TOMAN/.test(await tarjetaTxt()), "tocado el que da, la tarjeta no pidió los que toman: «" + await tarjetaTxt() + "»");
+    await clic(P(-150, 0));
+    const tomo = await ev(`[...document.querySelectorAll('#dzCanvas > svg g[data-low-art] path[fill="none"]')].map(e => e.getAttribute("stroke"))`);
+    assert.ok(tomo.filter((c) => c === "#2a7de1").length >= 2, "el igualar guiado no pasó el color: " + JSON.stringify(tomo));
+    await tecla("Escape", "Escape", 27);
+    // matriz guiada: tocar lo que se repite abre el cuadro, con la separación del tamaño del objeto
+    await ev(`(()=>{ dzClearMulti?.(); DZ.sel = null; return true; })()`);
+    await botonDelCajon("#dzMatriz");
+    assert.ok(/Matriz/.test(await tarjetaTxt()), "Matriz sin nada elegido no pidió qué repetir");
+    await clic(P(-100, 120));
+    assert.ok(await ev(`!document.querySelector("#overlay").hidden && !!document.querySelector("#mzHacer")`), "tocado el objeto, no se abrió la matriz");
+    const sepMz = await ev(`Number(document.querySelector("#mzDx").value)`), anchoMm = 200 / (96 / 25.4) * await ev(`1`);
+    assert.ok(sepMz > anchoMm, "la separación de la matriz es más chica que el objeto (las copias se pisan): " + sepMz + " mm para un ancho de ~" + Math.round(anchoMm) + " mm");
+    await ev(`document.querySelector("#mzCancelar").click(); true`);
+    // F3 deja una insignia sobre la hoja, y su ✕ las apaga
+    await tecla("F3", "F3", 114);
+    assert.ok(await ev(`(() => { const r = document.querySelector("#dzCadRefent"); return !!r && !r.hidden && r.getBoundingClientRect().width > 0; })()`), "con F3 prendido no hay nada sobre la hoja que lo diga");
+    await clic(await ev(`(() => { const r = document.querySelector("#dzCadRefent [data-cad-refent-apagar]").getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`));
+    assert.ok(await ev(`!LOW.drawing.autocad.refentActivo() && document.querySelector("#dzCadRefent").hidden`), "la ✕ de la insignia no apagó las referencias");
+
     // ── 10. un pedido común no es un comando ──
     assert.strictEqual(await ev(`LOW.drawing.autocad.comando("hacé el fondo azul")`), false, "un pedido a la IA se tomó como comando");
 

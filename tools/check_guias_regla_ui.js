@@ -136,9 +136,21 @@ async function main() {
     // ── 6. doble clic: la posición exacta ──
     s = await estado();
     const lh = s.lineas.find((l) => l.axis === "h");
-    await mouse("mouseMoved", 700, lh.y); await mouse("mousePressed", 700, lh.y, 1, 0, 1); await mouse("mouseReleased", 700, lh.y, 0, 0, 1);
-    await mouse("mousePressed", 700, lh.y, 1, 0, 2); await mouse("mouseReleased", 700, lh.y, 0, 0, 2); await w(250);
-    if (!(await ev(`!!document.querySelector(".dz-guia-campo")`))) mal("el doble clic en la guía no abrió el campo de posición", {});
+    // EL DOBLE CLIC SE MIDE POR LA HORA DE LA ENTRADA, no por cuándo se atiende.
+    // Intermitente en la puerta (oct-2026): la guía medía con performance.now()
+    // al atender, y bajo carga dos clics rápidos llegaban a más de 450 ms. Le
+    // pasa igual a una persona con la máquina ocupada. Acá: los dos clics a
+    // 100 ms (hora de la entrada) y el hilo principal ocupado 600 ms en medio.
+    const T0 = Date.now() / 1000;
+    const clicCon = (type, cuenta, dt) => send("Input.dispatchMouseEvent", { type, x: 700, y: lh.y, button: "left",
+      buttons: type === "mousePressed" ? 1 : 0, clickCount: cuenta, timestamp: T0 + dt });
+    await mouse("mouseMoved", 700, lh.y);
+    await clicCon("mousePressed", 1, 0); await clicCon("mouseReleased", 1, 0.04);
+    const ocupado = send("Runtime.evaluate", { expression: `(()=>{ const t = performance.now(); while (performance.now() - t < 600) {} return 1; })()` });
+    await clicCon("mousePressed", 2, 0.1); await clicCon("mouseReleased", 2, 0.14); await ocupado;
+    let campo = false;
+    for (let i = 0; i < 30 && !campo; i++) { campo = await ev(`!!document.querySelector(".dz-guia-campo")`); if (!campo) await w(100); }
+    if (!campo) mal("el doble clic en la guía no abrió el campo de posición (con la máquina ocupada entre los dos clics)", {});
     await send("Input.insertText", { text: "540" }).catch(() => {});
     await ev(`(()=>{ const c = document.querySelector(".dz-guia-campo"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(c, "540"); return true; })()`);
     await tecla("Enter", "Enter", 13);

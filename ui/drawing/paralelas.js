@@ -64,7 +64,7 @@
       if (!doc.querySelector("#dzParalelasEstilo")) {
         const st = doc.createElement("style"); st.id = "dzParalelasEstilo";
         st.textContent = `.dz-paralelas-insignia{position:fixed;z-index:66;display:flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:999px;
-          background:rgba(28,28,30,.9);color:#f4f1ec;font:12px/1.2 inherit;box-shadow:0 2px 10px rgba(0,0,0,.25);user-select:none}
+          background:rgba(28,28,30,.9);color:#f4f1ec;font-family:inherit;font-size:12px;line-height:1.2;box-shadow:0 2px 10px rgba(0,0,0,.25);user-select:none}
           .dz-paralelas-insignia[hidden]{display:none!important}
           .dz-paralelas-insignia b{font-weight:600;letter-spacing:.01em}
           .dz-paralelas-insignia input{width:52px;padding:2px 4px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:inherit;font:inherit;text-align:right}

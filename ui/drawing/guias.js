@@ -216,11 +216,14 @@
     leer(e, g);
   }
   // el doble clic se cuenta acá: el primer clic redibuja la línea y el
-  // `dblclick` le llegaba a otro elemento (nunca se abría el campo)
+  // `dblclick` le llegaba a otro elemento (nunca se abría el campo).
+  // Se mide con la HORA DE LA ENTRADA (`e.timeStamp`), no con la de atenderla:
+  // con la máquina ocupada, dos clics rápidos se atendían a más de 450 ms y no
+  // eran doble clic (intermitente en la puerta, oct-2026).
   let ultimoClic = { i: -1, t: 0 };
   function agarrar(e, i) {
     if (bloqueadas || e.button !== 0) return;
-    const ahora = performance.now();
+    const ahora = e.timeStamp || performance.now();
     if (ultimoClic.i === i && ahora - ultimoClic.t < 450) { ultimoClic = { i: -1, t: 0 }; escribir(e, i); return; }
     ultimoClic = { i, t: ahora };
     arrastrar(e, i, copia(guias()), false);
