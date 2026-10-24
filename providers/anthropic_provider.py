@@ -23,6 +23,11 @@ LO QUE CAMBIÓ EN OCT-2026 (v3.47), y por qué:
 - El pensamiento cuenta dentro de `max_tokens`: con 4096 las respuestas se
   cortaban; en los modelos que piensan el piso es 16000.
 - Los errores salen con el motivo que da la API, no «400 Bad Request».
+
+v3.48: STREAMING real (`chat_stream`). Antes Claude era el único proveedor
+bloqueante: el usuario no veía nada hasta que terminaba cada vuelta («no veo
+tu respuesta»). Ahora el texto y el pensamiento llegan a la UI a medida que
+se generan, con el mismo formato de eventos que los compatibles con OpenAI.
 """
 import json
 import re
@@ -149,6 +154,9 @@ def _motivo(e):
 
 class AnthropicProvider(AIProvider):
 
+    # send_chat/_run_model usan chat_stream si esto es True
+    supports_stream = True
+
     def __init__(self, api_key: str = None, **kwargs):
         base_url = (kwargs.pop("base_url", "") or "https://api.anthropic.com/v1").rstrip("/")
         super().__init__(api_key=api_key,
@@ -199,7 +207,33 @@ class AnthropicProvider(AIProvider):
             r = self._cli().beta.messages.create(**kw)
         except Exception as e:  # noqa: BLE001 — el motivo de la API hacia arriba, legible
             raise RuntimeError("Anthropic " + _motivo(e)) from e
-        d = r.to_dict()
+        return self._respuesta(r.to_dict())
+
+    def chat_stream(self, messages, system_prompt="", temperature=0.7, max_tokens=4096, tools=None):
+        """Streaming real: yield {type: content|reasoning, text} a medida que llegan
+        y al final {type: done, response: AIResponse} (mismo contrato que base).
+        Si el consumidor corta (botón detener), el `with` cierra la conexión."""
+        kw = self.cuerpo(messages, system_prompt, max_tokens, tools)
+        try:
+            with self._cli().beta.messages.stream(**kw) as st:
+                for ev in st:
+                    if getattr(ev, "type", "") != "content_block_delta":
+                        continue
+                    dt = ev.delta
+                    tipo = getattr(dt, "type", "")
+                    if tipo == "text_delta" and dt.text:
+                        yield {"type": "content", "text": dt.text}
+                    elif tipo == "thinking_delta" and getattr(dt, "thinking", ""):
+                        yield {"type": "reasoning", "text": dt.thinking}
+                final = st.get_final_message()
+        except GeneratorExit:
+            raise
+        except Exception as e:  # noqa: BLE001 — el motivo de la API hacia arriba, legible
+            raise RuntimeError("Anthropic " + _motivo(e)) from e
+        yield {"type": "done", "response": self._respuesta(final.to_dict())}
+
+    def _respuesta(self, d):
+        """Mensaje de Anthropic (dict) → AIResponse con tool_calls formato OpenAI."""
         bloques = d.get("content") or []
         text = "".join(b.get("text", "") for b in bloques if b.get("type") == "text")
         tool_calls = [{"id": b["id"], "type": "function",

@@ -34,6 +34,7 @@ from providers import get_provider, PROVIDERS, is_custom_provider
 from providers.media_gateway import generate as generate_media
 from code_runner.agent_plan import TOOL as PLAN_TOOL, validate as validate_plan
 from code_runner import CodeRunner
+from code_runner import live_feed
 try:
     from low_anim import AnimationAPI
 except Exception:            # dep opcional ausente (p.ej. numpy): LOW arranca igual
@@ -52,7 +53,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.47.0"
+LOW_VERSION = "3.48.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -1021,6 +1022,16 @@ class Api:
             return f" {e}"
 
     # ── infraestructura ───────────────────────────────────
+    def _push_live(s, event, build):
+        """Feed en vivo (code_runner/live_feed.py). `build` se evalúa solo si hay
+        ventana; un fallo del feed nunca rompe la herramienta que lo originó."""
+        if not s._window:
+            return
+        try:
+            s._push(event, build())
+        except Exception as e:  # noqa: BLE001 — el feed es accesorio
+            log(f"_push_live({event}) fallo: {e}")
+
     def _push(s, event, data):
         if not s._window:
             return
@@ -3864,11 +3875,12 @@ class Api:
                 # checkpoint: guardar el contenido previo (o None si es nuevo) una
                 # sola vez por turno, para poder deshacer todo el turno con /undo
                 key = str(p)
+                prev = p.read_text(encoding="utf-8", errors="replace") if p.exists() else None
                 if key not in s._checkpoint:
-                    s._checkpoint[key] = p.read_text(encoding="utf-8",
-                                                     errors="replace") if p.exists() else None
+                    s._checkpoint[key] = prev
                 p.write_text(content, encoding="utf-8")
                 s._written.append(str(p))
+                s._push_live("live_diff", lambda: live_feed.diff_event(str(p), prev, content))
                 s._push("wrote", {"path": str(p)})
                 return f" Escrito {rel} ({len(content)}c)"
             if name == "edit_file":
@@ -3932,6 +3944,7 @@ class Api:
                     s._checkpoint[key] = orig
                 p.write_text(src, encoding="utf-8")
                 s._written.append(str(p))
+                s._push_live("live_diff", lambda: live_feed.diff_event(str(p), orig, src))
                 # rango de líneas tocado  el frontend lo abre, scrollea y resalta
                 lo = min(r[0] for r in ranges); hi = max(r[1] for r in ranges)
                 s._push("wrote", {"path": str(p), "range": [lo, hi]})
@@ -3942,13 +3955,16 @@ class Api:
                 if not cmd:
                     return " Falta 'command'. Llamá exec_cmd con {\"command\": \"...\"}."
                 r = s._run_shell(cmd, timeout=30)
-                return f" exit={r.returncode}\n" + ((r.stdout + "\n" + r.stderr).strip()[:3000])
+                out = (r.stdout + "\n" + r.stderr).strip()
+                s._push_live("live_term", lambda: live_feed.term_event(cmd, r.returncode, out))
+                return f" exit={r.returncode}\n" + out[:3000]
             if name == "git":
                 a = (args.get("args") or "").strip()
                 if not a:
                     return " Faltan argumentos de git (ej: 'commit -m \"msg\"', 'push')"
                 r = s._run_shell("git " + a, timeout=180)
                 out = (r.stdout + "\n" + r.stderr).strip()
+                s._push_live("live_term", lambda: live_feed.term_event("git " + a, r.returncode, out, "git"))
                 return f" git {a} (exit={r.returncode})\n{out[:3500] or '(sin salida)'}"
             if name == "ssh_exec":
                 target, key, port = s._resolve_ssh(args.get("host", ""))
@@ -5273,7 +5289,7 @@ class Api:
                 s._push("agent_end", {})
             s._live = started
             return r
-        # provider sin streaming (Anthropic): una sola llamada bloqueante
+        # provider sin streaming (media/gateways): una sola llamada bloqueante
         return s.prov.chat(ms, system_prompt=sp, temperature=temperature,
                            max_tokens=max_tok, tools=tools)
 

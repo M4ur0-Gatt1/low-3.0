@@ -1594,7 +1594,7 @@ function termLine(txt, cls) {
 }
 
 /* ── chat ── */
-function scrollMsgs() { const m = $("#msgs"); m.scrollTop = m.scrollHeight; }
+/* scrollMsgs / resetMsgs viven en ai/chat-scroll.js (autoscroll inteligente) */
 function setStatus(t) { $("#status").textContent = t; }
 
 /* contador en vivo mientras el modelo trabaja — así no parece congelado
@@ -1625,7 +1625,7 @@ function userMsg(text, imgDataUrl) {
     t.textContent = text;
     d.appendChild(t);
   }
-  $("#msgs").appendChild(d); scrollMsgs();
+  $("#msgs").appendChild(d); scrollMsgs(true);
 }
 
 /* ── imagen adjunta (visión): diálogo, pegado desde portapapeles, preview ── */
@@ -1891,7 +1891,7 @@ async function resume(sid) {
   const msgs = await api.resume(sid);
   if (msgs.error) return sysMsg(" " + msgs.error);
   S.chatId = sid;
-  $("#msgs").innerHTML = "";
+  resetMsgs();
   for (const m of msgs) {
     if (m.role === "user") userMsg(m.content);
     else if (m.role === "LOW") agentMsg(m.content);
@@ -1904,7 +1904,7 @@ async function resume(sid) {
 async function newChat() {
   const id = await api.new_session();
   if (id) S.chatId = id;
-  $("#msgs").innerHTML = "";
+  resetMsgs();
   sysMsg("Nueva conversación");
   await loadChatTabs();
 }
@@ -1973,7 +1973,7 @@ async function closeChat(id, label) {
   // si cerré la que estaba abierta, el backend arrancó una nueva  limpiar chat
   if (r && r.was_active) {
     S.chatId = r.session_id;
-    $("#msgs").innerHTML = "";
+    resetMsgs();
     sysMsg(`Cerré «${label || id}». Conversación nueva.`);
   }
   renderChatTabs();

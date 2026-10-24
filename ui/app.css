@@ -355,9 +355,19 @@ select option {
 .working-on[hidden] { display: none; }
 
 .msgs {
-  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px;
+  /* min-height: el chat nunca queda aplastado por el panel de trabajo */
+  flex: 1 1 auto; min-height: 160px; overflow-y: auto; overflow-x: hidden; padding: 14px;
   display: flex; flex-direction: column; gap: 12px;
 }
+/* aviso flotante cuando llegan mensajes y estás leyendo más arriba */
+.msgs-jump {
+  align-self: center; position: relative; z-index: 4; margin: -40px 0 8px; flex: none;
+  padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line);
+  background: var(--panel2); color: var(--txt); font: 500 11.5px 'Figtree', sans-serif;
+  cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+.msgs-jump:hover { border-color: var(--red); }
+.msgs-jump[hidden] { display: none; }
 /* rutas y errores largos sin espacios no deben desbordar las cajas */
 .m-user, .m-txt, .m-sys, .card-b, .step, .chg-row .file { overflow-wrap: anywhere; }
 .m-user {

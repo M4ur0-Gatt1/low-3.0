@@ -15,6 +15,8 @@ acepta herramientas» con cualquier Claude actual):
 4. Un modelo viejo (Sonnet 4.5) no recibe `thinking` ni la beta.
 5. Un error trae el motivo que da la API, no «400 Bad Request».
 6. Los campos internos de LOW no salen a las APIs compatibles con OpenAI.
+7. (v3.48) Streaming: el texto y el pensamiento llegan por partes, y el
+   «done» final trae los mismos bloques/tool_calls que la llamada normal.
 """
 import json
 import sys
@@ -40,12 +42,45 @@ class Falsa(BaseHTTPRequestHandler):
         cuerpo = json.loads(self.rfile.read(largo) or b"{}")
         pedidos.append({"path": self.path, "headers": {k.lower(): v for k, v in self.headers.items()}, "body": cuerpo})
         codigo, resp = respuestas.pop(0)
+        if codigo == 200 and cuerpo.get("stream"):
+            datos = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in sse(resp)).encode("utf-8")
+            self.send_response(200)
+            self.send_header("content-type", "text/event-stream")
+            self.send_header("content-length", str(len(datos)))
+            self.end_headers()
+            self.wfile.write(datos)
+            return
         datos = json.dumps(resp).encode("utf-8")
         self.send_response(codigo)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(datos)))
         self.end_headers()
         self.wfile.write(datos)
+
+
+def sse(m):
+    """Un mensaje completo → los eventos SSE que mandaría la API (texto en 2 partes)."""
+    yield {"type": "message_start", "message": {**m, "content": [], "stop_reason": None,
+                                                "usage": {"input_tokens": m["usage"]["input_tokens"], "output_tokens": 0}}}
+    for i, b in enumerate(m["content"]):
+        t = b["type"]
+        if t == "thinking":
+            yield {"type": "content_block_start", "index": i, "content_block": {"type": "thinking", "thinking": "", "signature": ""}}
+            if b["thinking"]:
+                yield {"type": "content_block_delta", "index": i, "delta": {"type": "thinking_delta", "thinking": b["thinking"]}}
+            yield {"type": "content_block_delta", "index": i, "delta": {"type": "signature_delta", "signature": b["signature"]}}
+        elif t == "text":
+            yield {"type": "content_block_start", "index": i, "content_block": {"type": "text", "text": ""}}
+            mitad = len(b["text"]) // 2
+            for parte in (b["text"][:mitad], b["text"][mitad:]):
+                yield {"type": "content_block_delta", "index": i, "delta": {"type": "text_delta", "text": parte}}
+        elif t == "tool_use":
+            yield {"type": "content_block_start", "index": i, "content_block": {**b, "input": {}}}
+            yield {"type": "content_block_delta", "index": i, "delta": {"type": "input_json_delta", "partial_json": json.dumps(b["input"])}}
+        yield {"type": "content_block_stop", "index": i}
+    yield {"type": "message_delta", "delta": {"stop_reason": m["stop_reason"], "stop_sequence": None},
+           "usage": {"output_tokens": m["usage"]["output_tokens"]}}
+    yield {"type": "message_stop"}
 
 
 srv = HTTPServer(("127.0.0.1", 0), Falsa)
@@ -154,6 +189,40 @@ def familias():
     assert not piensa_adaptativo("gpt-4o")
 
 
+def streaming():
+    pedidos.clear()
+    p = AnthropicProvider(api_key="sk-prueba", model="claude-opus-5-5", base_url=URL)
+    assert getattr(p, "supports_stream", False), "Claude no declara streaming: la UI queda muda hasta el final"
+    pensar = {"type": "thinking", "thinking": "planeo", "signature": "firma-opaca-123=="}
+    respuestas.append((200, msg([pensar, {"type": "text", "text": "Voy a escribir."},
+                                 {"type": "tool_use", "id": "toolu_9", "name": "write_file", "input": {"path": "a.svg"}}],
+                                stop="tool_use")))
+    evs = list(p.chat_stream([{"role": "user", "content": "dibujá"}], system_prompt="sos LOW", tools=TOOLS))
+    b = pedidos[0]["body"]
+    assert b.get("stream") is True and "temperature" not in b, "pedido de stream mal armado: " + json.dumps(b)[:200]
+    textos = [e["text"] for e in evs if e["type"] == "content"]
+    assert len(textos) >= 2 and "".join(textos) == "Voy a escribir.", "el texto no llegó por partes: " + repr(textos)
+    assert "".join(e["text"] for e in evs if e["type"] == "reasoning") == "planeo", "el pensamiento no llegó"
+    assert evs[-1]["type"] == "done", "falta el done final"
+    r = evs[-1]["response"]
+    m = r.raw["choices"][0]["message"]
+    assert r.content == "Voy a escribir." and m["tool_calls"][0]["id"] == "toolu_9", "done sin tool_calls: " + json.dumps(m)[:300]
+    assert json.loads(m["tool_calls"][0]["function"]["arguments"]) == {"path": "a.svg"}, "argumentos de la herramienta"
+    assert m["_anthropic_content"][0]["signature"] == "firma-opaca-123==", "el pensamiento no conservó su firma"
+
+
+def streaming_error():
+    p = AnthropicProvider(api_key="sk-prueba", model="claude-opus-5-5", base_url=URL)
+    p._cli().max_retries = 0
+    respuestas.append((400, {"type": "error", "error": {"type": "invalid_request_error", "message": "algo inválido"}}))
+    try:
+        list(p.chat_stream([{"role": "user", "content": "hola"}]))
+    except RuntimeError as e:
+        assert "400" in str(e) and "algo inválido" in str(e), "el error de stream no trae el motivo: " + str(e)
+        return
+    raise AssertionError("un 400 en streaming no levantó error")
+
+
 def sin_campos_internos():
     ms = [{"role": "assistant", "content": "x", "_anthropic_content": [PENSAR], "reasoning_content": "r"}]
     assert _sin_campos_internos(ms) == [{"role": "assistant", "content": "x", "reasoning_content": "r"}], "un campo interno sale a la API"
@@ -165,6 +234,8 @@ prueba("un 400 trae el motivo de la API", error_legible)
 prueba("un rechazo se dice, no vuelve vacío", rechazo)
 prueba("qué modelos piensan y cuáles atan sus bloques", familias)
 prueba("los campos internos no salen a las APIs compatibles con OpenAI", sin_campos_internos)
+prueba("streaming: texto y pensamiento por partes, done con tool_calls y firma", streaming)
+prueba("streaming: un 400 trae el motivo de la API", streaming_error)
 srv.shutdown()
 print(f"\n{total - len(fallas)}/{total} OK")
 if fallas:
