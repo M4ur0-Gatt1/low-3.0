@@ -95,11 +95,19 @@ class Providers(unittest.TestCase):
                     name + " no declara modelo por defecto")
 
     def test_anthropic_native_auth_endpoint_and_tool_conversion(self):
+        # desde la v3.47 va por el SDK oficial (tools/check_anthropic_provider.py prueba el cable)
         provider = get_provider("anthropic", api_key="test-key", base_url="https://example.test/v1/", model="chosen")
-        with patch("requests.post", return_value=response({"content": [{"type": "tool_use", "id": "1", "name": "read_file", "input": {"path": "a"}}]})) as post:
+        cliente = provider._cli()
+        self.assertEqual(str(cliente.base_url).rstrip("/"), "https://example.test")
+        self.assertEqual(cliente.api_key, "test-key")
+
+        class Resp:
+            def to_dict(self):
+                return {"content": [{"type": "tool_use", "id": "1", "name": "read_file", "input": {"path": "a"}}],
+                        "stop_reason": "tool_use", "usage": {"input_tokens": 1, "output_tokens": 1}}
+        with patch.object(cliente.beta.messages, "create", return_value=Resp()) as crear:
             result = provider.chat([{"role": "user", "content": "test"}])
-            self.assertEqual(post.call_args.args[0], "https://example.test/v1/messages")
-            self.assertEqual(post.call_args.kwargs["headers"]["x-api-key"], "test-key")
+            self.assertNotIn("temperature", crear.call_args.kwargs)
             self.assertEqual(result.raw["choices"][0]["message"]["tool_calls"][0]["function"]["name"], "read_file")
 
     def test_cloudflare_account_and_legacy_url(self):

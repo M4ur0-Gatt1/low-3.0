@@ -52,7 +52,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.46.0"
+LOW_VERSION = "3.47.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -5170,7 +5170,7 @@ class Api:
             ("openai", "gpt-4o"),
             ("siliconflow", "Qwen/Qwen3-VL-8B-Instruct"),
             ("digitalocean", "nemotron-nano-12b-v2-vl"),
-            ("anthropic", "claude-sonnet-4-5"),
+            ("anthropic", "claude-opus-5-5"),
             ("qwen", "qwen-vl-plus"),
         ]
         for pv, md in cands:
@@ -5445,7 +5445,12 @@ class Api:
                                 continue
                             use_tools = False
                             log(f"tools deshabilitadas tras 400: {err[:200]}")
-                            s._push("sys", " Este modelo no acepta herramientas — respondo sin ellas (no puede crear archivos)")
+                            # el motivo REAL: antes se afirmaba que el modelo no acepta
+                            # herramientas ante cualquier 400 (con Claude era `temperature`)
+                            if "tool" in low or "function" in low:
+                                s._push("sys", " Este modelo no acepta herramientas — respondo sin ellas (no puede crear archivos)")
+                            else:
+                                s._push("sys", f" El proveedor rechazó el pedido ({err[:220].strip()}) — reintento sin herramientas")
                             continue
                         # ── FAILOVER: modelo caído/agotado/dado de baja  siguiente ──
                         if (s._is_failover(err) or decom) and ci + 1 < len(chain):
@@ -5563,6 +5568,10 @@ class Api:
                     # back". El transport ya lo captura en raw  lo reinyectamos.
                     if msg_resp.get("reasoning_content"):
                         asst["reasoning_content"] = msg_resp["reasoning_content"]
+                    # Claude: la respuesta TAL CUAL (con sus bloques de pensamiento), que
+                    # tiene que volver intacta en la vuelta siguiente (providers/anthropic_provider.py)
+                    if msg_resp.get("_anthropic_content"):
+                        asst["_anthropic_content"] = msg_resp["_anthropic_content"]
                     ms.append(asst)
                     progressed = False   # ¿alguna tool AVANZÓ (no error) en esta ronda?
                     ran_any = False      # ¿se ejecutó alguna tool (aunque falle)?

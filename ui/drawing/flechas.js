@@ -51,7 +51,7 @@
   function mover(e) {
     const d = dz(), paso = e.shiftKey ? PASO_GRANDE : PASO, [ux, uy] = DIR[e.key];
     const els = seleccion();
-    const ahora = performance.now();
+    const ahora = e.timeStamp || performance.now();   // la hora de la tecla, no la de atenderla (con LOW ocupado se partía el Ctrl+Z)
     const misma = els.length === ultimo.els.length && els.every((n, i) => n === ultimo.els[i]);
     // varias flechas seguidas sobre lo mismo = un solo paso de deshacer
     if (!misma || ahora - ultimo.t > JUNTAS_MS) global.dzSnapshot();

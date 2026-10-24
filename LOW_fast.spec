@@ -2,7 +2,9 @@
 # LOW_fast.spec — build RAPIDO (--onedir, sin UPX, ~30-60s)
 # Uso: python build_exe.py fast
 # El ffmpeg de imageio-ffmpeg viaja DENTRO del ejecutable (MP4 sin instalar nada).
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+# el SDK oficial de Anthropic (proveedor Claude, v3.47) carga módulos al vuelo
+_ANTHROPIC = collect_submodules("anthropic")
 _FFMPEG = collect_data_files("imageio_ffmpeg")
 
 a = Analysis(
@@ -26,7 +28,7 @@ a = Analysis(
                    'tools.animation.rigging', 'tools.animation.nodes',
                    'tools.animation.ai_pipeline', 'vtracer',
                    # pythonnet → clr_loader → cffi (necesario para .NET runtime)
-                   'cffi', 'clr_loader', 'clr_loader.hostfxr', 'clr_loader.ffi'],
+                   'cffi', 'clr_loader', 'clr_loader.hostfxr', 'clr_loader.ffi'] + _ANTHROPIC,
     hookspath=['.'],
     hooksconfig={},
     runtime_hooks=['pyi_rth_pythonnet.py'],

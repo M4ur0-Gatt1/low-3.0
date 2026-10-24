@@ -4,6 +4,15 @@ from dataclasses import dataclass
 from typing import Optional, Generator
 
 
+def _sin_campos_internos(messages):
+    """Los campos internos de LOW en un mensaje (empiezan con «_», p. ej. los
+    bloques de Claude en `_anthropic_content`) no salen a las APIs compatibles
+    con OpenAI: rechazan lo que no conocen («property … is unsupported»). Pasa
+    al cambiar de proveedor a mitad de una conversación."""
+    return [{k: v for k, v in m.items() if not str(k).startswith("_")} if isinstance(m, dict) else m
+            for m in messages or []]
+
+
 @dataclass
 class APIResult:
     content: str
@@ -33,6 +42,19 @@ PRICING = {
     "gpt-4o-mini":        (0.15, 0.60),
     "claude-sonnet-4":    (3.00, 15.00),
     "claude-sonnet-4-5":  (3.00, 15.00),
+    # los Claude actuales (oct-2026, precios de la API de Anthropic)
+    "claude-opus-5-5":    (4.00, 20.00),
+    "claude-opus-5":      (5.00, 25.00),
+    "claude-opus-4-8":    (5.00, 25.00),
+    "claude-opus-4-7":    (5.00, 25.00),
+    "claude-opus-4-6":    (5.00, 25.00),
+    "claude-sonnet-5-5":  (2.00, 10.00),
+    "claude-sonnet-5":    (2.00, 10.00),
+    "claude-sonnet-4-6":  (3.00, 15.00),
+    "claude-haiku-5-5":   (0.10, 0.50),
+    "claude-haiku-4-5":   (1.00, 5.00),
+    "claude-fable-5-1":   (10.00, 50.00),
+    "claude-fable-5":     (10.00, 50.00),
     "claude-opus-4-1":    (15.00, 75.00),
     "claude-3-5-haiku":   (0.80, 4.00),
     "llama-3.3-70b":      (0.59, 0.79),
@@ -102,7 +124,7 @@ class Transport:
         """Completar chat completo (sin streaming). Devuelve APIResult."""
         body = {
             "model": model,
-            "messages": messages,
+            "messages": _sin_campos_internos(messages),
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": stream,
@@ -190,7 +212,7 @@ class Transport:
         'done' final con APIResult (incluye tool_calls en formato OpenAI en raw)."""
         body = {
             "model": model,
-            "messages": messages,
+            "messages": _sin_campos_internos(messages),
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": True,

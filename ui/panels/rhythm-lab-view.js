@@ -128,7 +128,10 @@
       });
       pintarCarriles();still();
     }
-    /** Un golpe de Espacio. No hay que armar nada: se anota siempre. */
+    /** Un golpe de Espacio. No hay que armar nada: se anota siempre.
+     *  `now` es la HORA DE LA TECLA (event.timeStamp), no la de atenderla: cada
+     *  golpe redibuja la escena y, con LOW ocupado, los siguientes se atendían
+     *  tarde. Medido: golpes parejos daban [1,1,1,14,1,1,1] (oct-2026). */
     function tap(now=performance.now()){
       const last=pasada.at(-1);
       if(last!=null && now-last>R.GAP_MS){ if(pasada.length>1)cortadas++; pasada=[]; }
@@ -159,7 +162,7 @@
     buttons.apply.onclick=()=>{try{if(typeof DZ==='undefined'||DZ.doc!==doc)throw Error('El documento activo cambió. Volvé a abrir Interpretar.');if(R.apply(doc,s,values)){global.dzSetStatus?.('Interpretación aplicada. Un Deshacer recupera el ritmo original.');close();}}catch(error){hint(error.message);buttons.apply.disabled=true;}};
     dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
     dialog.addEventListener('keydown',event=>{
-      if(event.code==='Space' && event.target.tagName!=='INPUT'){event.preventDefault();event.stopImmediatePropagation();if(!event.repeat)tap();}
+      if(event.code==='Space' && event.target.tagName!=='INPUT'){event.preventDefault();event.stopImmediatePropagation();if(!event.repeat)tap(event.timeStamp||performance.now());}
       if(event.key==='Tab'){const nodes=[...dialog.querySelectorAll('button:not(:disabled),input')];const first=nodes[0],last=nodes.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}
       // Prevent editor shortcuts from modifying the document underneath the lab.
       event.stopPropagation();

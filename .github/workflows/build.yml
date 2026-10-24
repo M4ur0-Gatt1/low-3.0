@@ -63,6 +63,7 @@ jobs:
       - name: Puentes de guardado e importación
         run: |
           python tools/check_provider_contracts.py
+          python tools/check_anthropic_provider.py
           python tools/check_multiplane_backend.py
           python tools/check_asset_import_backend.py
           python tools/check_storyboarder_import_backend.py
@@ -223,6 +224,7 @@ jobs:
           node tools/check_personajes_2d_disco_ui.js
           node tools/check_rescate_aviso_ui.js
           node tools/check_rescate_disco_ui.js
+          node tools/check_grabacion_gesto_ui.js
           node tools/check_taller_hoja_2d_ui.js
           node tools/check_3d_terreno_ui.js
           node tools/check_3d_rectas_fuga_ui.js

@@ -1,4 +1,5 @@
 requests>=2.31
+anthropic>=2.3       # proveedor Claude: SDK oficial (pensamiento adaptativo, bloques preservados)
 pywebview>=5.0
 pillow>=10.0
 imageio-ffmpeg>=0.5   # trae su propio ffmpeg: MP4/WebM sin instalar nada (PATH primero, después este)

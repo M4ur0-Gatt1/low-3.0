@@ -73,7 +73,7 @@ DEFAULT_CONFIG = {
         "groq": {"api_key": "", "model": "llama-3.3-70b-versatile", "base_url": ""},
         "siliconflow": {"api_key": "", "model": "deepseek-ai/DeepSeek-V3", "base_url": ""},
         "openai": {"api_key": "", "model": "gpt-4o", "base_url": ""},
-        "anthropic": {"api_key": "", "model": "claude-sonnet-4-5", "base_url": ""},
+        "anthropic": {"api_key": "", "model": "claude-opus-5-5", "base_url": ""},
         "custom": {"api_key": "", "model": "llama3", "base_url": "http://localhost:11434/v1"},
         "qwen": {"api_key": "", "model": "qwen-plus", "base_url": ""},
         "glm": {"api_key": "", "model": "glm-4", "base_url": ""},

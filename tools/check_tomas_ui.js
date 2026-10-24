@@ -28,12 +28,19 @@ async function main() {
   const ev = async (expression) => { const r = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
     if (r.exceptionDetails) throw Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  /* EL RITMO SE MIDE CON LA HORA DE LA ENTRADA. Cada golpe lleva su hora
+     (`timestamp` de CDP = `event.timeStamp` en la página): bajo carga, los
+     viajes de ida y vuelta de CDP estiraban los intervalos y la prueba fallaba
+     a veces (intermitente en la puerta, oct-2026). Y la app anotaba la hora de
+     ATENDER el golpe: con LOW ocupado, el ritmo grabado no era el tocado. */
+  let reloj = Date.now() / 1000;
+  const avanzar = async (ms) => { reloj += ms / 1000; await wait(ms); };
   const espacio = async () => {
-    await send("Input.dispatchKeyEvent", { type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32 });
-    await send("Input.dispatchKeyEvent", { type: "keyUp", key: " ", code: "Space", windowsVirtualKeyCode: 32 });
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32, timestamp: reloj });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: " ", code: "Space", windowsVirtualKeyCode: 32, timestamp: reloj + 0.01 });
   };
   /** Una pasada: 8 golpes (7 poses + el final) con los intervalos dados. */
-  const pasada = async (intervalos) => { for (let i = 0; i < 8; i++) { await espacio(); if (i < 7) await wait(intervalos[i]); } await wait(120); };
+  const pasada = async (intervalos) => { for (let i = 0; i < 8; i++) { await espacio(); if (i < 7) await avanzar(intervalos[i]); } await avanzar(120); };
   const click = async (expr) => {
     const p = await ev(`(()=>{const e=${expr};if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
     assert.ok(p, "no está: " + expr);
@@ -56,8 +63,9 @@ async function main() {
     assert.equal(await ev("document.querySelectorAll('.rhythm-lane').length"), 0, "no tiene que haber tomas al empezar");
 
     // 1. dos pasadas, sin grabar: parejo, y después con la «Suspensión» larga
+    reloj = Date.now() / 1000;
     await pasada([90, 90, 90, 90, 90, 90, 90]);
-    await wait(300);
+    await avanzar(300);
     await pasada([90, 90, 90, 420, 90, 90, 90]);
     const c1 = await carriles();
     assert.equal(c1.length, 2, "dos pasadas tienen que dar dos carriles: " + JSON.stringify(c1));
@@ -65,8 +73,8 @@ async function main() {
     assert.match(await ev("document.querySelector('.rhythm-hint').textContent"), /lista/);
 
     // 2. pasada cortada por una pausa larga
-    await espacio(); await wait(90); await espacio(); await wait(90); await espacio();
-    await wait(2700);
+    await espacio(); await avanzar(90); await espacio(); await avanzar(90); await espacio();
+    await avanzar(2700);
     await espacio();
     assert.match(await ev("document.querySelector('[data-takes-state]').textContent"), /cortada/, "la pasada cortada tiene que avisarse");
     assert.equal((await carriles()).length, 2, "una pasada cortada NO puede convertirse en toma");
@@ -93,6 +101,20 @@ async function main() {
     await click(`document.querySelector('[data-action="close"]')`);
     await ev("lowInterpretar({sample:true})"); await wait(300);
     assert.equal((await carriles()).length, 2, "al volver a abrir se perdieron las tomas");
+
+    // 6. CON LOW OCUPADO, SE GRABA EL RITMO TOCADO: golpes parejos (90 ms, por
+    // la hora de la entrada) y el hilo principal ocupado 600 ms en medio de la
+    // pasada. Antes la app anotaba la hora de atender cada golpe: la pose del
+    // medio salía larguísima aunque se tocó pareja.
+    await avanzar(3000);   // lejos de la pasada anterior
+    for (let i = 0; i < 8; i++) {
+      if (i === 4) send("Runtime.evaluate", { expression: "(()=>{ const t = performance.now(); while (performance.now() - t < 600) {} return 1; })()" });
+      await espacio(); if (i < 7) reloj += 0.09;
+    }
+    await wait(900);
+    const ocupado = (await carriles())[0];
+    assert.equal((await carriles()).length, 3, "la pasada con LOW ocupado no dio una toma");
+    assert.ok(Math.max(...ocupado) <= Math.min(...ocupado) + 1, "con LOW ocupado, el ritmo grabado no es el tocado (golpes parejos dieron poses distintas): " + JSON.stringify(ocupado));
 
     // 7. la demo no tocó el documento
     assert.equal(await ev("JSON.stringify(DZ.doc.scene.toJSON())===window.__antes"), true, "la demo cambió el documento");

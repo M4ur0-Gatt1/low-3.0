@@ -3901,7 +3901,7 @@ function dzPointerDown(e) {
   const rigRecNow = DZ.perf && DZ.perf.rec;
   if (DZ.rigMode && DZ.rigSubmode === "fk" && (DZ.rigTool === "pose" || rigRecNow) && pack.length === 1 && el.id) {
     const recNow = rigRecNow;
-    rigFrame = recNow ? 1 + (performance.now() - recNow.t0) / 1000 * recNow.fps : dzRigCur();
+    rigFrame = recNow ? 1 + ((e.timeStamp || performance.now()) - recNow.t0) / 1000 * recNow.fps : dzRigCur();
     // La pieza de arte puede tener un id distinto del hueso (bindRigElement):
     // resolvemos el HUESO por elementId para posar la cadena correcta, no crear
     // un nodo fantasma con el id del <path>/<g>.
@@ -3918,7 +3918,7 @@ function dzPointerDown(e) {
   if (DZ.rec && DZ.rec.armed) {
     const path = dzElPath(el);
     if (path) {
-      rec = { el, path, samples: [[0, 0, 0]], t0: performance.now(), last: [0, 0] };
+      rec = { el, path, samples: [[0, 0, 0]], t0: e.timeStamp || performance.now(), last: [0, 0] };
       dzSetStatus("⏹ GRABANDO el movimiento… soltá para terminar");
     }
   }
@@ -3951,7 +3951,7 @@ function dzPointerDown(e) {
       const rec = DZ.perf && DZ.perf.rec;
       if (rec) {
         rec.livePose = pose;
-        rec.take[rigDrag.id].push({ t: (performance.now() - rec.t0) / 1000,
+        rec.take[rigDrag.id].push({ t: ((ev.timeStamp || performance.now()) - rec.t0) / 1000,   // la hora del gesto, no la de atenderlo
           x: pose.x, y: pose.y, r: pose.r || 0,
           sx: pose.sx == null ? (pose.s == null ? 1 : pose.s) : pose.sx,
           sy: pose.sy == null ? (pose.s == null ? 1 : pose.s) : pose.sy });
@@ -3968,7 +3968,7 @@ function dzPointerDown(e) {
       } else dzAlignRender(null);
       bases.forEach(b => dzWritePos(b.n, b.base, dx + ax, dy + ay));
     }
-    if (rec) { rec.last = [dx, dy]; rec.samples.push([dx, dy, performance.now() - rec.t0]); }
+    if (rec) { rec.last = [dx, dy]; rec.samples.push([dx, dy, (ev.timeStamp || performance.now()) - rec.t0]); }   // la hora del gesto
     dzPositionHandle();
   };
   const up = (ev) => {
