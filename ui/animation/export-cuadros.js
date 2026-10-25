@@ -56,6 +56,28 @@ function dzExportCuadroSvg(f, porCamara) {
   return txt;
 }
 
+/** El mismo cuadro, pero con una clave de cámara AE sale del render 3D real
+ *  (ui/composition/ae-render3d.js) en vez de la aproximación SVG: la toma que
+ *  se ve en Composición es la que se exporta, también en órbitas fuertes.
+ *  Devuelve un SVG (con la imagen adentro) para que los que rasterizan no
+ *  cambien. Sin WebGL, o con una clave 2D, es exactamente `dzExportCuadroSvg`. */
+async function dzExportCuadroSvgListo(f, porCamara) {
+  const r3d = window.LOW?.composition?.render3d;
+  const cam = porCamara && r3d ? dzCamAt(f) : null;
+  if (cam && cam.ae) {
+    let txt = dzCuadroSvgTexto(f);
+    if (!txt) txt = dzExportCuadroEnBlanco(DZ.doc.scene);
+    txt = dzRigView(txt, f);
+    const vb = dzVB();
+    const png = await r3d.tomaPng(txt, cam, vb).catch(() => null);
+    if (png) {
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${vb[2]}" height="${vb[3]}" viewBox="${vb.join(" ")}" data-camara="ae-3d">` +
+        `<image href="${png}" x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}"/></svg>`;
+    }
+  }
+  return dzExportCuadroSvg(f, porCamara);
+}
+
 /** Lo que hay que decir cuando salieron MENOS cuadros de los pedidos.
  *
  *  Los cuadros vacios ya no se pierden, pero quedan dos maneras de perder uno:

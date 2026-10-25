@@ -171,7 +171,9 @@
     const preparando = $id("lowPrevPreparando");
     for (let k = 0; k < cuadros.length; k++) {
       if (!abierta(p)) return detener(p);
-      const du = await global.dzSvgToPng(global.dzExportCuadroSvg(cuadros[k], porCamara), lado);
+      // «Listo»: con cámara AE, el cuadro sale del render 3D, igual que en el export
+      const txt = global.dzExportCuadroSvgListo ? await global.dzExportCuadroSvgListo(cuadros[k], porCamara) : global.dzExportCuadroSvg(cuadros[k], porCamara);
+      const du = await global.dzSvgToPng(txt, lado);
       const img = du ? await aImagen(du) : null;
       if (!abierta(p)) return detener(p);
       if (!img) continue;

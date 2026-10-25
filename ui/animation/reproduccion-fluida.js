@@ -140,7 +140,8 @@
   async function rasterizar(f, t) {
     if (typeof global.dzExportCuadroSvg !== "function") return null;
     const conCamara = porCamara();
-    const txt = global.dzExportCuadroSvg(f, conCamara);
+    // con cámara AE, el cuadro sale del render 3D (el mismo que la toma y el export)
+    const txt = global.dzExportCuadroSvgListo ? await global.dzExportCuadroSvgListo(f, conCamara) : global.dzExportCuadroSvg(f, conCamara);
     const url = URL.createObjectURL(new Blob([txt], { type: "image/svg+xml" }));
     try {
       const img = new Image(); img.src = url; await img.decode();

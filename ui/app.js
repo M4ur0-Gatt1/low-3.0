@@ -9981,7 +9981,7 @@ async function dzDoExportDoc(kind, destino) {
   const pngs = [];
   for (let i = 0; i < cuadros.length; i++) {
     const f = cuadros[i];
-    const txt = dzExportCuadroSvg(f, throughCam);   // export-cuadros.js: el MISMO cuadro que muestra la vista previa
+    const txt = await dzExportCuadroSvgListo(f, throughCam);   // export-cuadros.js: el MISMO cuadro que la vista previa (cámara AE: render 3D)
     const du = await dzSvgToPng(txt, kind === "sheet" ? 512 : kind === "gif" ? 1080 : kind === "whatsapp" ? 720 : Math.max(DZ.doc?.scene?.width || 1080, DZ.doc?.scene?.height || 1080));   // MP4/PNG/Premiere a la resolución del DOCUMENTO (salía 1080×608 de un 1920×1080); el GIF, topeado para compartir
     if (du) pngs.push(du);
     dzSetStatus("Rasterizando" + (throughCam ? " por c\u00e1mara" : "") +

@@ -73,7 +73,11 @@ function dzCmpCamRender() {
   dzDocCommit();
   const cam = dzCmpCamActual();
   const texto = dzCuadroSvgTexto(DZ.doc.frame) || "";
-  lienzo.innerHTML = texto ? dzCamView(texto, cam) : "";
+  // 3.51: el SVG va a la mitad de abajo (la toma) y three.js dibuja encima la
+  // perspectiva real; arriba, la vista de trabajo (ui/composition/ae-render3d.js)
+  const destino = lienzo.querySelector(".cmp3-shot-svg") || lienzo;
+  destino.innerHTML = texto ? dzCamView(texto, cam) : "";
+  window.LOW?.composition?.render3d?.actualizar(texto, cam, dzVB());
   const info = raiz.querySelector(".cmp3-caminfo");
   if (info) {
     const claves = Object.keys(dzCamKeys() || {}).length;
@@ -448,6 +452,7 @@ function dzCmpCamMontar() {
   info.className = "cmp3-caminfo";
   escenario.append(vista, info);
   dzCmpCamMontarPanel(escenario);
+  window.LOW?.composition?.render3d?.montar(vista);   // toma en 3D real + vista dividida
 
   // C alterna las herramientas de cámara (la tecla de AE)
   raiz.addEventListener("keydown", (e) => {

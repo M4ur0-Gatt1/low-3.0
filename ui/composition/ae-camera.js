@@ -253,28 +253,71 @@
     return out.outerHTML;
   }
 
+  /* ── DÓNDE ESTÁ CADA PLANO EN EL MUNDO ─────────────────────────────────── */
+  /** Un plano (hijo del SVG del cuadro) llevado al mundo 3D: su profundidad y
+   *  la función que manda un punto de la hoja (u, v) a su lugar en el espacio.
+   *  La usan la vista SVG (afín) y el render 3D (perspectiva real): la MISMA
+   *  cuenta, así las dos vistas no pueden separarse. */
+  function planoMundo(n, vb) {
+    const k = unidadZ(vb[2]), z0 = zoomBase(vb[2]);
+    const ccx = vb[0] + vb[2] / 2, ccy = vb[1] + vb[3] / 2;
+    const at = (a, d) => { const v = parseFloat(n.getAttribute && n.getAttribute(a)); return Number.isFinite(v) ? v : d; };
+    const Z = zDe(at("data-z", 0)) * k, ox = at("data-comp-x", 0), oy = at("data-comp-y", 0);
+    const rz = at("data-comp-rz", 0) * Math.PI / 180, sx = at("data-comp-sx", 1) || 1, sy = at("data-comp-sy", 1) || 1;
+    const cs = Math.cos(rz), sn = Math.sin(rz);
+    // compensación de escala Z: el plano se dibujó a su tamaño de pantalla, así
+    // que en el mundo se agranda con la profundidad y la cámara por omisión lo
+    // muestra del tamaño dibujado (igual que la cámara 2D)
+    const comp = Math.max(0.01, (z0 + Z) / z0);
+    const mundo = (u, v) => {
+      const px = (u - ccx) * sx * comp, py = (v - ccy) * sy * comp;
+      return [ccx + ox + px * cs - py * sn, ccy + oy + px * sn + py * cs, Z];
+    };
+    return { Z, ox, oy, cs, sn, sx, sy, comp, ccx, ccy, mundo };
+  }
+
+  /** Los planos del cuadro en el mundo, con las cuatro esquinas de la hoja
+   *  (arriba-izq, arriba-der, abajo-der, abajo-izq). Para el render 3D. */
+  function planosMundo(svg, vb) {
+    vb = vbDe(vb);
+    const lista = [];
+    [...svg.children].forEach((n, idx) => {
+      const tag = String(n.tagName || "").toLowerCase();
+      if (n.classList && n.classList.contains("dz-onion")) return;
+      if (PASAN.has(tag)) { lista.push({ idx, pasa: true, n }); return; }
+      const m = planoMundo(n, vb), [x0, y0, w, h] = vb;
+      lista.push({ idx, n, z: m.Z, esquinas: [m.mundo(x0, y0), m.mundo(x0 + w, y0), m.mundo(x0 + w, y0 + h), m.mundo(x0, y0 + h)] });
+    });
+    return lista;
+  }
+
+  /** Desenfoque (en px de la hoja) de un plano a `distancia` de la cámara. */
+  function desenfoqueDe(cam, distancia) {
+    if (!cam.dof || !(cam.aperture > 0) || !(distancia > 0)) return 0;
+    return clamp(cam.aperture * Math.abs(distancia - cam.focus) / distancia * (cam.blurLevel / 100) * 0.5, 0, 80);
+  }
+
+  /** La cámara AE como cámara de three.js: posición, base (derecha, ARRIBA de
+   *  three = -u, atrás = -f) y campo vertical. Con esto la perspectiva real
+   *  coincide punto por punto con `proyector` (lo controla la prueba). */
+  function paraThree(camIn, vb) {
+    vb = vbDe(vb);
+    const cam = completar(camIn, vb), B = base(cam);
+    return { posicion: [cam.x, cam.y, cam.z], derecha: B.r, arriba: mul(B.u, -1), atras: mul(B.f, -1), adelante: B.f,
+      fovY: 2 * Math.atan(vb[3] / 2 / cam.zoom) * 180 / Math.PI, aspecto: vb[2] / vb[3], cam };
+  }
+
   /* ── LA VISTA POR LA CÁMARA AE ─────────────────────────────────────────── */
   /** Datos de proyección de cada plano (también los usa la prueba). */
   function planosProyectados(svg, cam, vb) {
-    const k = unidadZ(vb[2]), z0 = zoomBase(vb[2]), proy = proyector(cam, vb), B = base(cam), P = [cam.x, cam.y, cam.z];
+    const proy = proyector(cam, vb), B = base(cam), P = [cam.x, cam.y, cam.z];
     const ccx = vb[0] + vb[2] / 2, ccy = vb[1] + vb[3] / 2, h = vb[2] * 0.05;
     const lista = [];
     [...svg.children].forEach((n, idx) => {
       const tag = String(n.tagName || "").toLowerCase();
       if (n.classList && n.classList.contains("dz-onion")) return;
       if (PASAN.has(tag)) { lista.push({ idx, pasa: true, n }); return; }
-      const at = (a, d) => { const v = parseFloat(n.getAttribute && n.getAttribute(a)); return Number.isFinite(v) ? v : d; };
-      const Z = zDe(at("data-z", 0)) * k, ox = at("data-comp-x", 0), oy = at("data-comp-y", 0);
-      const rz = at("data-comp-rz", 0) * Math.PI / 180, sx = at("data-comp-sx", 1) || 1, sy = at("data-comp-sy", 1) || 1;
-      const cs = Math.cos(rz), sn = Math.sin(rz);
-      // compensación de escala Z: el plano se dibujó a su tamaño de pantalla, así
-      // que en el mundo se agranda con la profundidad y la cámara por omisión lo
-      // muestra del tamaño dibujado (igual que la cámara 2D)
-      const comp = Math.max(0.01, (z0 + Z) / z0);
-      const mundo = (u, v) => {
-        const px = (u - ccx) * sx * comp, py = (v - ccy) * sy * comp;
-        return [ccx + ox + px * cs - py * sn, ccy + oy + px * sn + py * cs, Z];
-      };
+      const { Z, ox, oy, cs, sn, sx, sy, comp, mundo } = planoMundo(n, vb);
       // ancla: donde el eje óptico corta a este plano (el punto que la cámara mira)
       let Q = null;
       if (B.f[2] > 1e-6) {
@@ -288,10 +331,7 @@
       if (!s0 || !s1 || !s2) { lista.push({ idx, oculto: true, n, z: Z }); return; }
       const a = (s1.x - s0.x) / h, b = (s1.y - s0.y) / h, c = (s2.x - s0.x) / h, d = (s2.y - s0.y) / h;
       const e = s0.x - a * uQ - c * vQ, f = s0.y - b * uQ - d * vQ;
-      let blur = 0;
-      if (cam.dof && cam.aperture > 0) {
-        blur = clamp(cam.aperture * Math.abs(s0.z - cam.focus) / s0.z * (cam.blurLevel / 100) * 0.5, 0, 80);
-      }
+      const blur = desenfoqueDe(cam, s0.z);
       lista.push({ idx, n, z: Z, distancia: s0.z, matriz: [a, b, c, d, e, f], blur });
     });
     return lista;
@@ -384,6 +424,7 @@
     FILM_MM, PRESETS, zoomDeFocal, focalDeZoom, anguloDeZoom, zoomDeAngulo, zoomBase, unidadZ,
     base, completar, desdeLegacy, comoAE, legacyDe, aplicarLegacy, redondear, interpolar,
     proyector, planosProyectados, vista2D, vista3D, orbitar, trackXY, trackZ, lente, mirarA, distanciaA,
+    planoMundo, planosMundo, desenfoqueDe, paraThree, Z_MIN, Z_MAX,
   });
   global.dzCamView = dzCamView;
 })(typeof window !== "undefined" ? window : globalThis);

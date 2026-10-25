@@ -128,6 +128,7 @@ jobs:
           node tools/check_multiplane_ui.js
           node tools/check_composition_ui.js
           node tools/check_ae_camera_ui.js
+          node tools/check_ae_render3d_ui.js
           node tools/check_brush_vector_import_ui.js
           node tools/check_storyboard_ui.js
           node tools/check_storyboard_workflow_ui.js

@@ -106,5 +106,40 @@ ok(mix.ae === 1 && cerca(mix.cx, cx) && cerca(mix.w, 1920), "interpolar desde un
 const r = ae.redondear(mitad);
 ok(r.ae === 1 && Number.isFinite(r.zoom) && cerca(r.x, mitad.x, 1e-2), "redondear conserva la cámara AE");
 
+// 6) render 3D (3.51): la cámara de three.js tiene que ver EXACTAMENTE lo mismo
+// que el proyector AE, también con la cámara orbitada y con un plano corrido
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const pantallaThree = (t, W) => {   // perspectiva de three: cámara mirando su -Z local, Y arriba
+  const d = [W[0] - t.posicion[0], W[1] - t.posicion[1], W[2] - t.posicion[2]];
+  const prof = -dot3(d, t.atras), tg = Math.tan(t.fovY * Math.PI / 360);
+  const nx = dot3(d, t.derecha) / prof / (tg * t.aspecto), ny = dot3(d, t.arriba) / prof / tg;
+  return [VB[0] + (nx + 1) / 2 * VB[2], VB[1] + (1 - ny) / 2 * VB[3]];
+};
+let igualThree = true;
+for (const c of [base, ae.orbitar(base, 35, -12, VB), ae.lente(ae.trackXY(base, 300, -80, VB), base.zoom * 0.6, VB)]) {
+  const t = ae.paraThree(c, VB), proy = ae.proyector(c, VB);
+  for (const W of [[cx, cy, 0], [100, 900, 1500], [1800, 120, -600], [960, 540, 4000]]) {
+    const a = proy(W); if (!a) continue;
+    const [bx, by] = pantallaThree(t, W);
+    if (!cerca(a.x, bx, 1e-6) || !cerca(a.y, by, 1e-6)) igualThree = false;
+  }
+}
+ok(igualThree, "render 3D: la cámara de three.js proyecta cada punto donde lo pone el proyector AE (base, orbitada, con lente)");
+const t0 = ae.paraThree(base, VB);
+ok(cerca(Math.abs(dot3(t0.derecha, t0.arriba)), 0, 1e-9) && cerca(dot3(t0.arriba, t0.atras), 0, 1e-9), "render 3D: la base de la cámara es ortonormal");
+// las esquinas del plano en el mundo son las mismas que usa la vista SVG
+const pm = ae.planosMundo(svgDe(plano({ "data-z": 120, "data-comp-x": 40, "data-comp-rz": 15 })), VB)[0];
+const pj = ae.planosProyectados(svgDe(plano({ "data-z": 120, "data-comp-x": 40, "data-comp-rz": 15 })), base, VB)[0];
+const proyB = ae.proyector(base, VB);
+let esquinasOk = pm.esquinas.length === 4;
+for (const [i, [u, v]] of [[0, [0, 0]], [2, [1920, 1080]]]) {
+  const s = proyB(pm.esquinas[i]), [ex, ey] = aplicar(pj.matriz, u, v);
+  // con la cámara de frente la vista afín es exacta: deben coincidir
+  if (!s || !cerca(s.x, ex, 1e-6) || !cerca(s.y, ey, 1e-6)) esquinasOk = false;
+}
+ok(esquinasOk, "render 3D: las esquinas de cada plano coinciden con la vista SVG (cámara de frente)");
+ok(ae.planosMundo(svgDe(plano({ "data-z": -150 })), VB)[0].z === ae.planosMundo(svgDe(plano({ "data-z": -60 })), VB)[0].z,
+  "render 3D: el mismo límite de profundidad que las otras vistas");
+
 console.log(fallas ? "\nFALLAS: " + fallas : "\nTODO OK");
 process.exit(fallas ? 1 : 0);
