@@ -102,6 +102,15 @@ LOW está en desarrollo activo. Algunas carpetas históricas son prototipos o ru
 de migración. La implementación 3D usada actualmente está en
 `low2-hybrid/modules/design/engine/webgl-design3d.ts`.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+Roles del equipo, aprobación de firmas y política de privacidad: [`docs/CODE_SIGNING_POLICY.md`](docs/CODE_SIGNING_POLICY.md).
+
+## Privacidad
+
+LOW no transfiere información a otros sistemas de la red salvo que lo pida expresamente quien lo instala o lo usa: no hay telemetría, y el chat sólo habla con el proveedor de IA que configures. Detalle en [`docs/CODE_SIGNING_POLICY.md`](docs/CODE_SIGNING_POLICY.md#privacy-policy).
+
 ## Licencia
 
 MIT. Consultar `LICENSE`.

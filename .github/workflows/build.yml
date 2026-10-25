@@ -311,7 +311,10 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
       - name: Crear release (si no existe)
-        run: gh release create "$RELEASE_TAG" --title "LOW $RELEASE_TAG" --generate-notes || true
+        # la página de descarga tiene que nombrar la política de firma (condición de SignPath Foundation)
+        run: >-
+          gh release create "$RELEASE_TAG" --title "LOW $RELEASE_TAG" --generate-notes
+          --notes "**Code signing policy:** free code signing provided by SignPath.io, certificate by SignPath Foundation — [docs/CODE_SIGNING_POLICY.md](https://github.com/${{ github.repository }}/blob/main/docs/CODE_SIGNING_POLICY.md)" || true
         env:
           GH_TOKEN: ${{ github.token }}
 
