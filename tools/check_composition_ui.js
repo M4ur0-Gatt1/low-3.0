@@ -115,9 +115,14 @@ async function main() {
       // en el PADRE, no en el nodo con data-z
       return [...svg.querySelectorAll("[data-z]")].map(n=>{
         const p=n.parentElement, t=(p&&p.getAttribute("transform"))||"";
+        // cámara 2D: translate(x …) · cámara estilo AE (3.50): matrix(a b c d e f)
+        const mm=t.match(/matrix\\(([-0-9.e]+)[ ,]+([-0-9.e]+)[ ,]+([-0-9.e]+)[ ,]+([-0-9.e]+)[ ,]+([-0-9.e]+)/);
+        if(mm) return Math.round(+mm[5]);
         const m=t.match(/translate\\(([-0-9.]+)/); return m?Math.round(+m[1]):null; }); };
+    // 3.50: la cámara es la de After Effects. Con la herramienta unificada el
+    // izquierdo ORBITA; el paneo (track XY) es Mayús+arrastre o el botón medio.
     const panear=async(dx)=>{ const r=vista.getBoundingClientRect();
-      vista.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,cancelable:true,pointerId:12,
+      vista.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,cancelable:true,pointerId:12,shiftKey:true,
         pointerType:"mouse",isPrimary:true,button:0,buttons:1,clientX:r.x+r.width/2,clientY:r.y+r.height/2}));
       for(let m=1;m<=6;m++){ window.dispatchEvent(new PointerEvent("pointermove",{bubbles:true,
         pointerId:12,clientX:r.x+r.width/2+dx*m/6,clientY:r.y+r.height/2,buttons:1})); await wait(50); }

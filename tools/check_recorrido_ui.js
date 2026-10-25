@@ -102,6 +102,12 @@ async function main() {
     const desc = await ev(`(document.getElementById("recDesc") || {}).textContent || ""`);
     assert.ok(/15 marcas/.test(desc), "la ventana no encontró las 15 marcas del recorrido: " + JSON.stringify(desc) + " · estado: " + await ev(`[...document.querySelectorAll("#dzStatusbar span")].map(s => s.textContent).pop()`) + " · lectura: " + await ev(`(()=>{ try { const r = LOW.animation.recorrido.leerReferencia(DZ.doc, DZ.doc.scene.layers.find(l => l.name === "Referencia").id, 1); return JSON.stringify(r.error || { total: r.total, marcas: r.marcas.length, cerrado: r.cerrado }); } catch (e) { return "EXC " + e.message; } })()`));
     assert.ok(/cerrado/i.test(desc), "el infinito no se reconoció como recorrido cerrado: " + JSON.stringify(desc));
+    /* «Generar» se tiene que VER, no sólo existir: v3.49.0 dejó la fila de botones
+       de todas las ventanas en opacity 0 (una regla del chat sobre .m-actions) y
+       esta prueba pasaba igual, porque el clic por coordenadas le llega a un botón
+       invisible. Reporte de Mauro: «no aparece el botón para usarlo». */
+    const opacidad = await ev(`(()=>{ let o = 1; for (let n = document.getElementById("recGo"); n; n = n.parentElement) o *= +getComputedStyle(n).opacity; return o; })()`);
+    assert.ok(opacidad > 0.9, "el botón «Generar» de la ventana no se ve (opacidad " + opacidad + ")");
 
     // ── 2. generar: la pelota sobre cada marca ──────────────────────────────
     await clicEn(await centro(`document.getElementById("recGo")`)); await wait(800);

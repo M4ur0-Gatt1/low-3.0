@@ -99,9 +99,9 @@
     });
   }
   function addActions(bubble) {
-    if (!bubble || bubble.querySelector(".m-actions")) return;
+    if (!bubble || bubble.querySelector(".m-tools")) return;
     const bar = document.createElement("div");
-    bar.className = "m-actions";
+    bar.className = "m-tools";   // NO .m-actions: esa es la fila de botones de las ventanas
     const b = document.createElement("button");
     b.type = "button"; b.className = "m-act"; b.textContent = "Copiar respuesta";
     b.onclick = async () => {

@@ -13,7 +13,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 # Asegurar que tools/animation está en el path
 sys.path.insert(0, str(Path(__file__).parent))

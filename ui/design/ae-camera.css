@@ -1,0 +1,45 @@
+/* Cámara virtual estilo After Effects en Composición (ui/panels/composition-camera.js) */
+.cmp3-camtools, .cmp3-camset { display: none; }
+.cmp3-en-camara .cmp3-camtools { display: flex; }
+.cmp3-en-camara .cmp3-camset:not([hidden]) { display: block; }
+
+.cmp3-camtools { position: absolute; left: 10px; top: 10px; z-index: 6; gap: 4px; align-items: center;
+  padding: 4px; border-radius: 8px; background: rgba(20, 21, 24, .86); border: 1px solid rgba(255, 255, 255, .1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35); }
+.cmp3-camtools button { font: 600 11px/1 system-ui, sans-serif; color: #d9dbe0; background: transparent;
+  border: 1px solid transparent; border-radius: 6px; padding: 6px 9px; cursor: pointer; }
+.cmp3-camtools button:hover { background: rgba(255, 255, 255, .07); }
+.cmp3-camtools button.active { color: #fff; background: var(--accent, #f0450e); border-color: transparent; }
+.cmp3-camtools i { width: 1px; height: 18px; margin: 0 3px; background: rgba(255, 255, 255, .14); }
+
+.cmp3-camset { position: absolute; right: 10px; top: 10px; bottom: 40px; z-index: 6; width: 232px; overflow: auto;
+  padding: 0 10px 10px; border-radius: 8px; background: rgba(20, 21, 24, .92); border: 1px solid rgba(255, 255, 255, .1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35); font: 12px/1.3 system-ui, sans-serif; color: #d9dbe0; cursor: default; }
+.cmp3-camset header { position: sticky; top: 0; padding: 10px 0 8px; font-weight: 700; color: #fff;
+  background: inherit; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.cmp3-camset h4 { margin: 12px 0 4px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #8d929c; }
+.cmp3-camset label { display: grid; grid-template-columns: 1fr 86px; gap: 6px; align-items: center; margin: 3px 0; }
+.cmp3-camset label.flag { grid-template-columns: 1fr auto; }
+.cmp3-camset input[type="number"], .cmp3-camset select { width: 100%; box-sizing: border-box; padding: 4px 6px;
+  border-radius: 5px; border: 1px solid rgba(255, 255, 255, .12); background: #111215; color: #fff; font: inherit; }
+.cmp3-camset label:has(select) { grid-template-columns: 60px 1fr; }
+.cmp3-camset .apagado { opacity: .38; pointer-events: none; }
+.cmp3-camset .botones { display: grid; gap: 6px; margin-top: 12px; }
+.cmp3-camset .botones button { padding: 7px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .05); color: #e8e9ec; cursor: pointer; font: 600 11px/1.2 system-ui, sans-serif; }
+.cmp3-camset .botones button:hover { background: rgba(255, 255, 255, .1); }
+
+/* la cámara y su punto de interés dibujados en la mesa */
+.cmp3-camgizmo { position: absolute; left: 0; top: 0; transform-style: preserve-3d; pointer-events: none; }
+.cmp3-camgizmo .cuerpo { position: absolute; left: -22px; top: -15px; width: 44px; height: 30px; border-radius: 5px;
+  background: #2b6cff; border: 2px solid #9dbbff; box-shadow: 0 0 0 3px rgba(43, 108, 255, .25); transform-style: preserve-3d; }
+.cmp3-camgizmo .cuerpo b { position: absolute; right: -12px; top: 6px; width: 0; height: 0;
+  border-top: 9px solid transparent; border-bottom: 9px solid transparent; border-left: 12px solid #9dbbff; }
+.cmp3-camgizmo .cuerpo span { position: absolute; left: 50%; top: -18px; transform: translateX(-50%);
+  font: 700 10px/1 system-ui, sans-serif; color: #9dbbff; white-space: nowrap; }
+.cmp3-camgizmo .poi { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid #9dbbff; box-sizing: border-box; }
+.cmp3-camgizmo .poi::before, .cmp3-camgizmo .poi::after { content: ""; position: absolute; background: #9dbbff; }
+.cmp3-camgizmo .poi::before { left: 6px; top: -6px; width: 2px; height: 26px; }
+.cmp3-camgizmo .poi::after { top: 6px; left: -6px; height: 2px; width: 26px; }
+.cmp3-camgizmo .poi[hidden] { display: none; }

@@ -49,7 +49,7 @@ async function main() {
 
     // 2) respuesta normal con formato + acciones
     await ev(`agentMsg('Listo:\\n\`\`\`py\\nprint(1)\\n\`\`\`')`);
-    await until('!!document.querySelector("#msgs .m-agent:last-child .m-actions")', 'acciones en la burbuja');
+    await until('!!document.querySelector("#msgs .m-agent:last-child .m-tools")', 'acciones en la burbuja');
     assert.equal(await ev('document.querySelector("#msgs .m-agent:last-child .md-code code").textContent'), 'print(1)');
     assert.equal(await ev('document.querySelector("#msgs .m-agent:last-child .m-txt").dataset.raw.includes("print(1)")'), true);
 

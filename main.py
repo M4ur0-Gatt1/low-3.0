@@ -53,7 +53,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.49.0"
+LOW_VERSION = "3.50.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -3192,8 +3192,12 @@ class Api:
             return (f" ask_model {provider} falló: {str(e)[:200]}. "
                     "Probá otro proveedor o hacelo vos.")
 
-    def _anim(s, action, params):
+    def _anim_tool(s, action, params):
         """Puente al motor de animación 2D (tools/animation + low_anim.AnimationAPI).
+        Se llama _anim_tool y NO _anim: __init__ hace `s._anim = None` (la API de
+        la pantalla de animación) y ese atributo de instancia TAPABA al método,
+        así que la herramienta `anim` del agente fallaba siempre con
+        «'NoneType' object is not callable» (medido en 3.47-3.49).
         Mantiene el proyecto vivo en s._anim_api entre tool-calls del turno, guarda
         en el workspace y avisa al frontend (wrote) para refrescar árbol/artefactos."""
         params = params or {}
@@ -4170,7 +4174,7 @@ class Api:
                                     args.get("model") or "",
                                     args.get("image") or "")
             if name == "anim":
-                return s._anim(args.get("action") or "", args.get("params") or {})
+                return s._anim_tool(args.get("action") or "", args.get("params") or {})
             if name == "vectorize":
                 raw, err = s._read_img_bytes(s._arg_path(args) or args.get("image"))
                 if err:

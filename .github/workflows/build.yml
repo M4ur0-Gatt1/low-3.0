@@ -60,6 +60,7 @@ jobs:
           node tools/run_lipsync_audio_tests.js
           node tools/run_arcs_tests.js
           node tools/run_collab_transport_tests.js
+          node tools/check_ae_camera_model.js
       - name: Puentes de guardado e importación
         run: |
           python tools/check_provider_contracts.py
@@ -86,6 +87,7 @@ jobs:
           python tools/check_recientes_backend.py
           python tools/check_brush_import_backend.py
           python tools/check_almacen3d_backend.py
+          python tools/check_anim_tool_backend.py
       - name: Contratos críticos de interacción 2D
         run: python tools/check_2d_interaction_contracts.py
       - name: Recorridos reales — dibujo, rigging, composición y storyboard
@@ -125,6 +127,7 @@ jobs:
           node tools/check_workspace_ui.js
           node tools/check_multiplane_ui.js
           node tools/check_composition_ui.js
+          node tools/check_ae_camera_ui.js
           node tools/check_brush_vector_import_ui.js
           node tools/check_storyboard_ui.js
           node tools/check_storyboard_workflow_ui.js

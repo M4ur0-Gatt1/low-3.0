@@ -24,10 +24,13 @@
   border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
 .md-copy:hover, .m-act:hover { color: var(--txt); border-color: var(--mut); }
 .md-copy:focus-visible, .m-act:focus-visible { outline: 1px solid var(--red); outline-offset: 1px; }
-/* acciones de la burbuja: discretas, aparecen al pasar el mouse o con el teclado */
-.m-actions { display: flex; gap: 6px; opacity: 0; transition: opacity .15s; }
-.m-agent:hover .m-actions, .m-actions:focus-within { opacity: 1; }
-.m-agent.m-empty .m-actions, .m-agent.m-empty .m-txt { display: none; }
+/* acciones de la burbuja: discretas, aparecen al pasar el mouse o con el teclado.
+   Clase PROPIA (.m-tools): en v3.49.0 se llamaba .m-actions, que es la fila de
+   botones de TODAS las ventanas (app.css), y el opacity:0 las dejó sin botones
+   visibles («Seguir un recorrido» sin «Generar», reporte de Mauro). */
+.m-tools { display: flex; gap: 6px; margin-top: 6px; opacity: 0; transition: opacity .15s; }
+.m-agent:hover .m-tools, .m-tools:focus-within { opacity: 1; }
+.m-agent.m-empty .m-tools, .m-agent.m-empty .m-txt { display: none; }
 .m-tag { margin-left: 6px; padding: 0 6px; border-radius: 99px; border: 1px solid var(--line); font-size: 10.5px; color: var(--faint); }
 .m-tag.bad { color: var(--red); border-color: var(--redsoft, var(--line)); }
 .m-retry { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; filter: none; }
@@ -35,4 +38,4 @@
 /* «LOW está trabajando»: el botón detener da un pequeño pulso */
 @keyframes send-nudge { 0%, 100% { transform: none; } 30% { transform: scale(1.14); } 60% { transform: scale(.94); } }
 .send.send-nudge { animation: send-nudge .45s ease; }
-@media (prefers-reduced-motion: reduce) { .send.send-nudge { animation: none; } .m-actions { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .send.send-nudge { animation: none; } .m-tools { transition: none; } }

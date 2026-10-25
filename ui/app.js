@@ -7662,58 +7662,8 @@ function dzCamAt(num) {
   return { cx: dzLerp(a.cx, b.cx, t), cy: dzLerp(a.cy, b.cy, t),
            w: dzLerp(a.w, b.w, t), rot: dzLerp(a.rot || 0, b.rot || 0, t) };
 }
-/* vista POR la cámara: recorta al encuadre (viewBox), aplica la rotación y
-   el parallax multiplano de los elementos con data-z (z>0 lejos, z<0 cerca) */
-function dzCamView(svgText, cam) {
-  const tmp = document.createElement("div"); tmp.innerHTML = svgText;
-  const svg = tmp.querySelector("svg");
-  if (!svg) return svgText;
-  const vb = (svg.getAttribute("viewBox") || "0 0 1080 1080").split(/\s+/).map(Number);
-  const vbcx = vb[0] + vb[2] / 2, vbcy = vb[1] + vb[3] / 2;
-  const h = cam.w * (vb[3] / vb[2]);
-  const NS = "http://www.w3.org/2000/svg";
-  const out = document.createElementNS(NS, "svg");
-  out.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  out.setAttribute("viewBox", `${(cam.cx - cam.w / 2).toFixed(1)} ${(cam.cy - h / 2).toFixed(1)} ${cam.w.toFixed(1)} ${h.toFixed(1)}`);
-  out.setAttribute("width", Math.round(vb[2])); out.setAttribute("height", Math.round(vb[3]));
-  const g = document.createElementNS(NS, "g");
-  if (cam.rot) g.setAttribute("transform", `rotate(${(-cam.rot).toFixed(2)} ${cam.cx.toFixed(1)} ${cam.cy.toFixed(1)})`);
-  [...svg.children].forEach(n => {
-    if (n.classList && n.classList.contains("dz-onion")) return;
-    const z = Math.max(-60, Math.min(400, parseFloat(n.getAttribute && n.getAttribute("data-z")) || 0));
-    const compX = parseFloat(n.getAttribute && n.getAttribute("data-comp-x")) || 0;
-    const compY = parseFloat(n.getAttribute && n.getAttribute("data-comp-y")) || 0;
-    const compRz = parseFloat(n.getAttribute && n.getAttribute("data-comp-rz")) || 0;
-    const compSx = parseFloat(n.getAttribute && n.getAttribute("data-comp-sx")) || 1;
-    const compSy = parseFloat(n.getAttribute && n.getAttribute("data-comp-sy")) || 1;
-    if (z || compX || compY || compRz || compSx !== 1 || compSy !== 1) {
-      // multiplano real (paneo Y dolly/zoom), como una cámara multiplano física:
-      // p = cuánto acompaña esta capa el movimiento de la cámara (1 = igual que
-      // el plano de acción; <1 = lejos, se mueve/escala menos; >1 = cerca, más)
-      const p = 100 / (100 + z);
-      const dx = (cam.cx - vbcx) * (1 - p), dy = (cam.cy - vbcy) * (1 - p);
-      // dolly: el viewBox de salida ya escala TODO por (vb[2]/cam.w) al hacer
-      // zoom. Para que la profundidad se sienta (lo cercano crece más rápido,
-      // lo lejano casi no cambia de tamaño al acercar la cámara) hay que
-      // contrarrestar ese escalado uniforme en proporción a 1-p.
-      const zoomRatio = cam.w / vb[2]; // <1 = cámara acercada (dolly in)
-      const extraScale = zoomRatio + (1 - zoomRatio) * p;
-      const w = document.createElementNS(NS, "g");
-      let tf = `translate(${(dx + compX).toFixed(1)} ${(dy + compY).toFixed(1)})`;
-      if (Math.abs(extraScale - 1) > 1e-4) {
-        tf += ` translate(${cam.cx.toFixed(1)} ${cam.cy.toFixed(1)}) scale(${extraScale.toFixed(4)}) translate(${(-cam.cx).toFixed(1)} ${(-cam.cy).toFixed(1)})`;
-      }
-      if (compRz || compSx !== 1 || compSy !== 1) {
-        tf += ` translate(${vbcx.toFixed(1)} ${vbcy.toFixed(1)}) rotate(${compRz.toFixed(2)}) scale(${compSx.toFixed(4)} ${compSy.toFixed(4)}) translate(${(-vbcx).toFixed(1)} ${(-vbcy).toFixed(1)})`;
-      }
-      w.setAttribute("transform", tf);
-      w.appendChild(n.cloneNode(true));
-      g.appendChild(w);
-    } else g.appendChild(n.cloneNode(true));
-  });
-  out.appendChild(g);
-  return out.outerHTML;
-}
+/* dzCamView (la vista POR la cámara, 2D y estilo After Effects) vive en
+   ui/composition/ae-camera.js desde la 3.50. */
 function dzHasCam() { return Object.keys(dzCamKeys()).length > 0; }
 
 /* ── overlay del encuadre: arrastrar = mover · esquina = zoom ·  = rotar ──

@@ -72,7 +72,22 @@
   const numeros = () => Object.keys(claves()).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
   const copiar = (o) => JSON.parse(JSON.stringify(o || {}));
 
+  /* Las claves estilo After Effects (`ae`, ui/composition/ae-camera.js) traen
+     posición, punto de interés y lente en 3D. Si se edita su cx/cy/w/rot desde
+     acá, la edición se traslada a la cámara 3D en vez de convertirla en 2D. */
+  const ae = () => global.LOW && global.LOW.composition && global.LOW.composition.aeCamera;
+  const vbAhora = () => (typeof global.dzVB === "function" ? global.dzVB() : [0, 0, 1080, 1080]);
+  function copiaClave(a) {
+    if (a && a.ae && ae()) { const c = { ...a }; delete c.ease; return c; }
+    return { cx: a.cx, cy: a.cy, w: a.w, rot: a.rot || 0 };
+  }
   function redondear(cam, curva) {
+    if (cam && cam.ae && ae()) {
+      const k = ae().redondear(ae().aplicarLegacy(cam, vbAhora()));
+      delete k.ease;
+      if (curva && curva !== "inout") k.ease = curva;
+      return k;
+    }
     const k = { cx: r1(cam.cx), cy: r1(cam.cy), w: r1(Math.max(1, cam.w)), rot: r1(cam.rot || 0) };
     if (curva && curva !== "inout") k.ease = curva;
     return k;
@@ -83,17 +98,18 @@
     const cams = claves(), ks = numeros();
     if (!ks.length) return global.dzCamDefault();
     const exacta = cams[num];
-    if (exacta) return { cx: exacta.cx, cy: exacta.cy, w: exacta.w, rot: exacta.rot || 0 };
-    if (num <= ks[0]) { const a = cams[ks[0]]; return { cx: a.cx, cy: a.cy, w: a.w, rot: a.rot || 0 }; }
+    if (exacta) return copiaClave(exacta);
+    if (num <= ks[0]) return copiaClave(cams[ks[0]]);
     const ult = ks[ks.length - 1];
-    if (num >= ult) { const a = cams[ult]; return { cx: a.cx, cy: a.cy, w: a.w, rot: a.rot || 0 }; }
+    if (num >= ult) return copiaClave(cams[ult]);
     let k1 = ks[0], k2 = ult;
     for (const k of ks) { if (k <= num) k1 = k; else { k2 = k; break; } }
     const a = cams[k1], b = cams[k2], curva = a.ease || "inout";
-    if (curva === "hold") return { cx: a.cx, cy: a.cy, w: a.w, rot: a.rot || 0 };
+    if (curva === "hold") return copiaClave(a);
     const eases = typeof DZ_EASES !== "undefined" ? DZ_EASES : null;
     const f = (eases && eases[curva]) || ((t) => t);
     const t = f((num - k1) / (k2 - k1));
+    if ((a.ae || b.ae) && ae()) return ae().interpolar(a, b, t, vbAhora());
     const w = a.w > 0 && b.w > 0 ? a.w * Math.pow(b.w / a.w, t) : a.w + (b.w - a.w) * t;
     return { cx: a.cx + (b.cx - a.cx) * t, cy: a.cy + (b.cy - a.cy) * t, w,
       rot: (a.rot || 0) + ((b.rot || 0) - (a.rot || 0)) * t };
