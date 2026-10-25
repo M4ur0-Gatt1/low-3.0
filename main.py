@@ -53,7 +53,7 @@ ASSET_EXT = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
 LANG_BY_EXT = {".py": "python", ".js": "javascript", ".ts": "javascript",
                ".sh": "bash", ".ps1": "powershell"}
 
-LOW_VERSION = "3.48.0"
+LOW_VERSION = "3.49.0"
 # El puerto desde el que se sirve la interfaz. FIJO a propósito: `localStorage`
 # es por origen, y con un puerto al azar en cada arranque LOW estrenaba
 # almacenamiento vacío cada vez —se perdían el rescate ante caída, los pinceles
@@ -5263,6 +5263,7 @@ class Api:
         `tools`: subconjunto ya filtrado (tool gating); si no se pasa, todos."""
         tools = (tools if tools is not None else s._get_tools()) if use_tools else None
         s._live = False
+        s._partial = ""     # texto ya mostrado en vivo (se rescata si el stream se corta)
         if getattr(s.prov, "supports_stream", False):
             started = thinking = False
             r = None
@@ -5279,6 +5280,7 @@ class Api:
                     if not started:
                         s._push("agent_start", {}); started = True
                     s._push("agent_delta", ev["text"])
+                    s._partial += ev["text"]
                 elif t == "done":
                     r = ev["response"]
                 if s._cancel:      # el usuario apretó detener  cortar el stream
@@ -5294,6 +5296,19 @@ class Api:
                            max_tokens=max_tok, tools=tools)
 
     def send_chat(s, msg, code, lang, image=None):
+        """Un turno por vez: un segundo envío mientras el agente trabaja (Enter
+        repetido, doble clic) pisaba el estado del turno en curso y mezclaba la
+        memoria. Ahora se rechaza con aviso y el turno activo sigue intacto."""
+        lock = s.__dict__.setdefault("_turn_lock", threading.Lock())
+        if not lock.acquire(blocking=False):
+            return {"busy": True, "text": "",
+                    "status": "LOW ya está trabajando — esperá o detené el turno"}
+        try:
+            return s._send_chat_turn(msg, code, lang, image)
+        finally:
+            lock.release()
+
+    def _send_chat_turn(s, msg, code, lang, image=None):
         r = None
         s._written = []
         s._checkpoint = {}   # arranca el checkpoint del turno
@@ -5432,7 +5447,7 @@ class Api:
                 marker_start = (len(dict.fromkeys(s._written)), tool_runs)
                 for attempt in range(max_attempts):
                     if s._cancel:
-                        return {"text": " Detenido.", "status": "Detenido"}
+                        return {"text": " Detenido.", "status": "Detenido", "stopped": True}
                     try:
                         # temperatura baja: las llamadas a herramientas requieren
                         # JSON exacto y los Llama en Groq lo fallan con temp alta
@@ -5505,9 +5520,7 @@ class Api:
                         raise
                     # el usuario detuvo (o el stream se cortó sin respuesta)
                     if s._cancel or r is None:
-                        return {"streamed": bool(getattr(s, "_live", False)),
-                                "full": "", "text": "" if getattr(s, "_live", False) else " Detenido.",
-                                "status": "Detenido"}
+                        return s._turn_interrupted(msg, sid0)
                     raw = r.raw or {}
                     msg_resp = raw.get("choices", [{}])[0].get("message", {})
                     tcs = msg_resp.get("tool_calls", [])
@@ -5793,6 +5806,9 @@ class Api:
                     s._learn_skill(msg, resumen)
                 except Exception as e:
                     log(f"learn_skill (turno) fallo: {e}")
+            if not (text or "").strip() and not getattr(s, "_live", False):
+                text = ("(El modelo terminó sin escribir una respuesta. Probá "
+                        "reintentar o reformular el pedido.)")
             # si el texto ya se mostró en vivo por streaming, no re-renderizar
             if getattr(s, "_live", False) and text:
                 return {"streamed": True, "full": text, "status": status}
@@ -5801,6 +5817,25 @@ class Api:
             import traceback
             log("send_chat fallo:\n" + traceback.format_exc())
             return {"text": f" {e}", "status": "Error"}
+
+    def _turn_interrupted(s, msg, sid0):
+        """El turno terminó sin respuesta completa. Distingue si lo detuvo el
+        usuario o si se cortó la conexión (antes ambos decían «Detenido»), y no
+        tira el texto que ya se vio en vivo: vuelve en `full` para guardarlo en la
+        charla y en la memoria del agente."""
+        live = bool(getattr(s, "_live", False))
+        partial = (getattr(s, "_partial", "") or "").strip()
+        cut = not s._cancel
+        if partial and s.ses_id == sid0:
+            s._mem.append({"role": "user", "content": msg})
+            s._mem.append({"role": "assistant",
+                           "content": partial + ("\n[respuesta cortada]" if cut else "\n[detenido por el usuario]")})
+            s._mem = s._mem[-s._mem_limit():]
+        note = ("La conexión con el modelo se cortó antes de terminar." if cut
+                else "Detenido.")
+        return {"streamed": live, "full": partial, "text": "" if live else note,
+                "status": "Cortado" if cut else "Detenido", "cut": cut,
+                "stopped": not cut}
 
     def undo_turn(s):
         """Revierte todos los archivos que el agente escribió en el último turno."""

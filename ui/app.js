@@ -143,7 +143,7 @@ Object.assign((window.LOW = window.LOW || {}), {
       }
       if (m.event === "agent_start") { stopThinking(); setStatus("✍ Escribiendo…"); planDone(); S.streamEl = agentMsg("").querySelector(".m-txt"); }
       if (m.event === "agent_delta" && S.streamEl) { S.streamEl.textContent += m.data; scrollMsgs(); }
-      if (m.event === "agent_end") S.streamEl = null;
+      if (m.event === "agent_end") { window.LOW.chatFlow?.finalize(S.streamEl); S.streamEl = null; }
       if (m.event === "tool") {
         stopThinking();
         // Mostrar detalles de la herramienta que se está usando
@@ -1695,7 +1695,7 @@ function agentMsg(text) {
   who.textContent = "LOW · " + ($("#selProv").value || "?") + " · " + ($("#selModel").value || "?");
   h.appendChild(who);
   const b = document.createElement("div");
-  b.className = "m-txt"; b.textContent = text;
+  b.className = "m-txt"; if (window.LOW.chatFlow) window.LOW.chatFlow.fill(b, text); else b.textContent = text;
   w.appendChild(h); w.appendChild(b);
   $("#msgs").appendChild(w); scrollMsgs();
   return w;
@@ -1778,7 +1778,7 @@ async function send() {
   const inp = $("#inp");
   const msg = inp.value.trim();
   const img = S.attachedImage;
-  if (!msg && !img) return;
+  if ((!msg && !img) || (S.busy && (window.LOW.chatFlow?.blocked() ?? true))) return;
   inp.value = "";
   if (msg.startsWith("/")) return command(msg);
   const sid = S.chatId;   // charla de ESTE turno: si cambiás de solapa mientras
@@ -1801,15 +1801,15 @@ async function send() {
     stopThinking();
     planDone();
     // si vino por streaming, la burbuja ya se armó con los eventos agent_*
-    if (r && r.streamed) { persist("LOW", r.full || "", sid); }
-    else if (r && r.text) { agentMsg(r.text); persist("LOW", r.text, sid); }
+    if (r && r.streamed) persist("LOW", r.full || "", sid); else if (r && r.text) { agentMsg(r.text); persist("LOW", r.text, sid); }
+    window.LOW.chatFlow?.after(r, msg, img);
     if (r && r.status) setStatus(r.status);
   } catch (e) {
     stopThinking();
     planDone();
     S.streamEl = null; S.thinkEl = null;
-    agentMsg(" Falló la llamada: " + (e.message || e));
-    reportErr("send_chat: " + (e.message || e));
+    if (window.LOW.chatFlow) window.LOW.chatFlow.fail(e, msg, img); else agentMsg(" Falló la llamada: " + (e.message || e));
+    if (window.LOW.chatFlow) { try { api.log_js("send_chat: " + (e.message || e)); } catch (_) { /* sin puente */ } } else reportErr("send_chat: " + (e.message || e));
     window.LOW.Workbench?.finish(true);
     setStatus("Error");
   } finally {
