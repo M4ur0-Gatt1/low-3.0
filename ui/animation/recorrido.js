@@ -241,6 +241,57 @@
     return out;
   }
 
+  /* ── el tamaño: la perspectiva de la escena, o a mano (3.52) ─────────────
+     Pedido de Mauro: «que la pelota vaya hacia atrás; tendría que achicarla
+     cuadro por cuadro para dar la sensación de profundidad; si pudiera dibujar
+     en perspectiva se podría hacer automático». Es la cuenta del layout
+     clásico: algo APOYADO EN EL PISO se ve tanto más chico cuanto más cerca
+     del horizonte está, y su tamaño es proporcional a la distancia (en la
+     hoja) entre el punto donde apoya y el horizonte. El recorrido marca dónde
+     apoya (para algo que vuela: el recorrido de su sombra). El horizonte es el
+     de las guías de perspectiva de la escena (ui/drawing/perspectiva.js). */
+  /** La recta del horizonte de la escena: {a, ux, uy}, o null si no hay. Igual que en perspectiva.js. */
+  function horizonteDe(escena) {
+    const p = escena && escena.perspective;
+    const hz = p && Array.isArray(p.vps) ? p.vps.filter((v) => v && v.eje !== "y" && Number.isFinite(v.x) && Number.isFinite(v.y)) : [];
+    if (!hz.length) return null;
+    const a = hz[0], b = hz[1];
+    if (!b || Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) return { a, ux: 1, uy: 0 };
+    const n = Math.hypot(b.x - a.x, b.y - a.y);
+    return { a, ux: (b.x - a.x) / n, uy: (b.y - a.y) / n };
+  }
+  const ESCALA_MIN = 0.02, ESCALA_MAX = 50;
+  /** Escala de cada parada respecto de la primera, según la distancia al horizonte. */
+  function escalasPorHorizonte(puntos, hz) {
+    if (!hz) return { error: "la escena no tiene perspectiva (poné los puntos de fuga en Perspectiva)" };
+    const nx = -hz.uy, ny = hz.ux;   // normal del horizonte
+    const dist = (q) => (q.x - hz.a.x) * nx + (q.y - hz.a.y) * ny;
+    const d0 = dist(puntos[0]);
+    if (Math.abs(d0) < 1) return { error: "el recorrido arranca sobre el horizonte: ahí lo que apoya en el piso no tiene tamaño" };
+    const escalas = puntos.map((q) => dist(q) / d0);
+    if (escalas.some((s) => s < ESCALA_MIN))
+      return { error: "el recorrido cruza el horizonte: algo apoyado en el piso no puede pasarlo. Si vuela, dibujá el recorrido de su sombra, o usá el tamaño a mano" };
+    return { escalas: escalas.map((s) => Math.min(ESCALA_MAX, s)) };
+  }
+  /** Escala a mano: de 100 % al `final` (%), repartida por lo recorrido (el espaciado de las marcas manda). */
+  function escalasHastaFinal(ref, lista, final) {
+    const f = Math.max(ESCALA_MIN, Math.min(ESCALA_MAX, (Number(final) || 100) / 100));
+    const tramo = [0];
+    for (let k = 1; k < lista.length; k++) {
+      let d = Math.abs(lista[k] - lista[k - 1]);
+      if (ref.cerrado) d = Math.min(d, ref.total - d);
+      tramo.push(tramo[k - 1] + d);
+    }
+    const largo = tramo[tramo.length - 1] || 1;
+    return tramo.map((t) => 1 + (f - 1) * t / largo);
+  }
+  /** Las escalas de cada cuadro según la opción elegida (o todas 1). */
+  function escalasDe(ref, lista, opciones, escena) {
+    if (opciones.tam === "perspectiva") return escalasPorHorizonte(lista.map((d) => enElCamino(ref, d)), horizonteDe(escena));
+    if (opciones.tam === "final") return { escalas: escalasHastaFinal(ref, lista, opciones.tamFinal) };
+    return { escalas: lista.map(() => 1) };
+  }
+
   /* ── lo elegido ────────────────────────────────────────────────────────── */
   function eleccion() {
     const d = dz();
@@ -286,6 +337,9 @@
     const inicio = proyectar(ref, ox, oy).d;
     const lista = paradas(ref, inicio, opciones);
     if (lista.length < 2) return { error: "con esas marcas no hay más de un cuadro" };
+    const tam = escalasDe(ref, lista, opciones, doc.scene);
+    if (tam.error) return { error: tam.error };
+    const escalas = tam.escalas;
     /* EL RECORRIDO LLEVA AL OBJETO, como un peg de Toon Boom: en cada cuadro
        se corre lo mismo que se corre el recorrido desde la primera parada, y
        conserva su distancia al trazo. Antes se ponía el CENTRO del objeto
@@ -339,6 +393,14 @@
           const tr = e2.getAttribute("transform") || "";
           e2.setAttribute("transform", (tr ? tr + " " : "") + "rotate(" + giro.toFixed(2) + " " + locales[i][0].toFixed(2) + " " + locales[i][1].toFixed(2) + ")");
         }
+        // el tamaño (perspectiva o a mano): alrededor del punto del recorrido,
+        // que es donde lo elegido «apoya»; lo que va al costado se acerca al trazo
+        const esc = escalas[k];
+        if (Math.abs(esc - 1) > 1e-4) {
+          const tr = e2.getAttribute("transform") || "", [lx, ly] = locales[i];
+          e2.setAttribute("transform", (tr ? tr + " " : "") + "translate(" + lx.toFixed(2) + " " + ly.toFixed(2) + ") scale(" + esc.toFixed(4) +
+            ") translate(" + (-lx).toFixed(2) + " " + (-ly).toFixed(2) + ")");
+        }
       }
       contenidos.push(tmp.innerHTML);
     }
@@ -363,7 +425,8 @@
     const dw = doc.drawing;
     if (typeof global.dzCanvasSet === "function") global.dzCanvasSet(dw ? dw.content : "");
     doc.emit("cells"); doc.emit("frame");
-    return { cuadros: contenidos.length, desde: F, hasta: F + contenidos.length - 1, juntos: els.length, sumado: sumar };
+    return { cuadros: contenidos.length, desde: F, hasta: F + contenidos.length - 1, juntos: els.length, sumado: sumar,
+      tamFinal: escalas[escalas.length - 1], tamModo: opciones.tam || "no" };
   }
 
   /* ── la ventana ────────────────────────────────────────────────────────── */
@@ -423,6 +486,11 @@
           <span class="dz-hint">Curva</span><select id="recEase" class="langsel"><option value="linear">Lineal</option><option value="in">Acelera</option><option value="out">Frena</option><option value="inout" selected>Acelera y frena</option></select></div>
         <div class="dz-style-row"><label class="dz-hint"><input type="checkbox" id="recInv"> invertir el sentido</label>
           <label class="dz-hint"><input type="checkbox" id="recGirar"> que gire siguiendo el recorrido</label></div>
+        <div class="dz-style-row" style="flex-wrap:wrap"><span class="dz-hint">Tamaño</span>
+          <label class="dz-hint" id="recTamPerspL" title="Lo que apoya en el piso se achica al acercarse al horizonte de la escena y crece al venir hacia adelante. El recorrido marca dónde apoya (si vuela: el recorrido de su sombra)"><input type="radio" name="recTam" id="recTamPersp"> según la perspectiva de la escena</label>
+          <label class="dz-hint" title="Sin perspectiva: de 100 % al tamaño que pongas, repartido según el espaciado de las marcas"><input type="radio" name="recTam" id="recTamFinal"> a mano: al final <input type="number" id="recTamPct" class="dz-win" value="40" min="2" max="1000" style="width:64px"> %</label>
+          <label class="dz-hint"><input type="radio" name="recTam" id="recTamNo"> igual</label>
+          <span class="dz-hint" id="recTamInfo"></span></div>
         <div class="dz-style-row" style="flex-wrap:wrap"><label class="dz-hint" title="Los cuadros que ya hay se conservan: sólo se mueve lo elegido. Así se suman objetos y recorridos de a uno (un brazo, después el otro)"><input type="radio" name="recModo" id="recSumar" checked> sumar a los cuadros que ya hay</label>
           <label class="dz-hint" title="Los cuadros que siguen pasan a ser copias de este, con lo elegido sobre el recorrido"><input type="radio" name="recModo" id="recReemplazar"> reemplazarlos por copias de este</label>
           <label class="dz-hint"><input type="radio" name="recModo" id="recInsertar"> insertar cuadros nuevos</label></div>
@@ -452,15 +520,33 @@
             : "sin marcas: elegí cuántos cuadros y la curva");
         $q("#recSinMarcas").hidden = n >= 2;
       };
-      $q("#recCapa").onchange = () => { llenarCaminos(); pintar(); };
-      $q("#recCamino").onchange = pintar;
-      llenarCaminos(); pintar();
+      const leerOpciones = () => ({ invertir: $q("#recInv").checked, girar: $q("#recGirar").checked,
+        modo: $q("#recInsertar").checked ? "insertar" : $q("#recReemplazar").checked ? "reemplazar" : "sumar",
+        cuadros: +$q("#recN").value || 12, curva: $q("#recEase").value,
+        tam: $q("#recTamPersp").checked ? "perspectiva" : $q("#recTamFinal").checked ? "final" : "no", tamFinal: +$q("#recTamPct").value || 100 });
+      // tamaño: con perspectiva en la escena arranca «según la perspectiva»; sin ella, «igual» (y la opción apagada)
+      const hayPerspectiva = !!horizonteDe(doc.scene);
+      $q(hayPerspectiva ? "#recTamPersp" : "#recTamNo").checked = true;
+      $q("#recTamPersp").disabled = !hayPerspectiva;
+      if (!hayPerspectiva) { $q("#recTamPerspL").style.opacity = ".45"; $q("#recTamPerspL").title = "La escena no tiene perspectiva: poné los puntos de fuga (Perspectiva) o usá el tamaño a mano"; }
+      /** Lo que va a pasar con el tamaño, antes de generar: «de 100 % a 34 %». */
+      const infoTam = () => {
+        const r = elegido(), out = $q("#recTamInfo"), op = leerOpciones();
+        if (r.error || op.tam === "no") { out.textContent = ""; return; }
+        const lista = paradas(r, proyectar(r, cx0, cy0).d, op), t = escalasDe(r, lista, op, doc.scene);
+        out.style.color = t.error ? "var(--red, #f0450e)" : "";
+        out.textContent = t.error ? "⚠ " + t.error
+          : "· de 100 % a " + Math.round(t.escalas[t.escalas.length - 1] * 100) + " % en " + t.escalas.length + " cuadros";
+      };
+      ["#recTamPersp", "#recTamFinal", "#recTamNo", "#recInv", "#recN", "#recEase"].forEach((s) => $q(s).addEventListener("change", infoTam));
+      $q("#recTamPct").addEventListener("input", () => { $q("#recTamFinal").checked = true; infoTam(); });
+      $q("#recCapa").onchange = () => { llenarCaminos(); pintar(); infoTam(); };
+      $q("#recCamino").onchange = () => { pintar(); infoTam(); };
+      llenarCaminos(); pintar(); infoTam();
       $q("#mCancel").onclick = global.closeModal;
       $q("#recGo").onclick = async () => {
         const ref = elegido();
-        const op = { invertir: $q("#recInv").checked, girar: $q("#recGirar").checked,
-          modo: $q("#recInsertar").checked ? "insertar" : $q("#recReemplazar").checked ? "reemplazar" : "sumar",
-          cuadros: +$q("#recN").value || 12, curva: $q("#recEase").value };
+        const op = leerOpciones();
         global.closeModal();
         if (ref.error) return explicar("No se pudo", ref.error);
         avisar("🛤 Preparando los cuadros…"); await respirar();
@@ -468,7 +554,9 @@
         try { r = await generar(ref, els, op); } catch (e) { r = { error: String(e && e.message || e) }; }
         if (r.error) return explicar("No se pudo seguir el recorrido", r.error);
         avisar("🛤 " + r.cuadros + " cuadros por el recorrido (" + r.desde + "–" + r.hasta + ")" + (r.juntos > 1 ? " · " + r.juntos + " elementos juntos" : "") +
-          (r.sumado ? " · sumado a lo que ya había" : "") + " · Ctrl+Z lo saca");
+          (r.sumado ? " · sumado a lo que ya había" : "") +
+          (r.tamModo !== "no" ? " · tamaño " + (r.tamModo === "perspectiva" ? "por la perspectiva" : "a mano") + ": de 100 % a " + Math.round(r.tamFinal * 100) + " %" : "") +
+          " · Ctrl+Z lo saca");
       };
       avisar("🛤 Recorrido encontrado: elegí las opciones y «Generar»");
     } catch (e) {
@@ -486,5 +574,6 @@
   global.dzRecorrido = abrir;
   global.LOW = global.LOW || {};
   global.LOW.animation = global.LOW.animation || {};
-  global.LOW.animation.recorrido = { leerReferencia, leerContenido, medirCapa, paradas, enElCamino, proyectar, generar, abrir };
+  global.LOW.animation.recorrido = { leerReferencia, leerContenido, medirCapa, paradas, enElCamino, proyectar, generar, abrir,
+    horizonteDe, escalasPorHorizonte, escalasHastaFinal, escalasDe };
 })(window);

@@ -196,6 +196,7 @@ jobs:
           node tools/check_forma_rapida_ui.js
           node tools/check_recorrido_ui.js
           node tools/check_recorrido_flujo_ui.js
+          node tools/check_recorrido_perspectiva_ui.js
           node tools/check_ocultar_capa_ui.js
           node tools/check_punteria_transformada_ui.js
           node tools/check_interpolacion_movimiento_ui.js
