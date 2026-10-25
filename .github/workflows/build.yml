@@ -224,6 +224,7 @@ jobs:
           node tools/check_3d_taller_personaje_ui.js
           node tools/check_3d_marioneta_ui.js
           node tools/check_3d_cara_cuerpo_ui.js
+          node tools/check_3d_cabeza_ancho_ui.js
           node tools/check_3d_modelado_ui.js
           node tools/check_3d_grosor_ui.js
           node tools/check_almacen_3d_ui.js

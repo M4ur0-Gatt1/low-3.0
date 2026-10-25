@@ -2605,7 +2605,9 @@ export class Personaje3D {
       bones.forEach((b, k) => {
         const nombre = nombreReal(b.name);
         const lado = /_[lr]$/.test(nombre) ? nombre.slice(-2) : '', r = nombre.replace(/_[lr]$/, ''), parte = PARTE_DE_HUESO[r], f2 = parte ? gr[parte] : undefined;
-        if (!parte || f2 === undefined) return;
+        // la cabeza va aparte (anchoCabeza): un radio desde la articulación del cuello
+        // estiraba la pera y ensanchaba el cuello
+        if (!parte || f2 === undefined || parte === 'cabeza') return;
         const a = enReposo(r === 'pelvis' || /^spine/.test(r) ? 'pelvis' : nombre);
         let fin = enReposo(sig[r] + (sig[r] === 'Head' || sig[r] === 'neck_01' ? '' : lado));
         if (!a || !fin) return;
@@ -2641,6 +2643,9 @@ export class Personaje3D {
       const u = Math.min(1, (wh - 0.3) / 0.6), f = 1 - u * u * (3 - 2 * u);
       out[i * 3] *= f; out[i * 3 + 1] *= f; out[i * 3 + 2] *= f;
     }
+    // el ancho de la cabeza, DESPUÉS de proteger la cara: si no, esa protección lo
+    // anulaba en el cráneo y sólo quedaba moviendo la transición (cuello y mandíbula)
+    if (kHead >= 0 && gr.cabeza !== undefined && gr.cabeza !== 1) this.anchoCabeza(out, gr.cabeza, kHead);
     const O = this.original, juntos = new Map<string, number[]>();
     for (let i = 0; i < n; i++) {
       const k = Math.round(O[i * 3] * 20000) + ',' + Math.round(O[i * 3 + 1] * 20000) + ',' + Math.round(O[i * 3 + 2] * 20000);
@@ -2651,6 +2656,42 @@ export class Personaje3D {
       for (let c = 0; c < 3; c++) { let s = 0; for (const i of l) s += out[i * 3 + c]; s /= l.length; for (const i of l) out[i * 3 + c] = s; }
     }
     return out;
+  }
+  /** «Cabeza (ancho)»: ensancha el CRÁNEO para los costados (sólo en x, alrededor
+   *  del centro de la cabeza), como el ancho de cabeza de un creador de personajes.
+   *  Reporte de Mauro (3.52): el dial «deforma el cuello y la pera». Medido con
+   *  1,80: el cráneo no crecía nada y el cuello se corría 24 mm. Ahora:
+   *  · sólo donde la piel es casi toda de la cabeza: el cuello no se mueve;
+   *  · entero en el cráneo y algo menos en la mandíbula; sólo para los costados,
+   *    así la pera (en el medio) no se estira ni para abajo ni para adelante;
+   *  · el frente de la cara (ojos, nariz, boca, cejas) no se corre: los ojos y las
+   *    cejas son mallas aparte que no acompañarían, y quedarían desencajados. */
+  private anchoCabeza(out: Float32Array, k: number, kHead: number): void {
+    const O = this.original, g = this.cuerpo.geometry, n = O.length / 3;
+    const si = g.attributes.skinIndex as THREE.BufferAttribute, sw = g.attributes.skinWeight as THREE.BufferAttribute;
+    const ss = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const wh = new Float32Array(n);
+    for (let i = 0; i < n; i++) for (let c = 0; c < 4; c++) if (si.getComponent(i, c) === kHead) wh[i] += sw.getComponent(i, c);
+    // la cabeza medida en la piel de fábrica: alto (pera a coronilla), centro y profundidad
+    let y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity, cx = 0, cz = 0, m = 0;
+    for (let i = 0; i < n; i++) {
+      if (wh[i] <= 0.9) continue;
+      const x = O[i * 3], y = O[i * 3 + 1], z = O[i * 3 + 2];
+      y0 = Math.min(y0, y); y1 = Math.max(y1, y); z0 = Math.min(z0, z); z1 = Math.max(z1, z); cx += x; cz += z; m++;
+    }
+    if (!m) return;
+    cx /= m; cz /= m;
+    const alto = y1 - y0, frente = z1 - cz;
+    for (let i = 0; i < n; i++) {
+      if (wh[i] <= 0.5) continue;
+      const x = O[i * 3], y = O[i * 3 + 1], z = O[i * 3 + 2];
+      const deCabeza = ss(0.5, 0.95, wh[i]);                                     // el cuello: nada
+      // la mandíbula acompaña (si no, cráneo ancho sobre mandíbula angosta: un hongo);
+      // la pera, que está en el medio, casi no se mueve porque el corrimiento es (x − centro)
+      const altura = 0.55 + 0.45 * ss(y0, y0 + 0.35 * alto, y);
+      const cara = ss(cz, cz + 0.6 * frente, z) * (1 - ss(y0 + 0.82 * alto, y0 + 0.92 * alto, y));   // el frente, debajo de la frente
+      out[i * 3] += (x - cx) * (k - 1) * deCabeza * altura * (1 - cara);
+    }
   }
   /** La contextura (un paso de Ctrl+Z lo arma el motor). */
   ponerForma(f: Forma | undefined): void {
