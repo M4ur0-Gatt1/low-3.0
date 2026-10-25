@@ -1,0 +1,55 @@
+name: msix
+
+# Arma el paquete MSIX de la Microsoft Store desde el LOW.exe de un release YA
+# publicado, sin volver a compilar: para probar el empaquetado en minutos, o para
+# rehacer el .msix de una versión cuando cambia la identidad de Partner Center.
+# El build normal (build.yml) lo arma solo en cada release. Ver docs/MICROSOFT_STORE.md
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release del que se toma LOW.exe (vX.Y.Z)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Bajar LOW.exe del release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          gh release download "$env:RELEASE_TAG" --repo "${{ github.repository }}" --pattern "LOW.exe" --dir dist
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Paquete MSIX
+        shell: pwsh
+        env:
+          LOW_MSIX_IDENTITY_NAME: ${{ vars.LOW_MSIX_IDENTITY_NAME }}
+          LOW_MSIX_PUBLISHER: ${{ vars.LOW_MSIX_PUBLISHER }}
+          LOW_MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.LOW_MSIX_PUBLISHER_DISPLAY_NAME }}
+          LOW_MSIX_DISPLAY_NAME: ${{ vars.LOW_MSIX_DISPLAY_NAME }}
+        run: |
+          pip install pillow
+          python tools/check_msix_manifest.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $ver = "$env:RELEASE_TAG" -replace '^v',''
+          python packaging/msix/armar_msix.py --exe dist/LOW.exe --version $ver --out build/msix
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          ./packaging/msix/empaquetar.ps1 -Carpeta build/msix -Version $ver -Salida Output-msix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LOW-msix-${{ inputs.tag }}
+          path: Output-msix/
+          retention-days: 90

@@ -88,6 +88,7 @@ jobs:
           python tools/check_brush_import_backend.py
           python tools/check_almacen3d_backend.py
           python tools/check_anim_tool_backend.py
+          pip install pillow && python tools/check_msix_manifest.py
       - name: Contratos críticos de interacción 2D
         run: python tools/check_2d_interaction_contracts.py
       - name: Recorridos reales — dibujo, rigging, composición y storyboard
@@ -407,6 +408,32 @@ jobs:
         run: gh release upload "$RELEASE_TAG" Output/*.exe dist/LOW.exe --clobber
         env:
           GH_TOKEN: ${{ github.token }}
+      # ── Microsoft Store (como Krita: gratis acá, paga en la Store) ─────────────
+      # El .msix NO va al release: la versión de GitHub es el instalador de
+      # siempre. Queda como artefacto del run para subirlo a Partner Center.
+      # La identidad sale de las variables del repo LOW_MSIX_* (sin ellas, una de
+      # prueba). Ver docs/MICROSOFT_STORE.md
+      - name: Paquete MSIX (Microsoft Store)
+        # si falla no tumba el release de GitHub (ya subido): queda marcado en el run
+        continue-on-error: true
+        shell: pwsh
+        env:
+          LOW_MSIX_IDENTITY_NAME: ${{ vars.LOW_MSIX_IDENTITY_NAME }}
+          LOW_MSIX_PUBLISHER: ${{ vars.LOW_MSIX_PUBLISHER }}
+          LOW_MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.LOW_MSIX_PUBLISHER_DISPLAY_NAME }}
+          LOW_MSIX_DISPLAY_NAME: ${{ vars.LOW_MSIX_DISPLAY_NAME }}
+        run: |
+          pip install pillow
+          $ver = "$env:RELEASE_TAG" -replace '^v',''
+          python packaging/msix/armar_msix.py --exe dist/LOW.exe --version $ver --out build/msix
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          ./packaging/msix/empaquetar.ps1 -Carpeta build/msix -Version $ver -Salida Output-msix
+      - name: Guardar el MSIX (artefacto del run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: LOW-msix-${{ env.RELEASE_TAG }}
+          path: Output-msix/
+          retention-days: 90
 
   macos:
     needs: release

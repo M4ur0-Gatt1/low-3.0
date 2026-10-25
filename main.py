@@ -6405,14 +6405,36 @@ def _version_tupla(texto):
     return tuple(partes)
 
 
+def empaquetado_msix():
+    """¿Corre como paquete MSIX (la versión de la Microsoft Store)?
+
+    Un paquete tiene identidad de app: `GetCurrentPackageFullName` responde
+    ERROR_INSUFFICIENT_BUFFER (122) en vez de APPMODEL_ERROR_NO_PACKAGE (15700).
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        largo = ctypes.c_uint32(0)
+        r = ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(largo), None)
+        return r != 15700
+    except Exception:  # noqa: BLE001 — Windows viejo sin la API: no es paquete
+        return False
+
+
 def version_instalada():
     """La versión que el INSTALADOR dejó anotada, o None.
 
     El instalador escribe HKCU\\Software\\LOW\\Version al terminar. Es la única
     señal exacta de qué versión hay en el disco: un ejecutable de un solo
     archivo no puede leer su propia versión nueva sin desempacarse.
+
+    La versión de la Store (MSIX) no la mira: la actualiza la Store, no ese
+    instalador, y si en la misma PC está también la de GitHub, la clave es de
+    ESA instalación. Leerla daba el aviso de «se instaló una versión más nueva»
+    a una ventana que no tiene nada viejo.
     """
-    if sys.platform != "win32":
+    if sys.platform != "win32" or empaquetado_msix():
         return None
     try:
         import winreg

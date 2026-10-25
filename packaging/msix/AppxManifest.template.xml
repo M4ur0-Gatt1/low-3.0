@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LOW como paquete MSIX para la Microsoft Store. Lo completa
+     packaging/msix/armar_msix.py: los campos entre llaves dobles salen de Partner Center (variables
+     del repo) y de la versión del tag. Ver docs/MICROSOFT_STORE.md -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity Name="{{IDENTITY_NAME}}" Publisher="{{PUBLISHER}}" Version="{{VERSION}}" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>{{DISPLAY_NAME}}</DisplayName>
+    <PublisherDisplayName>{{PUBLISHER_DISPLAY_NAME}}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Estudio creativo: dibujo, animación 2D, rigging, composición y 3D.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!-- Windows 10 1809 en adelante: el mínimo con WebView2 y MSIX para apps de escritorio -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="es-AR" />
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application Id="LOW" Executable="LOW\LOW.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="{{DISPLAY_NAME}}"
+        Description="Dibujo, animación 2D, rigging, composición y 3D"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="LOW" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- los documentos .low se abren con LOW (lo que el instalador de GitHub hace en el registro) -->
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="lowescena">
+            <uap:DisplayName>Escena de LOW</uap:DisplayName>
+            <uap:Logo>Assets\LowDoc.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.low</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- app de escritorio completa (Python + WebView2): sin esto no corre fuera del contenedor -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
