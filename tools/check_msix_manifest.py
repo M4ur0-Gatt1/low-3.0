@@ -24,6 +24,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
+# la consola del runner de Windows es cp1252: sin esto, una «→» tumba la prueba
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.path.insert(0, str(RAIZ / "packaging" / "msix"))
 import armar_msix as A  # noqa: E402
 

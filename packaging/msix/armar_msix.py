@@ -123,6 +123,7 @@ def armar(exe, version, out, env=None):
 
 
 def main(argv=None):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # consola cp1252 del runner de Windows
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--exe", required=True)
     ap.add_argument("--version", required=True)
