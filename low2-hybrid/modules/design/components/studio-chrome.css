@@ -250,6 +250,11 @@
 .taller3d-vistas label { display:inline-flex; align-items:center; gap:3px; font-size:11.5px; margin-right:6px; }
 .taller3d-ver { display:flex; flex-direction:column; gap:3px; margin:2px 0 8px; font-size:12px; }
 .taller3d-ver label, .taller3d-ver span { display:flex; align-items:center; gap:6px; cursor:pointer; }
+/* Estudio de anatomía: la leyenda del mapa de músculos, en dos columnas */
+.taller3d-leyenda { list-style:none; margin:4px 0 10px; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; font-size:11px; }
+.taller3d-leyenda li { display:flex; align-items:center; gap:5px; min-width:0; }
+.taller3d-leyenda i { flex:0 0 11px; height:11px; border-radius:3px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.25); }
+.taller3d-canon b { color:var(--accent, #f0450e); }
 .taller3d-desl input[type=range] { flex:1 1 auto; min-width:0; }
 .taller3d-desl output, .taller3d .toma3d-fila output { min-width:34px; text-align:right; font-variant-numeric:tabular-nums; font-size:11px; }
 .taller3d-cierre { margin-top:12px; }

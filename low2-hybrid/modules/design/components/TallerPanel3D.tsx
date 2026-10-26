@@ -3,6 +3,7 @@ import { lowStore, useLowStore } from '../../../store/low-store';
 import type { WebGLDesign3D } from '../engine/webgl-design3d';
 import { CUERPOS, PROP_RANGOS, PARTES_GROSOR, cargarPoses, cargarAnimaciones, type BaseCuerpo, type ModoTaller, type PincelEscultura, type Proporciones } from '../engine/personaje3d';
 import { cargarKitsPropios, guardarKitsPropios, kitsDeFabrica, type Kit, type Pieza } from '../engine/biblioteca3d';
+import { LUCES_ACADEMIA, GRUPOS_MUSCULARES, POSES_CLASICAS, CUERPOS_CLASICOS, type LuzAcademia } from '../engine/academia3d';
 
 /* Panel «Personaje»: el TALLER DE PERSONAJE (ver engine/personaje3d.ts).
    Mauro: «un módulo de diseño de personaje con todas las herramientas al
@@ -90,6 +91,12 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
   const [intensidadFiltro, setIntensidadFiltro] = useState(0.5);
   const [nombrePieza, setNombrePieza] = useState('');
   const mirror = useLowStore().mirrorMode;
+  const [, setAcademiaVer] = useState(0);
+  useEffect(() => {
+    const oir = () => setAcademiaVer((v) => v + 1);
+    window.addEventListener('low3d:academia', oir);
+    return () => window.removeEventListener('low3d:academia', oir);
+  }, []);
 
   useEffect(() => {
     const oir = () => { const e = engine.current; const t = e?.enTaller() ?? null; setTaller(t); if (t) setVista(t.vista); const ed = e?.enEdicion(); if (ed) setNombre(ed.nombre); };
@@ -413,6 +420,40 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
       <label title="El cuerpo se ve transparente; se sigue dibujando sobre él"><input type="checkbox" checked={t.fantasma}
         onChange={(ev) => e?.setPersonajeFantasma(ev.target.checked)}/> Cuerpo transparente</label>
     </div>
+
+    {e && (() => {
+      const ac = e.academia(), o = ac.opciones;
+      const caja = (k: 'yeso' | 'canon' | 'esqueleto' | 'planos' | 'musculos', nombre: string, ayuda: string, extra?: () => void) =>
+        <label title={ayuda}><input type="checkbox" data-academia={k} checked={o[k]} onChange={(ev) => { ac.poner({ [k]: ev.target.checked }); extra?.(); }}/> {nombre}</label>;
+      return <>
+        <h3>Estudio de anatomía</h3>
+        <p className="persp3d-nota">La sala de dibujo de una academia: el cuerpo en yeso, luces de estudio, el canon medido en cabezas, el esqueleto, la construcción de la cabeza y los grupos musculares.</p>
+        <div className="taller3d-ver taller3d-academia">
+          {caja('yeso', 'Yeso', 'El cuerpo como un vaciado de academia: blanco mate, para estudiar luz y forma')}
+          {caja('canon', 'Canon en cabezas', 'Una regla al costado, medida en el cuerpo (de pie): cuántas cabezas mide y dónde caen mentón, pezones, ombligo, pubis…')}
+          {caja('esqueleto', 'Esqueleto', 'Los huesos del armazón a la vista (con el cuerpo transparente se leen mejor)', () => { if (!t.fantasma && !o.esqueleto) e.setPersonajeFantasma(true); })}
+          {caja('planos', 'Planos de la cabeza', 'La construcción de Loomis: la esfera del cráneo, los cortes laterales, la línea media y las líneas del pelo, las cejas, los ojos, la nariz y el mentón. Sigue la pose')}
+          {caja('musculos', 'Mapa de músculos', 'Los grandes grupos musculares en color, como una lámina de anatomía')}
+        </div>
+        {o.canon && <p className="persp3d-nota taller3d-canon" aria-live="polite">{ac.cabezas ? <>Mide <b>{fmt(ac.cabezas, 1)} cabezas</b> · el canon clásico va de 7 (Policleto) a 8 (heroico)</> : 'Midiendo…'}</p>}
+        <p className="persp3d-nota">Cuerpo clásico: lleva este cuerpo a un canon con el dial de la cabeza y la contextura (un paso de Ctrl+Z). Los de fábrica miden 10,7 cabezas: cabeza chica y físico de culturista.</p>
+        <div className="taller3d-claves" aria-label="Cuerpos clásicos">
+          {CUERPOS_CLASICOS.map((c) => <button key={c.id} data-clasico={c.id} title={c.ayuda}
+            onClick={() => { const r = e.cuerpoClasico(c.id); if (!o.canon) ac.poner({ canon: true }); setAviso(r ? `«${c.nombre}»: ahora mide ${fmt(r, 1)} cabezas` : 'No se pudo medir el cuerpo'); }}>{c.nombre}</button>)}
+        </div>
+        <label className="toma3d-fila" title="Las luces de la sala: reemplazan a las del estudio mientras están puestas">Luz
+          <select aria-label="Luz de academia" data-academia="luz" value={o.luz} onChange={(ev) => ac.poner({ luz: ev.target.value as LuzAcademia })}>
+            {LUCES_ACADEMIA.map((l) => <option key={l.id} value={l.id} title={l.ayuda}>{l.nombre}</option>)}</select></label>
+        <p className="persp3d-nota">{LUCES_ACADEMIA.find((l) => l.id === o.luz)?.ayuda}</p>
+        <label className="toma3d-fila" title="Poses de la tradición académica, para dibujar del modelo">Pose clásica
+          <select aria-label="Pose clásica" data-academia="pose" value="" onChange={(ev) => { if (ev.target.value) e.ponerPoseClasica(ev.target.value); }}>
+            <option value="">Elegí una pose…</option>
+            {POSES_CLASICAS.map((p) => <option key={p.id} value={p.id} title={p.ayuda}>{p.nombre}</option>)}</select></label>
+        {o.musculos && <ul className="taller3d-leyenda" aria-label="Grupos musculares">
+          {GRUPOS_MUSCULARES.map((m) => <li key={m.id} data-musculo={m.id}><i style={{ background: m.color }}/>{m.nombre}</li>)}
+        </ul>}
+      </>;
+    })()}
 
     <h3>Cuerpo y proporciones</h3>
     <label className="toma3d-fila">Cuerpo<select aria-label="Cuerpo" value={t.base} onChange={(ev) => e?.cambiarCuerpo(ev.target.value as BaseCuerpo)}>

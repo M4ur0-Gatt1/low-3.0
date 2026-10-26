@@ -40,6 +40,7 @@ import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUti
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { lowStore, type LowStore } from '../../../store/low-store';
 import { LOW_CYAN } from '../theme';
+import { Academia3D, ponerPoseClasica, CUERPOS_CLASICOS } from './academia3d';
 import type { BrushSettings, GizmoMode, Layer, SurfaceType, ToolType } from '../../../types/design-types';
 
 export type Theme = 'light' | 'dark';
@@ -4438,6 +4439,37 @@ export class WebGLDesign3D {
   }
   /** El personaje del taller (null mientras se carga su cuerpo). */
   personajeDelTaller(): Personaje3D | null { return this.taller?.rec?.personaje ?? null; }
+  /** El Estudio de anatomía del taller: yeso, luces, canon, esqueleto, planos, músculos (engine/academia3d.ts). */
+  private academiaInst: Academia3D | null = null;
+  academia(): Academia3D { return (this.academiaInst ??= new Academia3D(this.scene, () => this.personajeDelTaller())); }
+  /** Una pose clásica (contrapposto, torsión…), en un paso de Ctrl+Z. */
+  ponerPoseClasica(id: string): boolean { return this.cambiarPersonaje((x) => { ponerPoseClasica(x, id); }, true); }
+  /** Lleva el cuerpo a un canon (en cabezas): mide con la regla del Estudio de
+   *  anatomía y ajusta el tamaño de la cabeza (el mismo dial «Cabeza»), UN paso de
+   *  Ctrl+Z. Devuelve las cabezas que mide al final. Se mide de pie: con la pose
+   *  actual, si no está parado, la medida es la de esa pose. */
+  ajustarCanon(cabezas: number): number | null {
+    const inst = this.personajeDelTaller(); if (!inst || !(cabezas > 3)) return null;
+    const ac = this.academia(), [mn, mx] = [0.6, 2];
+    for (let k = 0; k < 6; k++) {
+      const md = ac.medir(); if (!md) return null;
+      const ahora = md.alto / md.cabeza;
+      if (Math.abs(ahora - cabezas) < 0.02) break;
+      const c = Math.max(mn, Math.min(mx, inst.datos.prop.cabeza * ahora / cabezas));
+      if (Math.abs(c - inst.datos.prop.cabeza) < 1e-4) break;
+      this.verProporciones({ cabeza: Math.round(c * 1000) / 1000 });
+    }
+    this.confirmarProporciones();
+    const md = ac.medir();
+    return md ? md.alto / md.cabeza : null;
+  }
+  /** Un cuerpo clásico (heroico, académico, Policleto): la contextura y el canon, UN paso de Ctrl+Z. */
+  cuerpoClasico(id: string): number | null {
+    const c = CUERPOS_CLASICOS.find((x) => x.id === id), inst = this.personajeDelTaller();
+    if (!c || !inst) return null;
+    if (inst.aceptaContextura()) this.verFormaTaller({ peso: c.peso, musculo: c.musculo });   // abre el paso de Ctrl+Z…
+    return this.ajustarCanon(c.cabezas);                                                      // …y el canon lo cierra
+  }
   /** Todos los cuerpos pedidos ya cargados (para las pruebas y el guardado). */
   personajesListos(): Promise<void> { return Promise.all([...this.cargasPersonajes]).then(() => undefined); }
 

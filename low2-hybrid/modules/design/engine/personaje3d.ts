@@ -2693,6 +2693,8 @@ export class Personaje3D {
       out[i * 3] += (x - cx) * (k - 1) * deCabeza * altura * (1 - cara);
     }
   }
+  /** La piel como vino de fábrica, en reposo (sólo lectura: la usa el Estudio de anatomía). */
+  pielDeFabrica(): Float32Array { return this.original; }
   /** La contextura (un paso de Ctrl+Z lo arma el motor). */
   ponerForma(f: Forma | undefined): void {
     const fv = formaValida(f && !this.aceptaContextura() ? { peso: 0, musculo: 0, grosor: f.grosor } : f);
