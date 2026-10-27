@@ -136,7 +136,7 @@ export function TallerPanel3D({ engine }: { engine: React.MutableRefObject<WebGL
       <button className="persp3d-boton persp3d-repetir-ya taller3d-entrar" onClick={() => abrir(null, null)}>Abrir el taller</button>
       {mios.length > 0 && <><h3>Mis personajes</h3>
         <div className="taller3d-mios">{mios.map(({ kit, p }) => <button key={kit.id + '/' + p.id} data-personaje={p.id} onClick={() => abrir(p, kit.id)} title={'Abrir «' + p.nombre + '» en el taller'}>{p.nombre}</button>)}</div></>}
-      <p className="persp3d-nota">Los cuerpos también están en la Biblioteca (colección «Personajes»), en varias poses: colocalos en tus fondos para darles escala humana. Cuerpos y poses: Quaternius (CC0).</p>
+      <p className="persp3d-nota">Los cuerpos también están en la Biblioteca (colección «Personajes»), en varias poses: colocalos en tus fondos para darles escala humana. Cuerpos y poses: Quaternius (CC0); el cuerpo de estudio, Human Base Meshes de Blender Studio (CC0).</p>
       {aviso && <p className="persp3d-aviso" role="status">{aviso}</p>}
     </div>;
   }

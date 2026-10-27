@@ -35,7 +35,7 @@ import { clone as clonarEsqueleto } from 'three/examples/jsm/utils/SkeletonUtils
 import { capasValidas, piezasValidas, levantarPieza, mascaraATexto, mascaraDeTexto, curvaCaida, idNuevo, CAPA_FUERZA, PIEZA_GROSOR,
   type CapaEscultura, type Pieza, type CaidaPincel } from './modelado3d';
 
-export type BaseCuerpo = 'hombre' | 'mujer' | 'maniqui';
+export type BaseCuerpo = 'hombre' | 'mujer' | 'maniqui' | 'hombre-realista' | 'mujer-realista';
 /** Qué hace el mouse sobre el personaje en el taller. */
 export type ModoTaller = 'dibujar' | 'posar' | 'animar' | 'esculpir';
 export type PincelEscultura = 'dibujar' | 'arcilla' | 'capa' | 'inflar' | 'desinflar' | 'surco' | 'pellizcar' | 'suavizar' | 'aplanar' | 'raspar'
@@ -58,7 +58,12 @@ export const CUERPOS: { id: BaseCuerpo; nombre: string; descripcion: string }[] 
   { id: 'hombre', nombre: 'Hombre', descripcion: 'Anatomía realista, estilizada (8 cabezas)' },
   { id: 'mujer', nombre: 'Mujer', descripcion: 'Anatomía realista, estilizada (8 cabezas)' },
   { id: 'maniqui', nombre: 'Maniquí', descripcion: 'El maniquí articulado de dibujo, sin rasgos' },
+  // los Human Base Meshes de Blender Studio (CC0), con el esqueleto del Taller: ver herramientas/scripts/rig.py
+  { id: 'hombre-realista', nombre: 'Hombre (estudio)', descripcion: 'Anatomía de estudio, proporción real (8 cabezas), sin gestos de cara todavía' },
+  { id: 'mujer-realista', nombre: 'Mujer (estudio)', descripcion: 'Anatomía de estudio, proporción real (7,5 cabezas), sin gestos de cara todavía' },
 ];
+/** Los cuerpos de los Human Base Meshes: su boca no es la de los otros (no se parte). */
+const SIN_BOCA = new Set<BaseCuerpo>(['hombre-realista', 'mujer-realista']);
 
 /** Las proporciones: 1 = como viene el cuerpo. */
 export interface Proporciones {
@@ -868,7 +873,7 @@ function partirLabios(g: THREE.BufferGeometry): THREE.BufferGeometry {
 const pielesPartidas = new Map<BaseCuerpo, THREE.BufferGeometry>();
 function pielPartida(base: BaseCuerpo, g0: THREE.BufferGeometry, malla?: THREE.SkinnedMesh): THREE.BufferGeometry {
   let p = pielesPartidas.get(base);
-  if (!p) { p = partirLabios(g0); if (malla) retorcerAntebrazos(p, malla); pielesPartidas.set(base, p); }
+  if (!p) { p = SIN_BOCA.has(base) ? g0.clone() : partirLabios(g0); if (malla) retorcerAntebrazos(p, malla); pielesPartidas.set(base, p); }
   return p;
 }
 
