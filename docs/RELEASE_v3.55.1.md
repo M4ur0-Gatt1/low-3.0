@@ -1,4 +1,6 @@
-# LOW 3.55.0 · Cuerpos de estudio en el Taller
+# LOW 3.55.1 · Cuerpos de estudio en el Taller
+
+(La etiqueta v3.55.0 quedó, por un error al publicar, sobre el código de la 3.54; su build se canceló y no tiene release. Esta es la versión con los cuerpos de estudio.)
 
 Pedido de Mauro: «mejorá los modelos y la malla». Fuimos por una base nueva: los **Human Base Meshes de Blender Studio** (CC0), riggeados con el esqueleto del Taller.
 
