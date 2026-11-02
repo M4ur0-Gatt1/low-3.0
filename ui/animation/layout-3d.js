@@ -21,6 +21,18 @@
     try { f.contentWindow.postMessage(datos, "*"); } catch (_) { /* el estudio se cerró */ }
   }
 
+  /** EL ORIGEN DE UN ENVÍO: el estudio manda, junto con las imágenes, su
+   *  proyecto (JSON) y los ajustes con que las hizo. El proyecto se guarda una
+   *  vez en la escena y el nivel apunta a él (scene-model.js, fuente3dData).
+   *  undefined si el estudio no mandó origen (uno anterior a v3.56): el nivel
+   *  conserva el que tuviera. */
+  function fuenteDe(m, tipo, nombre) {
+    const o = m && m.origen, sc = escena();
+    if (!sc || !o || typeof o !== "object" || typeof o.proyecto !== "string" || typeof sc.guardarProyecto3D !== "function") return undefined;
+    const proyecto = sc.guardarProyecto3D(o.proyecto);
+    return proyecto ? { tipo, proyecto, nombre, params: o.params || {}, fecha: new Date().toISOString() } : undefined;
+  }
+
   function recibir(m, f) {
     const sc = escena();
     if (!sc || typeof DZ.doc.setLayout3D !== "function") {
@@ -34,12 +46,18 @@
     const W = sc.width || 1920, H = sc.height || 1080;
     if (typeof global.dzDocCommit === "function") global.dzDocCommit();   // lo que estaba en la mesa, guardado antes
     const contenido = `<image data-low="layout-3d" href="${m.png}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none"/>`;
-    DZ.doc.setLayout3D(contenido, { nombre: "Layout 3D" });
     // si el cuadro cambió de tamaño mientras tanto, los puntos se llevan al nuevo
     const kx = W / (Number(m.width) || W), ky = H / (Number(m.height) || H);
     const vps = (Array.isArray(m.vps) ? m.vps : []).map((v) => ({ x: v.x * kx, y: v.y * ky, eje: v.eje, color: v.color }));
-    if (typeof global.dzPerspectivaDesde3D === "function")
-      global.dzPerspectivaDesde3D(vps, { paralelas: m.paralelas, ajustes: m.ajustes });
+    // la imagen y la perspectiva son UN paso de Ctrl+Z (antes eran dos: el
+    // primer Ctrl+Z sacaba sólo los puntos de fuga y dejaba el calco)
+    const h = DZ.doc.history, tx = !!h && !h.transaction;
+    if (tx) h.begin("Layout desde el estudio 3D");
+    try {
+      DZ.doc.setLayout3D(contenido, { nombre: "Layout 3D", fuente: fuenteDe(m, "encuadre", "Layout 3D") });
+      if (typeof global.dzPerspectivaDesde3D === "function")
+        global.dzPerspectivaDesde3D(vps, { paralelas: m.paralelas, ajustes: m.ajustes });
+    } finally { if (tx) h.commit(); }
     try {
       if (typeof global.dzBuildLayers === "function") global.dzBuildLayers();
       if (typeof global.dzTlFramesRender === "function") global.dzTlFramesRender();
@@ -73,7 +91,7 @@
     const nombre = String(m.nombre || "Toma 1").slice(0, 60);
     const items = fotos.map((x) => ({ cuadro: Math.round(x.cuadro),
       content: `<image data-low="toma-3d" href="${x.data}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none"/>` }));
-    const ly = DZ.doc.setToma3D(nombre, items, { hasta: Number(m.cuadros) || 0 });
+    const ly = DZ.doc.setToma3D(nombre, items, { hasta: Number(m.cuadros) || 0, fuente: fuenteDe(m, "toma", nombre) });
     if (!ly) return responderToma({ error: "no se pudo armar la capa de fondos" });
     try {
       if (typeof global.dzBuildLayers === "function") global.dzBuildLayers();
@@ -106,7 +124,8 @@
     if (typeof global.dzDocCommit === "function") global.dzDocCommit();
     const nombre = String(m.nombre || "Multiplano").slice(0, 60);
     const capas = DZ.doc.setPlanos3D(nombre, planos.map((p) => ({ z: Math.max(-60, Math.min(400, Math.round(Number(p.z)))),
-      content: `<image data-low="plano-3d" data-z="${Math.max(-60, Math.min(400, Math.round(Number(p.z))))}" href="${p.png}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none"/>` })));
+      content: `<image data-low="plano-3d" data-z="${Math.max(-60, Math.min(400, Math.round(Number(p.z))))}" href="${p.png}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none"/>` })),
+      { fuente: fuenteDe(m, "planos", nombre) });
     if (!capas) return responderP({ error: "no se pudieron armar las capas" });
     try {
       if (typeof global.dzBuildLayers === "function") global.dzBuildLayers();
@@ -181,12 +200,44 @@
     responderH({ ok: true, aviso: texto });
   }
 
+  /** EDITAR EN EL 3D (clic derecho en la capa): abre el estudio con el proyecto
+   *  de donde salió ese nivel y los mismos ajustes del envío. El estudio aparta
+   *  la escena que tenía abierta, y «Actualizar en el 2D» rehace los fondos con
+   *  el mismo nombre (reemplazan a los de antes, un paso de Ctrl+Z) y la
+   *  devuelve. `id`: el de la capa o el de su nivel. */
+  let estudioListo = false, pendiente = null;
+  function fuenteDeCapa(id) {
+    const sc = escena();
+    if (!sc) return null;
+    const ly = sc.layers.find((l) => l.id === id);
+    const lv = sc.levels.find((l) => l.id === (ly ? ly.levelId : id));
+    const fu = lv && lv.fuente3d;
+    if (!fu) return null;
+    const proyecto = sc.proyectos3d && sc.proyectos3d[fu.proyecto];
+    return proyecto ? { fuente: fu, proyecto, capa: (ly && ly.name) || lv.name } : null;
+  }
+  function editar(id) {
+    const x = fuenteDeCapa(id);
+    if (!x) { aviso("Esa capa no vino del estudio 3D (o se mandó con una versión anterior): no hay proyecto para abrir"); return false; }
+    pendiente = { type: "low:editar-fuente", tipo: x.fuente.tipo, nombre: x.fuente.nombre, params: x.fuente.params,
+                  proyecto: x.proyecto, capa: x.capa };
+    if (typeof global.openL3d === "function") global.openL3d();
+    const f = marco();
+    // el estudio ya estaba abierto de antes: se le manda ya; si no, cuando avise que está listo
+    if (f && estudioListo) { responder(f, pendiente); pendiente = null; }
+    aviso("Abriendo «" + x.capa + "» en el estudio 3D · al terminar, «Actualizar en el 2D»");
+    return true;
+  }
+
   global.addEventListener("message", (ev) => {
     const f = marco();
     if (!f || ev.source !== f.contentWindow) return;
     const m = ev.data;
     if (!m || typeof m !== "object") return;
-    if (m.type === "low:pedir-encuadre") {
+    if (m.type === "low:estudio-listo") {
+      estudioListo = true;
+      if (pendiente) { responder(f, pendiente); pendiente = null; }
+    } else if (m.type === "low:pedir-encuadre") {
       const sc = escena();
       responder(f, { type: "low:encuadre", width: sc ? sc.width : 1920, height: sc ? sc.height : 1080, hayDocumento: !!sc,
         fps: sc ? sc.fps : 24, cuadros: sc && typeof sc.playRange === "function" ? sc.playRange().out : 24 });
@@ -212,5 +263,5 @@
 
   global.LOW = global.LOW || {};
   global.LOW.animation = global.LOW.animation || {};
-  global.LOW.animation.layout3d = { recibir, recibirToma, recibirPlanos };
+  global.LOW.animation.layout3d = { recibir, recibirToma, recibirPlanos, recibirHoja, editar, fuenteDeCapa };
 })(typeof window !== "undefined" ? window : globalThis);

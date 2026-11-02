@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { WebGLDesign3D } from '../engine/webgl-design3d';
 import { cuadrosARender, TOMA_INICIAL, type Toma3D } from '../engine/toma3d';
+import { origenDe } from './Fuente2DBarra';
 
 /* Panel «Toma» del estudio: la cámara animada que saca los fondos para el 2D.
    Se mueve la vista, se pone una clave en un cuadro, se mueve otra vez, otra
@@ -37,6 +38,9 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
         if (e && m.cuadros && m.cuadros > 1 && e.getToma().cuadros === TOMA_INICIAL.cuadros && !e.getToma().claves.length) setToma(e.setToma({ cuadros: m.cuadros }));
       } else if (m.type === 'low:sent-to-2d') {
         setAviso(m.error ? 'No se pudo mandar: ' + m.error : 'Listo: el encuadre está en el 2D, con sus puntos de fuga');
+      } else if (m.type === 'low:planos-recibidos') {
+        // el 2D siempre contestaba; acá nadie escuchaba y un error no se veía
+        setAviso(m.error ? 'No se pudo mandar: ' + m.error : (m.aviso || 'Listo: los planos están en el 2D'));
       } else if (m.type === 'low:toma-recibida') {
         setOcupado(false);
         setAviso(m.error ? 'No se pudo mandar: ' + m.error : (m.aviso || 'Listo: los fondos están en el 2D'));
@@ -86,7 +90,7 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
     const r = e.mandarAl2D(marco.w, marco.h, { cajas: op.cajas });
     if (!r) { setAviso('Pasá a la vista Perspectiva para mandar el encuadre'); return; }
     setAviso('Mandando al 2D…');
-    window.parent.postMessage({ type: 'low:send-to-2d', ...r }, '*');
+    window.parent.postMessage({ type: 'low:send-to-2d', ...r, origen: origenDe(e, { cajas: op.cajas }) }, '*');
   };
   /** EN PLANOS: el encuadre partido por distancia, para la cámara multiplano del 2D. */
   const [nPlanos, setNPlanos] = useState(3);
@@ -96,7 +100,8 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
     const r = e.mandarEnPlanos(marco.w, marco.h, nPlanos, { cajas: op.cajas });
     if (!r) { setAviso('Pasá a la vista Perspectiva, con algo a la vista, para mandar los planos'); return; }
     setAviso(`Mandando ${r.planos.length} planos al 2D…`);
-    window.parent.postMessage({ type: 'low:send-planos', nombre: 'Multiplano', ...r }, '*');
+    window.parent.postMessage({ type: 'low:send-planos', nombre: 'Multiplano', ...r,
+      origen: origenDe(e, { cajas: op.cajas, planos: nPlanos }) }, '*');
   };
   const mandar = async () => {
     const e = engine.current; if (!e || ocupado) return;
@@ -110,7 +115,7 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
     if (!fotos.length) { setOcupado(false); setAviso('No se pudo renderizar la toma'); return; }
     setAviso('Mandando al 2D…');
     window.parent.postMessage({ type: 'low:send-toma', nombre: toma.nombre, width: marco.w, height: marco.h, cuadros: toma.cuadros,
-      cada: op.cada, formato: op.formato, fotos }, '*');
+      cada: op.cada, formato: op.formato, fotos, origen: origenDe(e, { cajas: op.cajas, cada: op.cada, formato: op.formato, calidad: op.calidad }) }, '*');
   };
 
   const enClave = toma.claves.some((k) => k.cuadro === cuadro);

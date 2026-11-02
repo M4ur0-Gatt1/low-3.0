@@ -60,6 +60,9 @@
     const capas = doc.scene.layers, i = capas.findIndex((l) => l.id === id);
     if (i < 0) return false;
     const ly = capas[i], n = capas.length, arriba = i >= n - 1, abajo = i <= 0;
+    // las capas que mandó el estudio 3D se pueden reabrir allá y actualizar
+    const l3d = global.LOW && global.LOW.animation && global.LOW.animation.layout3d;
+    const de3d = !!(l3d && l3d.fuenteDeCapa && l3d.fuenteDeCapa(ly.id));
     // NO se elige la capa al abrir: elegirla redibuja la línea de tiempo, eso
     // mueve su desplazamiento, y el menú se cierra solo con cualquier scroll
     // (medido: se abría y se cerraba en el mismo instante). Cada acción trabaja
@@ -70,6 +73,7 @@
       { icon: "⬚", label: "Elegir toda la capa (todos los cuadros)", shortcut: "Ctrl+Shift+A",
         disabled: !(global.LOW && global.LOW.drawing && global.LOW.drawing.seleccionOpciones),
         action: () => global.LOW.drawing.seleccionOpciones.elegirCapaEntera(ly.id) },
+      ...(de3d ? [{ icon: "⬡", label: "Editar en el estudio 3D…", action: () => l3d.editar(ly.id) }] : []),
       "separator",
       { icon: "⤒", label: "Traer al frente", disabled: arriba, action: () => mover(doc, ly, n - 1, "quedó al frente de todo") },
       { icon: "↑", label: "Subir una posición", disabled: arriba, action: () => mover(doc, ly, i + 1, "subió una posición") },

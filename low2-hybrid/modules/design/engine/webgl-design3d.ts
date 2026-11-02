@@ -7684,7 +7684,8 @@ export class WebGLDesign3D {
       try {
         // editando un elemento, lo que se resguarda es TU ESCENA (la que espera
         // afuera), no el elemento a medio hacer
-        json = JSON.stringify(this.edicion ? this.edicion.escena : this.exportProject());
+        // y editando un fondo del 2D, también: tu escena es la apartada
+        json = JSON.stringify(this.fuente2d ? this.fuente2d.previa : this.edicion ? this.edicion.escena : this.exportProject());
       } catch (e) { this.fallaAutosave('no se pudo armar: ' + (e instanceof Error ? e.message : String(e))); return; }
       if (enLOW()) {
         void guardarEnDisco('autoguardado', json).then((r) => {
@@ -7709,7 +7710,7 @@ export class WebGLDesign3D {
    *  puso algo ya (fuera de LOW). */
   restoreAutosave(): boolean {
     if (enLOW()) {
-      void pedir('leer', 'autoguardado').then((r) => {
+      this.autosaveListo = pedir('leer', 'autoguardado').then((r) => {
         if (this.disposed) return;
         if (r.error && !r.sinApp) { this.avisar('No se pudo leer el autoguardado del 3D: ' + r.error); return; }
         let local: string | null = null;
@@ -7721,7 +7722,7 @@ export class WebGLDesign3D {
           void guardarEnDisco('autoguardado', local).then((g) => { if (g.ok) { try { window.localStorage.removeItem(WebGLDesign3D.AUTOSAVE_KEY); } catch { /* sin almacén */ } } });
         }
         window.dispatchEvent(new Event('low3d:history'));
-      });
+      }).catch(() => { /* sin respuesta del host: queda la escena vacía */ });
       return false;
     }
     try {
@@ -7732,6 +7733,43 @@ export class WebGLDesign3D {
     } catch {
       return false;
     }
+  }
+
+  /** Se resuelve cuando el autoguardado ya se leyó (o no había). Abrir un
+   *  proyecto antes de eso dejaba que el autoguardado llegara después y lo pisara. */
+  autosaveListo: Promise<void> = Promise.resolve();
+
+  // ---------------------------------------------------------------- editar un fondo del 2D
+  /** Desde el 2D (clic derecho en una capa que vino del 3D → «Editar en el
+   *  estudio 3D») llega el proyecto de donde salió esa capa. Tu escena se
+   *  APARTA en datos (el autoguardado sigue guardando ésa, no la del 2D) y
+   *  vuelve al terminar. Su Ctrl+Z no vuelve: el historial apuntaría a objetos
+   *  que ya no están (ver `edicion`). */
+  private fuente2d: { previa: Low3DProject } | null = null;
+  enFuente2D(): boolean { return !!this.fuente2d; }
+  async editarFuente2D(json: string): Promise<boolean> {
+    await this.autosaveListo;
+    if (this.disposed || this.edicion) return false;
+    let datos: unknown;
+    try { datos = JSON.parse(json); } catch { return false; }
+    const previa = this.fuente2d ? this.fuente2d.previa : this.exportProject();
+    try { this.importProject(datos); } catch (e) {
+      this.avisar('No se pudo abrir el proyecto que mandó el 2D: ' + (e instanceof Error ? e.message : String(e)));
+      if (this.fuente2d) this.importProject(previa);
+      return false;
+    }
+    this.fuente2d = { previa };
+    window.dispatchEvent(new Event('low3d:history'));
+    return true;
+  }
+  /** Vuelve tu escena como estaba antes de editar el fondo del 2D. */
+  terminarFuente2D(): void {
+    const f = this.fuente2d;
+    if (!f) return;
+    this.fuente2d = null;
+    try { this.importProject(f.previa); } catch (e) { this.avisar('No se pudo devolver tu escena: ' + (e instanceof Error ? e.message : String(e))); }
+    window.dispatchEvent(new Event('low3d:history'));
+    this.scheduleAutosave();
   }
 
   /** Descarta el autoguardado (proyecto nuevo). En disco queda el respaldo. */

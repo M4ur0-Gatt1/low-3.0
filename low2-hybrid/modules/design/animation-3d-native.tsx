@@ -13,6 +13,7 @@ import { iniciarBiblioteca, cargarKitsPropios, guardarKitsPropios } from './engi
 import { WebGLDesign3D, type Theme } from './engine/webgl-design3d';
 import { lowStore } from '../../store/low-store';
 import { StudioChrome3D } from './components/StudioChrome3D';
+import { Fuente2DBarra } from './components/Fuente2DBarra';
 import { LOW_ACCENT } from './theme';
 
 const bg: Record<Theme, string> = {
@@ -44,6 +45,9 @@ export const Animation3DNative: React.FC<Props> = ({ projectId = 'default', onRe
     // último proyecto (los botones Guardar/Abrir siguen siendo para archivos
     // .low3d propios, esto es la red por si cerraste sin guardar).
     engine.restoreAutosave();
+    // el 2D espera esto para mandar una capa a editar (Fuente2DBarra): recién
+    // con el autoguardado leído, si no llegaba después y pisaba ese proyecto
+    if (window.parent !== window) void engine.autosaveListo.then(() => window.parent.postMessage({ type: 'low:estudio-listo' }, '*'));
     // la biblioteca propia, del disco (y el pase de lo que estaba en el navegador)
     void iniciarBiblioteca();
     // para las pruebas (como __low3d): la biblioteca propia
@@ -263,6 +267,7 @@ ${m.path || '(ruta desconocida)'}` };
         onSave={saveProject} onExport={pedirSTL}
         projectName={projectPathRef.current.split(/[\\/]/).pop() || 'Sin título'}
         guideOpacity={guideOpacity} onGuideOpacity={v => { setGuideOpacity(v); eng()?.setGuideOpacity(v / 100); }} />
+      <Fuente2DBarra engine={engineRef} />
       {(confirmNuevo || aviso) && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center',

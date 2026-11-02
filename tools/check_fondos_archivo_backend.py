@@ -99,7 +99,22 @@ def main_():
         trampa.write_text('{"x":"<image data-low=\\"toma-3d\\" href=\\"low-archivo:../secreto.jpg\\"/>"}', encoding="utf-8")
         if "base64" in api.open_file(str(trampa)).get("content", ""):
             mal("una referencia con ../ leyó un archivo de fuera de la carpeta de fondos")
-    print("OK fondos de toma como archivos: .low liviano, ida y vuelta exacta, guardar como, poda, faltantes, sin ../")
+        # 8 el encuadre único («Mandar este encuadre», layout-3d) y los planos
+        # también salen del .low: antes el encuadre quedaba en base64 adentro
+        e, z = imagen(5, "e"), imagen(6, "z")
+        con_encuadre = json.dumps({"format": "lowscene", "version": 1, "scene": {"levels": [
+            {"id": "E", "type": "reference", "drawings": [{"id": "e", "number": 1, "content":
+             f'<image data-low="layout-3d" href="data:image/png;base64,{e}" x="0" y="0" width="1920" height="1080" preserveAspectRatio="none"/>'}]},
+            {"id": "Z", "type": "reference", "drawings": [{"id": "z", "number": 1, "content":
+             f'<image data-low="plano-3d" data-z="40" href="data:image/png;base64,{z}" x="0" y="0" width="1920" height="1080"/>'}]}]}}, indent=1)
+        ruta8 = Path(tmp) / "calle.low"
+        api.save_file(str(ruta8), con_encuadre, "calle.low")
+        disco8 = ruta8.read_text(encoding="utf-8")
+        if e in disco8 or z in disco8:
+            mal("el encuadre o un plano del 3D siguen en base64 adentro del .low")
+        if api.open_file(str(ruta8)).get("content") != con_encuadre:
+            mal("abrir no devuelve el encuadre y los planos como se guardaron")
+    print("OK fondos del 3D como archivos (toma, planos y encuadre): .low liviano, ida y vuelta exacta, guardar como, poda, faltantes, sin ../")
 
 
 if __name__ == "__main__":
