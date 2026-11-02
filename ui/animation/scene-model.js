@@ -965,6 +965,8 @@
       this.type = data.type === "raster" || data.type === "reference" ? data.type : "vector";
       this.paletteId = data.paletteId || null;
       this.drawings = (data.drawings || []).map((d) => new Drawing(d));
+      // de qué proyecto del estudio 3D salió (sólo los niveles que mandó el 3D)
+      this.fuente3d = fuente3dData(data.fuente3d);
     }
     /** Dibujo por NÚMERO (lo que referencia la celda), no por índice. */
     byNumber(n) { return this.drawings.find((d) => d.number === Number(n)) || null; }
@@ -998,8 +1000,44 @@
     }
     toJSON() {
       return { id: this.id, name: this.name, type: this.type,
-               paletteId: this.paletteId, drawings: this.drawings.map((d) => d.toJSON()) };
+               paletteId: this.paletteId, drawings: this.drawings.map((d) => d.toJSON()),
+               ...(this.fuente3d ? { fuente3d: clone(this.fuente3d) } : {}) };
     }
+  }
+
+  /** EL ORIGEN 3D DE UN NIVEL: qué se mandó desde el estudio 3D (un encuadre,
+   *  los planos o una toma), con qué ajustes, y la clave del proyecto 3D de
+   *  donde salió (el proyecto vive una sola vez en `scene.proyectos3d`). Con
+   *  esto el 2D puede volver a abrir ese proyecto en el 3D y «Actualizar»: los
+   *  fondos se rehacen sin rearmar nada a mano. null si el nivel no vino del 3D. */
+  const FUENTE3D_TIPOS = ["encuadre", "planos", "toma"];
+  function fuente3dData(d) {
+    if (!d || typeof d !== "object" || !FUENTE3D_TIPOS.includes(d.tipo)) return null;
+    if (typeof d.proyecto !== "string" || !/^p[0-9a-f]{8}-[0-9a-z]{1,10}$/.test(d.proyecto)) return null;
+    const p = d.params && typeof d.params === "object" ? d.params : {};
+    const entero = (v, a, b, def) => (Number.isFinite(Number(v)) ? Math.max(a, Math.min(b, Math.round(Number(v)))) : def);
+    const params = { cajas: p.cajas === true };
+    if (d.tipo === "planos") params.planos = entero(p.planos, 2, 8, 3);
+    if (d.tipo === "toma") {
+      params.cada = entero(p.cada, 1, 4, 2);
+      params.formato = p.formato === "png" ? "png" : "jpg";
+      params.calidad = entero(p.calidad, 50, 100, 90);
+    }
+    return { tipo: d.tipo, proyecto: d.proyecto, nombre: String(d.nombre || "").slice(0, 60), params,
+             fecha: typeof d.fecha === "string" ? d.fecha.slice(0, 40) : "" };
+  }
+  /** La clave de un proyecto 3D: el mismo proyecto mandado dos veces (los
+   *  planos y la toma de la misma calle) se guarda una sola vez. */
+  function claveProyecto3D(json) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < json.length; i++) { h ^= json.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return "p" + (h >>> 0).toString(16).padStart(8, "0") + "-" + json.length.toString(36);
+  }
+  function proyectos3dData(d) {
+    const out = {};
+    if (d && typeof d === "object") for (const [k, v] of Object.entries(d))
+      if (/^p[0-9a-f]{8}-[0-9a-z]{1,10}$/.test(k) && typeof v === "string") out[k] = v;
+    return out;
   }
 
   /** Un estilo: un color con nombre y opacidad, referenciable desde el dibujo.
@@ -1306,7 +1344,19 @@
       this.audio = clone(data.audio || []);
       this.rig = rigData(data.rig);
       this.perspective = perspectiveData(data.perspective);
+      // los proyectos del estudio 3D de donde salieron niveles (ver fuente3dData)
+      this.proyectos3d = proyectos3dData(data.proyectos3d);
       this.revision = Number(data.revision) || 0;
+    }
+
+    /** Guarda un proyecto del estudio 3D (su JSON) y devuelve su clave. No pasa
+     *  por el historial: al guardar quedan sólo los que algún nivel usa, así que
+     *  un Ctrl+Z que devuelve un nivel encuentra su proyecto. */
+    guardarProyecto3D(json) {
+      if (typeof json !== "string" || !json) return null;
+      const k = claveProyecto3D(json);
+      this.proyectos3d[k] = json;
+      return k;
     }
 
     touch() { this.revision++; return this; }
@@ -1978,7 +2028,17 @@
                camera: this.camera, composition: clone(this.composition),
                storyboard: clone(this.storyboard), audio: this.audio,
                rig: rigToJSON(this.rig), perspective: clone(this.perspective), revision: this.revision,
-               guias: (this.guias || []).map((g) => ({ axis: g.axis, u: g.u })) };
+               guias: (this.guias || []).map((g) => ({ axis: g.axis, u: g.u })),
+               ...this.proyectos3dUsados() };
+    }
+    /** { proyectos3d } con sólo los proyectos que algún nivel usa ({} si ninguno). */
+    proyectos3dUsados() {
+      const usados = {};
+      for (const lv of this.levels) {
+        const k = lv.fuente3d && lv.fuente3d.proyecto;
+        if (k && this.proyectos3d[k]) usados[k] = this.proyectos3d[k];
+      }
+      return Object.keys(usados).length ? { proyectos3d: usados } : {};
     }
 
     /** Convierte el modelo VIEJO (`frames` = lista de archivos) al nuevo. Cada
@@ -2010,6 +2070,8 @@
   animation.clone = clone;
   animation.rigData = rigData;
   animation.perspectiveData = perspectiveData;
+  animation.fuente3dData = fuente3dData;
+  animation.claveProyecto3D = claveProyecto3D;
   animation.rigToJSON = rigToJSON;
   animation.rigChannelPath = rigChannelPath;
   animation.rigEaseData = rigEaseData;

@@ -1203,7 +1203,7 @@
      *  expuesto en toda la escena. Si ya hay uno de un envío anterior (se
      *  reconoce por la marca data-low="layout-3d"), se reemplaza su imagen:
      *  volver a mandar no apila capas. Todo es un paso de Ctrl+Z. */
-    setLayout3D(content, { nombre = "Layout 3D" } = {}) {
+    setLayout3D(content, { nombre = "Layout 3D", fuente } = {}) {
       const sc = this.scene, marca = 'data-low="layout-3d"';
       const foto = () => {
         const lv = sc.levels.find((l) => l.type === "reference" && l.drawings.some((d) => String(d.content || "").includes(marca)));
@@ -1216,6 +1216,8 @@
       if (!lv) lv = sc.addLevel(nombre, "reference");
       const d = lv.byNumber(1) || lv.addDrawing(1, "");
       d.content = String(content);
+      // el origen entra ANTES de la foto de después: así Redo lo devuelve
+      if (fuente !== undefined) lv.fuente3d = animation.fuente3dData(fuente);
       let ly = sc.layers.find((l) => l.levelId === lv.id);
       if (!ly) {
         ly = sc.addLayer(lv.id, nombre); ly.opacity = 0.7;
@@ -1248,7 +1250,7 @@
      *  el siguiente. Se reconoce por data-toma="<nombre>": volver a mandar la
      *  misma toma REEMPLAZA sus fondos (no apila capas). Un paso de Ctrl+Z.
      *  items: [{ cuadro, content }] ordenados; hasta: último cuadro de la toma. */
-    setToma3D(nombre, items, { hasta = 0, titulo: tituloPedido = "" } = {}) {
+    setToma3D(nombre, items, { hasta = 0, titulo: tituloPedido = "", fuente } = {}) {
       const sc = this.scene, clave = encodeURIComponent(String(nombre || "Toma"));
       const marca = 'data-toma="' + clave + '"';
       const validos = (items || []).filter((x) => x && Number(x.cuadro) > 0 && x.content != null)
@@ -1266,6 +1268,7 @@
       if (!lv) lv = sc.addLevel(titulo, "reference");
       lv.drawings = [];
       validos.forEach((it, i) => lv.addDrawing(i + 1, String(it.content).replace("<image ", "<image " + marca + " ")));
+      if (fuente !== undefined) lv.fuente3d = animation.fuente3dData(fuente);
       let ly = sc.layers.find((l) => l.levelId === lv.id);
       if (!ly) {
         ly = sc.addLayer(lv.id, titulo);
@@ -1302,7 +1305,7 @@
      *  dibujo expuesto en toda la escena. Volver a mandar el mismo conjunto
      *  REEMPLAZA sus capas. Un paso de Ctrl+Z. items: [{ z, content }] del
      *  fondo al frente. */
-    setPlanos3D(nombre, items) {
+    setPlanos3D(nombre, items, { fuente } = {}) {
       const sc = this.scene, clave = encodeURIComponent(String(nombre || "Multiplano"));
       const marca = 'data-planos="' + clave + '"';
       const validos = (items || []).filter((x) => x && x.content != null);
@@ -1320,6 +1323,7 @@
         const titulo = String(nombre || "Multiplano") + " · " + (i + 1);
         const lv = sc.addLevel(titulo, "reference");
         lv.addDrawing(1, String(it.content).replace("<image ", "<image " + marca + " "));
+        if (fuente !== undefined) lv.fuente3d = animation.fuente3dData(fuente);
         const ly = sc.addLayer(lv.id, titulo);
         sc.layers.splice(sc.layers.indexOf(ly), 1);
         for (let f = 1; f <= n; f++) ly.setCell(f, 1);

@@ -126,6 +126,14 @@
 .persp3d-mandar { background:var(--studio-accent)!important;color:#fff!important;border:0;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer; }
 .persp3d-mandar:disabled { opacity:.45;cursor:default; }
 .persp3d-aviso { margin:0;font-size:11.5px;color:var(--studio-fg); }
+/* editando una capa del 2D (Fuente2DBarra): arriba al centro, debajo de la cabecera */
+.fuente2d-barra { position:absolute;top:76px;left:50%;transform:translateX(-50%);z-index:150;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  max-width:calc(100% - 32px);padding:8px 10px;border-radius:12px;background:var(--studio-bg);border:1px solid var(--studio-accent);
+  box-shadow:var(--studio-shadow);color:var(--studio-fg);font:500 12px/1.3 Inter,Figtree,system-ui,sans-serif; }
+.fuente2d-barra .persp3d-boton { font:inherit; }
+.fuente2d-barra .fuente2d-actualizar { background:var(--studio-accent);border-color:var(--studio-accent);color:#fff; }
+.fuente2d-barra button:disabled { opacity:.5;cursor:default; }
+.fuente2d-aviso { flex-basis:100%;color:var(--studio-muted); }
 .persp3d-repetir { display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;font-size:12px;align-items:end; }
 .persp3d-repetir label { display:flex;flex-direction:column;gap:3px; }
 .persp3d-repetir select,.persp3d-repetir input { background:var(--studio-input);border:1px solid var(--studio-line);border-radius:8px;padding:5px;color:var(--studio-fg);width:100%; }

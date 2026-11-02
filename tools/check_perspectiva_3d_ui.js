@@ -222,10 +222,12 @@ async function main() {
   await evIframe(`__t.boton("Mandar este encuadre al 2D")`); await w(800);
   const dos = await evHost(`({ capas: DZ.doc.scene.layers.length, layouts: DZ.doc.scene.levels.filter(l => l.drawings.some(d => /data-low="layout-3d"/.test(d.content))).length, vp: DZ.doc.scene.perspective.vps.map(v => Math.round(v.x)) })`);
   if (dos.capas !== doc.capas + 1 || dos.layouts !== 1) mal("volver a mandar apiló otra capa en vez de reemplazar", dos);
-  await evHost(`(()=>{ DZ.doc.history.undo(); DZ.doc.history.undo(); return true; })()`);
+  // desde v3.56 cada envío es UN Ctrl+Z (antes, calco y puntos de fuga eran dos
+  // pasos: el primer Ctrl+Z dejaba el calco nuevo con la perspectiva vieja)
+  await evHost(`(()=>{ DZ.doc.history.undo(); return true; })()`);
   const atras = await evHost(`({ capas: DZ.doc.scene.layers.length, vp: DZ.doc.scene.perspective.vps.map(v => Math.round(v.x)) })`);
-  if (atras.capas !== doc.capas + 1 || JSON.stringify(atras.vp) === JSON.stringify(dos.vp)) mal("Ctrl+Z no volvió al envío anterior", { dos, atras });
-  await evHost(`(()=>{ DZ.doc.history.undo(); DZ.doc.history.undo(); return true; })()`);
+  if (atras.capas !== doc.capas + 1 || JSON.stringify(atras.vp) === JSON.stringify(dos.vp)) mal("un Ctrl+Z no volvió al envío anterior", { dos, atras });
+  await evHost(`(()=>{ DZ.doc.history.undo(); return true; })()`);
   const nada = await evHost(`({ capas: DZ.doc.scene.layers.length, vps: DZ.doc.scene.perspective.vps.length })`);
   if (nada.capas !== doc.capas || nada.vps !== 0) mal("deshaciendo todo no se fue el layout", nada);
 

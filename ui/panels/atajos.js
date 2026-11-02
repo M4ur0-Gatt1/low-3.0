@@ -99,7 +99,7 @@
     ["refent", "Referencias a objetos (como AutoCAD)", "Vista", "f3", "#dzRefent"],
     ["zen", "Modo dibujo (esconder paneles)", "Vista", "tab", null],
     ["capas", "Mostrar u ocultar capas", "Vista", "f7", null],
-    ["vista3d", "Espacio 3D", "Vista", "3", null],
+    ["vista3d", "Abrir el estudio 3D", "Vista", "3", "#abL3d"],
     ["swap", "Intercambiar relleno y trazo", "Color", "shift+x", null],
     ["play", "Reproducir / parar", "Animación", "enter", "#tlPlay"],
     ["prevframe", "Cuadro anterior", "Animación", ",", "#tlPrev"],
@@ -226,7 +226,9 @@
     mesasola: () => global.dzMesaSolaToggle && global.dzMesaSolaToggle(),
     acompanar: () => global.dzAcompanar && global.dzAcompanar(),
     capas: () => global.dzLayersToggle(),
-    vista3d: () => global.dz3dToggle(),
+    // el «Espacio 3D» viejo (dz3dToggle) quedó retirado y su botón #dz3DBtn ya no
+    // existe: el atajo tiraba un error. El 3D real es el estudio (botón #abL3d).
+    vista3d: () => global.openL3d(),
     swap: () => global.dzSwapPaint(),
     loop: () => { const pb = dz().playback; if (pb) pb.setLoop(!pb.loop); else clic("#tlLoop")(); },
     onion: () => { const d = dz(); d.onionOn = !d.onionOn; global.dzOnion2Render?.(); global.dzOnionRender?.(); },
