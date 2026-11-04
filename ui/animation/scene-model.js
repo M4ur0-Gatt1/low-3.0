@@ -1033,6 +1033,32 @@
     for (let i = 0; i < json.length; i++) { h ^= json.charCodeAt(i); h = Math.imul(h, 0x01000193); }
     return "p" + (h >>> 0).toString(16).padStart(8, "0") + "-" + json.length.toString(36);
   }
+  /** LA PLANILLA DE PRODUCCIÓN (ui/panels/produccion.js): las etapas de la
+   *  obra —guion, diseño de personajes, storyboard, fondos, animación, color,
+   *  sonido, exportación…— con sus pasos para ir tildando. Viaja en el .low:
+   *  quien abre el archivo ve en qué está la producción. null si no se empezó.
+   *  `ir` es sólo un nombre (un ítem del menú o «3d»): el panel decide qué
+   *  abre y no ejecuta nada que no esté en su lista. */
+  const PRODUCCION_ESTADOS = ["pendiente", "en-curso", "hecho"];
+  function produccionData(d) {
+    if (!d || typeof d !== "object" || !Array.isArray(d.etapas)) return null;
+    const id = (v, def) => (typeof v === "string" && /^[a-z0-9-]{1,40}$/.test(v) ? v : def);
+    const txt = (v, n) => String(v == null ? "" : v).slice(0, n);
+    const usados = new Set();
+    const unico = (v, def) => { let k = id(v, def), i = 2; while (usados.has(k)) k = def + "-" + i++; usados.add(k); return k; };
+    const etapas = d.etapas.slice(0, 12).filter((e) => e && typeof e === "object").map((e, i) => ({
+      id: unico(e.id, "etapa-" + (i + 1)), nombre: txt(e.nombre, 60) || "Etapa " + (i + 1),
+      pasos: (Array.isArray(e.pasos) ? e.pasos : []).slice(0, 60).filter((p) => p && typeof p === "object").map((p, j) => {
+        const out = { id: unico(p.id, "paso-" + (i + 1) + "-" + (j + 1)), texto: txt(p.texto, 120) || "Paso",
+                      estado: PRODUCCION_ESTADOS.includes(p.estado) ? p.estado : "pendiente" };
+        if (p.nota) out.nota = txt(p.nota, 2000);
+        if (p.quien) out.quien = txt(p.quien, 60);
+        if (out.estado === "hecho" && typeof p.fecha === "string") out.fecha = p.fecha.slice(0, 40);
+        if (typeof p.ir === "string" && /^(3d|menu:[a-z0-9-]{1,30})$/.test(p.ir)) out.ir = p.ir;
+        return out;
+      }) }));
+    return { etapas };
+  }
   function proyectos3dData(d) {
     const out = {};
     if (d && typeof d === "object") for (const [k, v] of Object.entries(d))
@@ -1346,6 +1372,7 @@
       this.perspective = perspectiveData(data.perspective);
       // los proyectos del estudio 3D de donde salieron niveles (ver fuente3dData)
       this.proyectos3d = proyectos3dData(data.proyectos3d);
+      this.produccion = produccionData(data.produccion);
       this.revision = Number(data.revision) || 0;
     }
 
@@ -2029,7 +2056,8 @@
                storyboard: clone(this.storyboard), audio: this.audio,
                rig: rigToJSON(this.rig), perspective: clone(this.perspective), revision: this.revision,
                guias: (this.guias || []).map((g) => ({ axis: g.axis, u: g.u })),
-               ...this.proyectos3dUsados() };
+               ...this.proyectos3dUsados(),
+               ...(this.produccion ? { produccion: clone(this.produccion) } : {}) };
     }
     /** { proyectos3d } con sólo los proyectos que algún nivel usa ({} si ninguno). */
     proyectos3dUsados() {
@@ -2072,6 +2100,7 @@
   animation.perspectiveData = perspectiveData;
   animation.fuente3dData = fuente3dData;
   animation.claveProyecto3D = claveProyecto3D;
+  animation.produccionData = produccionData;
   animation.rigToJSON = rigToJSON;
   animation.rigChannelPath = rigChannelPath;
   animation.rigEaseData = rigEaseData;
