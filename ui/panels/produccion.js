@@ -162,6 +162,8 @@
   /* ── el panel ──────────────────────────────────────────────────────────── */
 
   let PANEL = null, cerradas = new Set(), docVisto = null, desuscribir = null, reloj = null;
+  // los títulos de dzPromptModal van como HTML: un nombre que viene del archivo se escapa
+  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const el = (tag, cls, texto) => { const n = document.createElement(tag); if (cls) n.className = cls; if (texto != null) n.textContent = texto; return n; };
   const boton = (texto, titulo, fn, cls = "") => { const b = el("button", cls, texto); b.type = "button"; if (titulo) b.title = titulo; b.onclick = fn; return b; };
 
@@ -239,7 +241,7 @@
     for (const paso of e.pasos) lista.append(pintarPaso(e, paso));
     sec.append(lista);
     sec.append(boton("+ Agregar paso", "Un paso propio en " + e.nombre, async () => {
-      const t = typeof global.dzPromptModal === "function" ? await global.dzPromptModal("Nuevo paso en " + e.nombre, "qué hay que hacer", "") : null;
+      const t = typeof global.dzPromptModal === "function" ? await global.dzPromptModal("Nuevo paso en " + esc(e.nombre), "qué hay que hacer", "") : null;
       if (t && t.trim()) api.agregar(e.id, t);
     }, "prod-agregar"));
     return sec;
@@ -271,11 +273,11 @@
     if (paso.ir && DESTINOS[paso.ir])
       botones.append(boton("Ir", DESTINOS[paso.ir].titulo, () => { if (!api.ir(paso.ir)) avisar("No encontré esa herramienta en esta versión de LOW"); }, "prod-ir"));
     botones.append(boton("✎", paso.nota ? "Nota: " + paso.nota : "Agregar una nota", async () => {
-      const n = typeof global.dzPromptModal === "function" ? await global.dzPromptModal("Nota de «" + paso.texto + "»", "lo que haga falta recordar", paso.nota || "") : null;
+      const n = typeof global.dzPromptModal === "function" ? await global.dzPromptModal("Nota de «" + esc(paso.texto) + "»", "lo que haga falta recordar", paso.nota || "") : null;
       if (n != null) api.anotar(e.id, paso.id, n);
     }, "prod-nota" + (paso.nota ? " on" : "")),
     boton("@", paso.quien ? "Lo hace: " + paso.quien : "Quién lo hace", async () => {
-      const q = typeof global.dzPromptModal === "function" ? await global.dzPromptModal("¿Quién hace «" + paso.texto + "»?", "nombre", paso.quien || "") : null;
+      const q = typeof global.dzPromptModal === "function" ? await global.dzPromptModal("¿Quién hace «" + esc(paso.texto) + "»?", "nombre", paso.quien || "") : null;
       if (q != null) api.asignar(e.id, paso.id, q);
     }, "prod-asignar"),
     boton("⌫", "Quitar este paso (Ctrl+Z lo devuelve)", () => api.quitar(e.id, paso.id), "prod-quitar"));

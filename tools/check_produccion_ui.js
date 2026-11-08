@@ -44,7 +44,7 @@ async function main() {
       tilde: !!(document.querySelector('#dzProduccion [data-paso="guion"] input') || {}).checked }; })()`);
 
   try {
-    await send("Page.enable"); await send("Runtime.enable");
+    await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true });
     await send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
     await send("Page.navigate", { url: base + "index.html?mock=1" });
     for (let i = 0; i < 90; i++) { if (await ev('document.readyState==="complete"&&typeof dzMenuAction==="function"&&!!api').catch(() => false)) break; await w(400); }
@@ -99,6 +99,13 @@ async function main() {
     const json = await ev(`(()=>{ const j = JSON.parse(JSON.stringify(DZ.doc.scene.toJSON())); const g = j.produccion && j.produccion.etapas[0].pasos.find(x => x.id === "guion"); return g ? g.estado : null; })()`);
     if (json !== "hecho") mal("la planilla no va en el JSON de la escena", { json });
 
+    // 8. un paso con HTML en el nombre (viene del archivo) no se ejecuta en el cuadro de la nota
+    await ev(`(async()=>{ window.__xss = 0; LOW.produccion.renombrar("pre", "idea", '</textarea><img src=x onerror="window.__xss=1">'); await new Promise(r=>setTimeout(r,200)); return true; })()`);
+    await clic('#dzProduccion [data-paso="idea"] .prod-nota');
+    await w(300);
+    const xss = await ev(`({ ejecuto: window.__xss, titulo: (document.querySelector("#modal h2") || {}).textContent || "" })`);
+    if (xss.ejecuto || !xss.titulo.includes("<img")) mal("el nombre del paso con HTML se ejecutó (o no se mostró tal cual)", xss);
+    await ev(`document.querySelector("#dzPrX").click(); true`);
     const errB = errores.filter((x) => !/ResizeObserver/.test(String(x)));
     if (errB.length) mal("errores en la página", errB);
     console.log("E2E planilla de producción OK " + JSON.stringify({ pasos: e.total, etapas: nombres }));
