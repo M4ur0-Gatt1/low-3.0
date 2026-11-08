@@ -1208,6 +1208,7 @@ LOW_I18N.registrar("en", "English", {
   "Sostiene la pose y salta en la clave siguiente": "Holds the pose and jumps at the next key",
   "Sostén": "Hold",
   "Spray de textura": "Texture spray",
+  "Intercalar toda la secuencia…": "Inbetween the whole sequence…",
   "Storyboard y generador de tomas": "Storyboard and shot generator",
   "Suave": "Soft",
   "Suavizado": "Smoothing",

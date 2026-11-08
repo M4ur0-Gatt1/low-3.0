@@ -1199,6 +1199,7 @@ LOW_I18N.registrar("pt", "Português", {
   "Sostener el dibujo (como Harmony)": "Segurar o desenho (como no Harmony)",
   "Sostiene la pose y salta en la clave siguiente": "Segura a pose e salta na próxima chave",
   "Sostén": "Segurar",
+  "Intercalar toda la secuencia…": "Intercalar toda a sequência…",
   "Storyboard y generador de tomas": "Storyboard e gerador de planos",
   "Suavizado": "Suavização",
   "Suavizado del lápiz y el pincel al soltar el trazo (0 = crudo, 100 = máximo)": "Suavização do lápis e do pincel ao soltar o traço (0 = cru, 100 = máximo)",

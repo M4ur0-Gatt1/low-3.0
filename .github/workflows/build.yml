@@ -54,6 +54,7 @@ jobs:
           node tools/run_smart_bones_tests.js
           node tools/run_view_sets_tests.js
           node tools/run_fuente3d_tests.js
+          node tools/run_intercalar_secuencia_tests.js
           node tools/run_control_sets_tests.js
           node tools/run_premiere_xml_tests.js
           node tools/run_lipsync_tests.js
@@ -237,6 +238,9 @@ jobs:
           node tools/check_grabacion_gesto_ui.js
           node tools/check_taller_hoja_2d_ui.js
           node tools/check_3d_editar_desde_2d_ui.js
+          node tools/check_tira_dibujos_ui.js
+          node tools/check_intercalar_secuencia_ui.js
+          node tools/check_sesion_larga.js 8
           node tools/check_3d_terreno_ui.js
           node tools/check_3d_rectas_fuga_ui.js
           node tools/check_3d_cierre_ui.js

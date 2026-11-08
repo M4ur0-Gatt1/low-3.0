@@ -26,6 +26,7 @@
       this.doc = doc;
       this.selected = new Set();
       this.anchor = null;
+      this._miniaturas = new Map();             // número de dibujo → { clave, el } (ver render)
       this._desuscribir = doc ? doc.subscribe((d, m) => {
         // se redibuja con lo que la afecta, no con cada movimiento del frame
         if (m === "frame") this._soloActual();
@@ -59,8 +60,83 @@
     }
     dispose() { if (this._desuscribir) this._desuscribir(); if (this.host) this.host.innerHTML = ""; }
 
+    /** La miniatura de un dibujo: la que ya estaba si el dibujo no cambió
+     *  (la clave es el contenido mismo, así que no hay caché que se
+     *  desincronice). Rearmarlas todas era parsear el nivel entero en cada
+     *  trazo, dos veces («cells» y «content»): medido en una sesión larga
+     *  (v3.57), ~100 ms de bloqueo al apoyar el lápiz con 12 dibujos cargados,
+     *  y creciendo con el documento. */
+    _miniatura(d, hojaPal) {
+      const doc = this.doc;
+      const clave = { vacio: d.isEmpty(), w: doc.scene.width, h: doc.scene.height, hoja: hojaPal, content: d.content };
+      const previa = this._miniaturas.get(d.number), p = previa && previa.clave;
+      if (p && p.vacio === clave.vacio && p.w === clave.w && p.h === clave.h && p.hoja === clave.hoja && p.content === clave.content) return previa;
+      const el = document.createElement("div");
+      el.className = "ls2-thumb";
+      // el propio SVG del dibujo, escalado
+      el.innerHTML = clave.vacio
+        ? ""
+        : `<svg viewBox="0 0 ${doc.scene.width} ${doc.scene.height}"
+                preserveAspectRatio="xMidYMid meet">${
+                  hojaPal ? `<style>${hojaPal}</style>` : ""}${d.content}</svg>`;
+      return { clave, el };
+    }
+    _contexto() {
+      const doc = this.doc, lv = doc.level;
+      // la miniatura lleva la hoja de la paleta: si no, mostraria el color
+      // literal que quedo guardado y no el que el estilo dice hoy
+      const hojaPal = (animation.palette && lv && doc.scene.levelPalette)
+        ? animation.palette.css(doc.scene.levelPalette(lv.id)) : "";
+      const expuestos = new Set();
+      for (const ly of doc.scene.layers) {
+        if (lv && ly.levelId === lv.id) ly.cells.forEach((c) => c != null && expuestos.add(c));
+      }
+      return { lv, hojaPal, expuestos, actual: doc.cell };
+    }
+    _clase(d, actual, expuestos) {
+      return "ls2-item" + (d.number === actual ? " actual" : "") + (this.selected.has(d.number) ? " selected" : "")
+        + (expuestos.has(d.number) ? "" : " suelto");
+    }
+    _titulo(d, expuestos) {
+      return expuestos.has(d.number)
+        ? `Dibujo ${d.number} · clic: ir a donde está expuesto`
+        : `Dibujo ${d.number} · NO está expuesto en ninguna celda`;
+    }
+    /** EN EL LUGAR: si el nivel y sus dibujos son los mismos objetos de la
+     *  última vez (lo normal al dibujar), sólo se tocan clases, títulos y la
+     *  miniatura del dibujo que cambió. Rearmar la tira, aun reusando las
+     *  miniaturas, obligaba al navegador a recalcular los estilos de todos
+     *  sus SVG al volver a insertarlos. Si cambió algo de forma (otro nivel,
+     *  dibujos agregados, quitados o renumerados), false: se rearma. */
+    _enElLugar() {
+      const P = this._pintado, doc = this.doc, lv = doc.level;
+      if (!P || !lv || P.lv !== lv || P.nombre !== lv.name || !P.box.isConnected || !this.host.contains(P.box)) return false;
+      if (P.dibujos.length !== lv.drawings.length || lv.drawings.some((d, i) => d !== P.dibujos[i] || d.number !== P.numeros[i])) return false;
+      const { hojaPal, expuestos, actual } = this._contexto();
+      const miniaturas = new Map();
+      let act = null;
+      for (const d of lv.drawings) {
+        const c = P.celdas.get(d.number);
+        const clase = this._clase(d, actual, expuestos);
+        if (c.cel.className.replace(/ dragging/, "") !== clase) c.cel.className = clase + (c.cel.classList.contains("dragging") ? " dragging" : "");
+        const titulo = this._titulo(d, expuestos);
+        if (c.cel.title !== titulo) c.cel.title = titulo;
+        const m = this._miniatura(d, hojaPal);
+        if (m.el !== c.mini) { c.cel.replaceChild(m.el, c.mini); c.mini = m.el; }
+        miniaturas.set(d.number, m);
+        if (d.number === actual) act = c.cel;
+      }
+      this._miniaturas = miniaturas;
+      // mover el scroll obliga a medir la página: sólo si cambió cuál es el actual
+      if (act && act !== this._actualPintado && global.LOW && global.LOW.core && global.LOW.core.scrollDentro)
+        global.LOW.core.scrollDentro(act, { limite: this.host });
+      this._actualPintado = act;
+      return true;
+    }
+
     render() {
       if (!this.host || !this.doc) return;
+      if (this._enElLugar()) return;
       const doc = this.doc;
       const lv = doc.level;
       const box = document.createElement("div");
@@ -92,35 +168,20 @@
 
       const tira = document.createElement("div");
       tira.className = "ls2-strip";
-      // la miniatura lleva la hoja de la paleta: si no, mostraria el color
-      // literal que quedo guardado y no el que el estilo dice hoy
-      const hojaPal = (animation.palette && lv && doc.scene.levelPalette)
-        ? animation.palette.css(doc.scene.levelPalette(lv.id)) : "";
-      const actual = doc.cell;
-      const expuestos = new Set();
-      for (const ly of doc.scene.layers) {
-        if (lv && ly.levelId === lv.id) ly.cells.forEach((c) => c != null && expuestos.add(c));
-      }
+      const { hojaPal, expuestos, actual } = this._contexto();
 
+      // las de otro nivel no sirven: se descartan al cambiar de nivel
+      if ((lv ? lv.id : null) !== this._nivelMiniaturas) this._miniaturas = new Map();
+      const miniaturas = new Map(), celdas = new Map();
       for (const d of (lv ? lv.drawings : [])) {
         const cel = document.createElement("div");
-        cel.className = "ls2-item"
-          + (d.number === actual ? " actual" : "")
-          + (this.selected.has(d.number) ? " selected" : "")
-          + (expuestos.has(d.number) ? "" : " suelto");
+        cel.className = this._clase(d, actual, expuestos);
         cel.dataset.num = d.number;
-        cel.title = expuestos.has(d.number)
-          ? `Dibujo ${d.number} · clic: ir a donde está expuesto`
-          : `Dibujo ${d.number} · NO está expuesto en ninguna celda`;
+        cel.title = this._titulo(d, expuestos);
 
-        const mini = document.createElement("div");
-        mini.className = "ls2-thumb";
-        // el propio SVG del dibujo, escalado: sin caché que se desincronice
-        mini.innerHTML = d.isEmpty()
-          ? ""
-          : `<svg viewBox="0 0 ${doc.scene.width} ${doc.scene.height}"
-                  preserveAspectRatio="xMidYMid meet">${
-                    hojaPal ? `<style>${hojaPal}</style>` : ""}${d.content}</svg>`;
+        const m = this._miniatura(d, hojaPal), mini = m.el;
+        miniaturas.set(d.number, m);
+        celdas.set(d.number, { cel, mini });
         const num = document.createElement("b");
         num.className = "ls2-num";
         num.textContent = d.number;
@@ -176,6 +237,11 @@
       box.appendChild(tira);
       this.host.innerHTML = "";
       this.host.appendChild(box);
+      this._miniaturas = miniaturas;            // sólo las de los dibujos que existen
+      this._nivelMiniaturas = lv ? lv.id : null;
+      // lo que se pintó, para la próxima vez poder actualizar en el lugar
+      this._pintado = lv ? { lv, nombre: lv.name, box, dibujos: lv.drawings.slice(),
+        numeros: lv.drawings.map((d) => d.number), celdas } : null;
       const act = tira.querySelector(".ls2-item.actual");
       this._nivelPintado = lv ? lv.id : null;
       this._actualPintado = act;
