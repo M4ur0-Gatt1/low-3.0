@@ -20,7 +20,7 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
   const [cuadro, setCuadro] = useState(1);
   const [marco, setMarco] = useState({ w: 1920, h: 1080, fps: 24, doc: false });
   // cajas: las cajas del estudio son andamio; con esto salen al 2D como volúmenes grises de referencia
-  const [op, setOp] = useState<{ cada: number; formato: 'jpg' | 'png'; calidad: number; cajas: boolean }>({ cada: 2, formato: 'jpg', calidad: 90, cajas: false });
+  const [op, setOp] = useState<{ cada: number; formato: 'jpg' | 'png'; calidad: number; cajas: boolean; lineArt: boolean }>({ cada: 2, formato: 'jpg', calidad: 90, cajas: false, lineArt: false });
   const [aviso, setAviso] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [jugando, setJugando] = useState(false);
@@ -110,12 +110,12 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
     parar();
     setOcupado(true);
     const cuadros = cuadrosARender(toma, op.cada);
-    const fotos = await e.tomaRender(cuadros, marco.w, marco.h, { formato: op.formato, calidad: op.calidad / 100, cajas: op.cajas },
+    const fotos = await e.tomaRender(cuadros, marco.w, marco.h, { formato: op.formato, calidad: op.calidad / 100, cajas: op.cajas, lineArt: op.lineArt },
       (h, n) => setAviso(`Renderizando ${h} de ${n}…`));
     if (!fotos.length) { setOcupado(false); setAviso('No se pudo renderizar la toma'); return; }
     setAviso('Mandando al 2D…');
     window.parent.postMessage({ type: 'low:send-toma', nombre: toma.nombre, width: marco.w, height: marco.h, cuadros: toma.cuadros,
-      cada: op.cada, formato: op.formato, fotos, origen: origenDe(e, { cajas: op.cajas, cada: op.cada, formato: op.formato, calidad: op.calidad }) }, '*');
+      cada: op.cada, formato: op.formato, fotos, origen: origenDe(e, { cajas: op.cajas, cada: op.cada, formato: op.formato, calidad: op.calidad, lineArt: op.lineArt }) }, '*');
   };
 
   const enClave = toma.claves.some((k) => k.cuadro === cuadro);
@@ -159,6 +159,7 @@ export function TomaPanel3D({ engine }: { engine: React.MutableRefObject<WebGLDe
       {op.formato === 'jpg' && <label>Calidad<input type="number" aria-label="Calidad JPG" min={50} max={100} value={op.calidad}
         onChange={(ev) => setOp({ ...op, calidad: Math.max(50, Math.min(100, Number(ev.target.value) || 90)) })}/></label>}
     </div>
+    <label className="toma3d-check" title="Los volúmenes (cajas, sólidos, terreno) salen sólo con sus bordes y siluetas en negro, cuadro a cuadro, con las líneas ocultas tapadas: listos para entintar encima"><input type="checkbox" className="toma3d-lineart" checked={op.lineArt} onChange={(ev) => setOp({ ...op, lineArt: ev.target.checked })}/> Sólo líneas (Line Art)</label>
     <button className="persp3d-boton persp3d-repetir-ya toma3d-mandar" disabled={ocupado} onClick={mandar}>
       {ocupado ? 'Trabajando…' : `Mandar la toma al 2D (${cuadrosARender(toma, op.cada).length} fondos)`}</button>
 

@@ -994,6 +994,38 @@ export class WebGLDesign3D {
    *  superficies-guía son ayudas del 3D: no van al layout. */
   /** Las cajas en gris liso y opaco mientras dura `fn` (para mandarlas al 2D
    *  como volúmenes de referencia); después vuelven a ser andamio translúcido. */
+  /** LINE ART (como el modificador Line Art de Grease Pencil): los VOLÚMENES
+   *  (cajas, sólidos, rellenos y terreno) se dibujan sólo con sus bordes y
+   *  siluetas, en negro, con las líneas ocultas tapadas por el propio volumen
+   *  (un relleno que escribe profundidad pero no color, si el fondo es
+   *  transparente). Los trazos quedan como son: ya son línea. Los personajes
+   *  articulados se dibujan como siempre (sus bordes no seguirían la piel). */
+  private conLineArt<T>(transparente: boolean, fn: () => T): T {
+    const mallas: THREE.Mesh[] = [];
+    for (const r of this.strokes) {
+      if (!r.object.visible || r.personajeDatos) continue;
+      if (r.solid || r.fill || r.kind === 'box') r.object.traverse((o) => { if ((o as THREE.Mesh).isMesh && !(o as THREE.SkinnedMesh).isSkinnedMesh) mallas.push(o as THREE.Mesh); });
+    }
+    this.terrenoGroup.traverse((o) => { if ((o as THREE.Mesh).isMesh) mallas.push(o as THREE.Mesh); });
+    const tapa = new THREE.MeshBasicMaterial({ color: 0xffffff, colorWrite: !transparente, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide });
+    const tinta = new THREE.LineBasicMaterial({ color: 0x1a1a1a });
+    const antes: [THREE.Mesh, THREE.Material | THREE.Material[]][] = [];
+    const bordes: THREE.LineSegments[] = [];
+    for (const m of mallas) {
+      antes.push([m, m.material]);
+      m.material = tapa;
+      const b = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 25), tinta);
+      b.renderOrder = 1;
+      m.add(b);
+      bordes.push(b);
+    }
+    try { return fn(); } finally {
+      for (const [m, mat] of antes) m.material = mat;
+      for (const b of bordes) { b.parent?.remove(b); b.geometry.dispose(); }
+      tapa.dispose(); tinta.dispose();
+    }
+  }
+
   private conCajasLisas<T>(fn: () => T): T {
     const antes: [THREE.Mesh | THREE.LineSegments, THREE.Material][] = [];
     this.boxesGroup.traverse((o) => {
@@ -1180,7 +1212,7 @@ export class WebGLDesign3D {
    *  control de transformar no. Las líneas del esquema de perspectiva, sólo si
    *  se piden. Un solo renderizador para todos los cuadros. */
   async tomaRender(cuadros: number[], W: number, H: number,
-    op: { formato: 'jpg' | 'png'; calidad?: number; lineas?: boolean; cajas?: boolean },
+    op: { formato: 'jpg' | 'png'; calidad?: number; lineas?: boolean; cajas?: boolean; lineArt?: boolean },
     progreso?: (hechos: number, total: number) => void): Promise<{ cuadro: number; data: string }[]> {
     if (!this.toma.claves.length || !(W > 0) || !(H > 0) || !cuadros.length) return [];
     this.detachRig();
@@ -1214,7 +1246,8 @@ export class WebGLDesign3D {
         cam.lookAt(new THREE.Vector3().fromArray(c.mira));
         cam.updateProjectionMatrix();
         cam.updateMatrixWorld(true);
-        if (op.cajas) this.conCajasLisas(() => r.render(this.scene, cam)); else r.render(this.scene, cam);
+        const pintar = () => (op.cajas ? this.conCajasLisas(() => r.render(this.scene, cam)) : r.render(this.scene, cam));
+        if (op.lineArt) this.conLineArt(op.formato === 'png', pintar); else pintar();
         out.push({ cuadro: cuadros[i], data: r.domElement.toDataURL(tipo, calidad) });
         progreso?.(i + 1, cuadros.length);
         // que la interfaz respire entre cuadro y cuadro (y se vea el progreso)

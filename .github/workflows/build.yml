@@ -250,6 +250,7 @@ jobs:
           node tools/check_modificadores_ui.js
           node tools/check_rellenos_ui.js
           node tools/check_varios_cuadros_ui.js
+          node tools/check_3d_lineart_ui.js
           node tools/check_sesion_larga.js 8
           node tools/check_3d_terreno_ui.js
           node tools/check_3d_rectas_fuga_ui.js

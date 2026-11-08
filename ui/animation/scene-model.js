@@ -1022,6 +1022,7 @@
       params.cada = entero(p.cada, 1, 4, 2);
       params.formato = p.formato === "png" ? "png" : "jpg";
       params.calidad = entero(p.calidad, 50, 100, 90);
+      if (p.lineArt === true) params.lineArt = true;     // la toma se mandó sólo con líneas (Line Art)
     }
     return { tipo: d.tipo, proyecto: d.proyecto, nombre: String(d.nombre || "").slice(0, 60), params,
              fecha: typeof d.fecha === "string" ? d.fecha.slice(0, 40) : "" };
