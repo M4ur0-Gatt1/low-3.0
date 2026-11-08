@@ -1226,6 +1226,8 @@ LOW_I18N.registrar("en", "English", {
   "Quitar el tinte": "Remove tint",
   "Relleno: degradé…": "Fill: gradient…",
   "Relleno: textura…": "Fill: texture…",
+  "Mover varios cuadros…": "Move multiple frames…",
+  "Cuadro de barrido (smear)…": "Smear frame…",
   "Storyboard y generador de tomas": "Storyboard and shot generator",
   "Suave": "Soft",
   "Suavizado": "Smoothing",

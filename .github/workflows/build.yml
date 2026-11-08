@@ -59,6 +59,7 @@ jobs:
           node tools/run_movimiento_capa_tests.js
           node tools/run_modificadores_tests.js
           node tools/run_rellenos_tests.js
+          node tools/run_varios_cuadros_tests.js
           node tools/run_control_sets_tests.js
           node tools/run_premiere_xml_tests.js
           node tools/run_lipsync_tests.js
@@ -248,6 +249,7 @@ jobs:
           node tools/check_movimiento_capa_ui.js
           node tools/check_modificadores_ui.js
           node tools/check_rellenos_ui.js
+          node tools/check_varios_cuadros_ui.js
           node tools/check_sesion_larga.js 8
           node tools/check_3d_terreno_ui.js
           node tools/check_3d_rectas_fuga_ui.js

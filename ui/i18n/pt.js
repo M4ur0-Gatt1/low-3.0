@@ -1217,6 +1217,8 @@ LOW_I18N.registrar("pt", "Português", {
   "Quitar el tinte": "Remover a tinta",
   "Relleno: degradé…": "Preenchimento: gradiente…",
   "Relleno: textura…": "Preenchimento: textura…",
+  "Mover varios cuadros…": "Mover vários quadros…",
+  "Cuadro de barrido (smear)…": "Quadro de borrão (smear)…",
   "Storyboard y generador de tomas": "Storyboard e gerador de planos",
   "Suavizado": "Suavização",
   "Suavizado del lápiz y el pincel al soltar el trazo (0 = crudo, 100 = máximo)": "Suavização do lápis e do pincel ao soltar o traço (0 = cru, 100 = máximo)",
