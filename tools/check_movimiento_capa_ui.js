@@ -88,6 +88,9 @@ async function main() {
     await derecho(`.tl2-row[data-layer-row="${ids.vaso}"] .tl2-name`);
     await elegirMenu("Movimiento de la capa");
     await ev(`(()=>{ const s = document.querySelector("#mcPadre"); s.value = window.__c.fondo; s.dispatchEvent(new Event("change")); return true; })()`);
+    // «Mira a» en el mismo diálogo (las opciones listan las otras capas)
+    const opcionesMira = await ev(`[...document.querySelectorAll("#mcMira option")].map(o => o.textContent)`);
+    if (!opcionesMira.includes("Fondo")) mal("«Mira a» no lista las otras capas", opcionesMira);
     await clic("#mCancel");
     const cuadro2 = (await ev(`dzCuadroSvgTexto(1)`)).replace(/\s+/g, " ");
     if (!/transform="matrix\(1 0 0 1 200 0\)"><g data-low-art="colour"><\/g><g data-low-art="line"><circle data-prueba="vaso"/.test(cuadro2)) mal("el vaso no sigue al fondo en el export", { cuadro2: cuadro2.slice(0, 500) });

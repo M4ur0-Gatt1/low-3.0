@@ -1065,10 +1065,24 @@
       if (!(f >= 1 && f <= 100000) || !v || typeof v !== "object") continue;
       claves[f] = { x: num(v.x, 0), y: num(v.y, 0), rot: num(v.rot, 0), esc: Math.max(0.01, Math.min(100, num(v.esc, 1))) };
     }
-    const padre = typeof d.padre === "string" && /^[a-z0-9_-]{1,40}$/i.test(d.padre) ? d.padre : null;
-    if (!Object.keys(claves).length && !padre) return null;
+    // el PADRE es otra capa o un HUESO del rig («hueso:<id>»); con un hueso,
+    // `bind` es la inversa de su matriz al pegarla (así no salta de lugar).
+    // MIRA A: la capa gira alrededor de su pivote apuntando al de otra capa.
+    const padre = typeof d.padre === "string" && /^(hueso:[a-z0-9_-]{1,60}|[a-z0-9_-]{1,40})$/i.test(d.padre) ? d.padre : null;
+    const mirarA = typeof d.mirarA === "string" && /^[a-z0-9_-]{1,40}$/i.test(d.mirarA) ? d.mirarA : null;
+    if (!Object.keys(claves).length && !padre && !mirarA) return null;
     const p = d.pivote && typeof d.pivote === "object" ? d.pivote : {};
-    return { claves, pivote: { x: num(p.x, 0), y: num(p.y, 0) }, padre };
+    const out = { claves, pivote: { x: num(p.x, 0), y: num(p.y, 0) }, padre };
+    if (padre && padre.startsWith("hueso:") && Array.isArray(d.bind) && d.bind.length === 6 && d.bind.every((v) => Number.isFinite(Number(v))))
+      out.bind = d.bind.map(Number);
+    if (mirarA) out.mirarA = mirarA;
+    return out;
+  }
+  /** Inversa de una matriz afín (null si no se puede invertir). */
+  function movInv(m) {
+    const det = m[0] * m[3] - m[1] * m[2];
+    if (Math.abs(det) < 1e-12) return null;
+    return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det];
   }
   /** Los valores del movimiento propio de la capa en ese cuadro. */
   function movEn(mov, frame) {
@@ -1443,8 +1457,28 @@
       if (vistos.has(layerId)) return null;
       vistos.add(layerId);
       const propia = matMov(movEn(ly.mov, frame), ly.mov.pivote);
-      const delPadre = ly.mov.padre && ly.mov.padre !== layerId ? this.matrizCapa(ly.mov.padre, frame, vistos) : null;
-      const m = delPadre ? movMul(delPadre, propia) : propia;
+      let delPadre = null;
+      if (ly.mov.padre && ly.mov.padre.startsWith("hueso:")) {
+        // un HUESO del rig: su matriz en ese cuadro por la inversa de la del momento de pegarla
+        let b = null;
+        try { b = typeof this.rigWorldMatrix === "function" ? this.rigWorldMatrix(ly.mov.padre.slice(6), frame) : null; } catch (_) { b = null; }
+        if (b) delPadre = ly.mov.bind ? movMul(b, ly.mov.bind) : b;
+      } else if (ly.mov.padre && ly.mov.padre !== layerId) delPadre = this.matrizCapa(ly.mov.padre, frame, vistos);
+      let m = delPadre ? movMul(delPadre, propia) : propia;
+      // MIRA A: girar alrededor del propio pivote (ya movido) hacia el de la otra capa
+      if (ly.mov.mirarA && ly.mov.mirarA !== layerId) {
+        const otra = this.layer(ly.mov.mirarA);
+        if (otra) {
+          const mo = this.matrizCapa(otra.id, frame, vistos) || [1, 0, 0, 1, 0, 0];
+          const po = otra.mov ? otra.mov.pivote : { x: 0, y: 0 }, pp = ly.mov.pivote;
+          const a = [m[0] * pp.x + m[2] * pp.y + m[4], m[1] * pp.x + m[3] * pp.y + m[5]];
+          const b = [mo[0] * po.x + mo[2] * po.y + mo[4], mo[1] * po.x + mo[3] * po.y + mo[5]];
+          if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-6) {
+            const ang = Math.atan2(b[1] - a[1], b[0] - a[0]), c = Math.cos(ang), s = Math.sin(ang);
+            m = movMul([c, s, -s, c, a[0] - (c * a[0] - s * a[1]), a[1] - (s * a[0] + c * a[1])], m);
+          }
+        }
+      }
       return esIdentidad(m) ? null : m;
     }
 
@@ -2176,6 +2210,7 @@
   animation.movData = movData;
   animation.movEn = movEn;
   animation.matrizASvg = matrizASvg;
+  animation.movInv = movInv;
   animation.GRUPO_COLORES = GRUPO_COLORES;
   animation.rigToJSON = rigToJSON;
   animation.rigChannelPath = rigChannelPath;

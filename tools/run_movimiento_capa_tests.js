@@ -115,5 +115,45 @@ const reabrir = (sc) => new A.Scene(JSON.parse(JSON.stringify(sc.toJSON())));
   check("duplicar una capa con movimiento copia el movimiento", (() => { const c = doc.duplicateLayer("fondo"); return c && c.mov && c.mov.claves[1].x === 10; })());
 }
 
+// ── 5. mira a ───────────────────────────────────────────────────────────────
+{
+  const doc = docConCapas(), sc = doc.scene;
+  doc.setPivoteMov("vaso", 0, 0);               // crea mov sin claves: no hay, todavía
+  check("mirar a otra capa", doc.setMirarAMov("mano", "vaso"));
+  doc.setPivoteMov("mano", 100, 100);
+  doc.ponerClaveMov("vaso", 1, { x: 100, y: 300 });   // el vaso (pivote 0,0) queda en (100, 300): abajo de la mano
+  const m = sc.matrizCapa("mano", 1);
+  const punta = aplica(m, 200, 100);             // un punto a la derecha del pivote de la mano…
+  check("…gira hasta apuntar al vaso (abajo)", cerca(punta[0], 100) && cerca(punta[1], 200), JSON.stringify(punta));
+  check("el pivote de la que mira no se mueve", cerca(aplica(m, 100, 100)[0], 100) && cerca(aplica(m, 100, 100)[1], 100));
+  check("mirarse a sí misma se rechaza", doc.setMirarAMov("mano", "mano") === false);
+  doc.setPadreMov("vaso", "mano");
+  check("mirar a una capa que la sigue se rechaza", doc.setMirarAMov("fondo", "fondo") === false);
+  const sc2 = reabrir(sc);
+  check("mirar a sobrevive a guardar y reabrir", sc2.layer("mano").mov.mirarA === "vaso");
+  let colgo = false;
+  try { sc2.matrizCapa("mano", 1); sc2.matrizCapa("vaso", 1); } catch (_) { colgo = true; }
+  check("mano mira al vaso que sigue a la mano: no cuelga", !colgo);
+  doc.setMirarAMov("mano", null);
+  check("dejar de mirar (sin nada más, la capa queda sin movimiento)", !sc.layer("mano").mov || !sc.layer("mano").mov.mirarA);
+}
+
+// ── 6. pegar a un hueso ─────────────────────────────────────────────────────
+{
+  const doc = docConCapas(), sc = doc.scene;
+  // un rig de mentira: el hueso «brazo» se corre 10 por cuadro
+  sc.rig = sc.rig || {}; sc.rig.nodes = { brazo: { id: "brazo", name: "Brazo" } };
+  sc.rigWorldMatrix = (id, f) => (id === "brazo" ? [1, 0, 0, 1, 10 * (f - 1) + 50, 0] : null);
+  doc.frame = 1; doc.goTo && doc.goTo(1);
+  check("un hueso que no existe se rechaza", doc.setPadreMov("vaso", "hueso:pierna") === false);
+  check("pegar el vaso al brazo", doc.setPadreMov("vaso", "hueso:brazo"));
+  check("al pegarla no salta de lugar", sc.matrizCapa("vaso", 1) === null);
+  check("después sigue al hueso", cerca(aplica(sc.matrizCapa("vaso", 4), 0, 0)[0], 30));
+  const sc2 = reabrir(sc);
+  check("el hueso y su bind sobreviven a guardar y reabrir", sc2.layer("vaso").mov.padre === "hueso:brazo" && sc2.layer("vaso").mov.bind.length === 6);
+  doc.history.undo();
+  check("Ctrl+Z la despega", !sc.layer("vaso").mov);
+}
+
 console.log(`Movimiento de capa: ${ok} bien, ${fallan} mal`);
 process.exit(fallan ? 1 : 0);

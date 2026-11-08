@@ -469,6 +469,16 @@
     /** La capa sigue el movimiento de otra (null: deja de seguirla). Un ciclo
      *  —emparentar con una capa que ya la sigue— se rechaza. */
     setPadreMov(layerId, padreId) {
+      // un HUESO del rig («hueso:<id>»): se guarda la inversa de su matriz en el
+      // cuadro actual, así la capa queda donde está y desde ahí sigue al hueso
+      if (padreId && String(padreId).startsWith("hueso:")) {
+        const nodo = padreId.slice(6), nodos = (this.scene.rig && this.scene.rig.nodes) || {};
+        if (!nodos[nodo] || typeof this.scene.rigWorldMatrix !== "function") return false;
+        let b = null;
+        try { b = this.scene.rigWorldMatrix(nodo, this.frame); } catch (_) { b = null; }
+        const bind = b ? animation.movInv(b) : null;
+        return this._cambioMov(layerId, "Pegar la capa a un hueso", (m) => { m.padre = padreId; if (bind) m.bind = bind; else delete m.bind; });
+      }
       if (padreId) {
         if (padreId === layerId || !this.scene.layer(padreId)) return false;
         for (let p = padreId, n = 0; p && n < 200; n++) {
@@ -476,11 +486,23 @@
           const l = this.scene.layer(p); p = l && l.mov ? l.mov.padre : null;
         }
       }
-      return this._cambioMov(layerId, padreId ? "Emparentar la capa" : "Soltar la capa de su padre", (m) => { m.padre = padreId || null; });
+      return this._cambioMov(layerId, padreId ? "Emparentar la capa" : "Soltar la capa de su padre", (m) => { m.padre = padreId || null; delete m.bind; });
+    }
+    /** MIRA A: la capa gira hacia el pivote de otra (los ojos que siguen algo).
+     *  null la suelta. Mirar a una capa que la sigue (o se mira a sí misma) se rechaza. */
+    setMirarAMov(layerId, otraId) {
+      if (otraId) {
+        if (otraId === layerId || !this.scene.layer(otraId)) return false;
+        for (let p = otraId, n = 0; p && n < 200; n++) {
+          if (p === layerId) return false;
+          const l = this.scene.layer(p); p = l && l.mov ? (l.mov.padre && !l.mov.padre.startsWith("hueso:") ? l.mov.padre : l.mov.mirarA) : null;
+        }
+      }
+      return this._cambioMov(layerId, otraId ? "La capa mira a otra" : "La capa deja de mirar", (m) => { if (otraId) m.mirarA = otraId; else delete m.mirarA; });
     }
     /** Sin claves ni padre: la capa vuelve a su lugar. */
     quitarMov(layerId) {
-      return this._cambioMov(layerId, "Quitar el movimiento de la capa", (m) => { m.claves = {}; m.padre = null; });
+      return this._cambioMov(layerId, "Quitar el movimiento de la capa", (m) => { m.claves = {}; m.padre = null; delete m.bind; delete m.mirarA; });
     }
 
     /** Una capa de SOMBRA o de LUZ encima de `baseId`, ya recortada con ella:

@@ -49,6 +49,9 @@
       <div class="dz-style-row">
         <span class="dz-hint">Sigue a</span><select id="mcPadre" class="langsel"></select>
       </div>
+      <div class="dz-style-row">
+        <span class="dz-hint">Mira a</span><select id="mcMira" class="langsel"></select>
+      </div>
       <div class="sub" id="mcClaves"></div>
       <div class="m-actions">
         <button class="ghost" id="mcQuitarTodo">Quitar todo el movimiento</button>
@@ -67,6 +70,31 @@
       if (ly.mov && ly.mov.padre === otra.id) o.selected = true;
       sel.appendChild(o);
     }
+    // los HUESOS del rig: la capa se pega al hueso (el vaso a la mano del personaje)
+    const nodos = Object.values((doc.scene.rig && doc.scene.rig.nodes) || {});
+    if (nodos.length) {
+      const grupo = document.createElement("optgroup"); grupo.label = "Huesos del rig";
+      for (const n of nodos) {
+        const o = document.createElement("option"); o.value = "hueso:" + n.id; o.textContent = "Hueso: " + (n.name || n.id);
+        if (ly.mov && ly.mov.padre === "hueso:" + n.id) o.selected = true;
+        grupo.appendChild(o);
+      }
+      sel.appendChild(grupo);
+    }
+    // MIRA A: la capa gira hacia el pivote de otra
+    const mira = $m("#mcMira");
+    const nadie = document.createElement("option"); nadie.value = ""; nadie.textContent = "(nadie)"; mira.appendChild(nadie);
+    for (const otra of doc.scene.layers) {
+      if (otra.id === ly.id) continue;
+      const o = document.createElement("option"); o.value = otra.id; o.textContent = otra.name;
+      if (ly.mov && ly.mov.mirarA === otra.id) o.selected = true;
+      mira.appendChild(o);
+    }
+    mira.onchange = () => {
+      const otra = mira.value || null;
+      if (doc.setMirarAMov(ly.id, otra)) avisar(otra ? "«" + ly.name + "» mira ahora a otra capa (gira sobre su pivote)" : "«" + ly.name + "» ya no mira a nadie");
+      else if (otra) { avisar("No se puede: esa capa ya depende de «" + ly.name + "» (sería un círculo)"); mira.value = ly.mov && ly.mov.mirarA ? ly.mov.mirarA : ""; }
+    };
     const claves = ly.mov ? Object.keys(ly.mov.claves).map(Number).sort((a, b) => a - b) : [];
     $m("#mcClaves").textContent = claves.length ? "Claves en los cuadros: " + claves.join(", ") : "Todavía no tiene claves.";
     $m("#mcQuitar").disabled = !(ly.mov && ly.mov.claves[f]);
