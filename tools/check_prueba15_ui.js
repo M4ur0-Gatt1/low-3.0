@@ -37,11 +37,30 @@ async function main() {
   await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable");
   await send("Network.setCacheDisabled", { cacheDisabled: true });
   await send("Emulation.setDeviceMetricsOverride", { width: 1500, height: 900, deviceScaleFactor: 1, mobile: false });
-  await send("Page.navigate", { url: pageUrl });
-  for (let i = 0; i < 60; i++) {
-    const r = await send("Runtime.evaluate", { expression: 'document.readyState==="complete"&&typeof dzPrueba15Abrir==="function" && !!api', returnByValue: true });
-    if (r.result?.value) break; await new Promise(r => setTimeout(r, 250));
-  }
+  const cargar = async () => {
+    await send("Page.navigate", { url: pageUrl });
+    for (let i = 0; i < 60; i++) {
+      const r = await send("Runtime.evaluate", { expression: 'document.readyState==="complete"&&typeof dzPrueba15Abrir==="function" && !!api', returnByValue: true });
+      if (r.result?.value) break; await new Promise(r => setTimeout(r, 250));
+    }
+  };
+  await cargar();
+
+  // ── 0. CON EL MOUSE DE VERDAD (v3.57). Los ítems del menú se disparan al
+  // apretar y el menú se cierra ahí: el .click() de abajo abría el panel, pero
+  // con el mouse NO SE ABRÍA, y el respaldo dzPrueba15Abrir() lo tapaba.
+  const valor = async (expr) => (await send("Runtime.evaluate", { expression: expr, returnByValue: true })).result?.value;
+  const clicMouse = async (sel) => {
+    const r = await valor(`(()=>{ const n = document.querySelector(${JSON.stringify(sel)}); if (!n) return null; const b = n.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+    if (!r) throw Error("REGRESIÓN: no está en la pantalla: " + sel);
+    for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: r.x, y: r.y, button: "left", clickCount: 1 });
+    await new Promise(res => setTimeout(res, 300));
+  };
+  await new Promise(res => setTimeout(res, 1200));
+  await clicMouse('.dz-menu[data-menu="ayuda"]');
+  await clicMouse('.dz-menu[data-menu="ayuda"] [data-act="prueba15"]');
+  if (!(await valor(`!!document.querySelector("#dzPrueba15")`))) throw Error("REGRESIÓN: Ayuda → Prueba maestra §15 no abre con el mouse");
+  await cargar();   // el resto arranca de cero, como siempre
 
   const expression = `(async()=>{
     const w=ms=>new Promise(r=>setTimeout(r,ms));

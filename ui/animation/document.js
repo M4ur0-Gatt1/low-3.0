@@ -1456,6 +1456,23 @@
     /** Cambia la perspectiva de la escena (puntos de fuga) con deshacer. Un
      *  arrastre muta en vivo y al soltar llama con `before` = lo de antes del
      *  arrastre, para que todo el gesto sea UN paso de Ctrl+Z. */
+    /** La planilla de producción (scene-model.js, produccionData). Cada cambio
+     *  —tildar un paso, anotarlo, agregarlo— es un paso de Ctrl+Z: tildar el
+     *  paso equivocado se deshace como cualquier otra cosa. null la quita. */
+    setProduccion(value, { label = "Planilla de producción" } = {}) {
+      const antes = animation.produccionData(this.scene.produccion);
+      const despues = animation.produccionData(value);
+      if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+      this.scene.produccion = despues;
+      this.touch(); this.emit("produccion");
+      if (this.history) {
+        const doc = this;
+        this.history.push({ label, domain: "produccion", before: antes, after: despues,
+          apply: (_dir, v) => { doc.scene.produccion = animation.produccionData(v); doc.touch(); doc.emit("produccion"); } });
+      }
+      return true;
+    }
+
     setPerspective(value, { label = "Cambiar la perspectiva", before = null } = {}) {
       const antes = animation.perspectiveData(before || this.scene.perspective);
       const despues = animation.perspectiveData(value);

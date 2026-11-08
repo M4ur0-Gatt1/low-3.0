@@ -321,11 +321,13 @@
 
   /* ── La entrada de menú, sin tocar app.js ──────────────────────────────── */
 
-  document.addEventListener("click", event => {
+  // Los ítems del menú se disparan al APRETAR (app.js, mousedown) y el menú se
+  // cierra ahí mismo: el clic de después ya no caía sobre el ítem y, con el
+  // mouse de verdad, la prueba NO SE ABRÍA (sólo con .click() desde código).
+  // Se escucha el mousedown, sin frenarlo para que el menú se cierre, y el clic.
+  for (const tipo of ["mousedown", "click"]) document.addEventListener(tipo, event => {
     const item = event.target.closest?.('[data-act="prueba15"]');
-    if (!item) return;
-    event.stopPropagation();
-    abrir();
+    if (item) abrir();
   }, true);
 
   core.Prueba15 = Prueba15;
