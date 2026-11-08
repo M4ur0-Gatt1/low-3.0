@@ -1817,6 +1817,35 @@ class Api:
             return {"cancel": True}
         return s._read_storyboarder(r[0] if isinstance(r, (list, tuple)) else r)
 
+    def import_capas(s):
+        """Las CAPAS de un PSD (Photoshop) o un ORA (Krita, GIMP, MyPaint), cada
+        una como PNG con su lugar, para armar capas de LOW (capas_archivo.py)."""
+        if not s._window:
+            return {"error": "sin ventana"}
+        try:
+            r = s._window.create_file_dialog(
+                webview.OPEN_DIALOG, allow_multiple=False,
+                file_types=("Capas de Photoshop o Krita (*.psd;*.ora)",))
+        except Exception as e:
+            return {"error": str(e)}
+        if not r:
+            return {"cancel": True}
+        fp = Path(r[0] if isinstance(r, (list, tuple)) else r)
+        try:
+            if fp.stat().st_size > 400_000_000:
+                return {"error": "archivo muy pesado (>400 MB)"}
+            raw = fp.read_bytes()
+        except OSError as e:
+            return {"error": str(e)}
+        import capas_archivo
+        try:
+            leido = capas_archivo.leer(fp.name, raw)
+        except capas_archivo.ErrorCapas as e:
+            return {"error": str(e)}
+        capas = [{k: v for k, v in c.items() if k != "png"} | {"data": "data:image/png;base64," + base64.b64encode(c["png"]).decode("ascii")}
+                 for c in leido["capas"]]
+        return {"name": fp.name, "ancho": leido["ancho"], "alto": leido["alto"], "capas": capas}
+
     def import_character_art(s):
         """Importa arte destinado a rigging, no una referencia de calco.
 

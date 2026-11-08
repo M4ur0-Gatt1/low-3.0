@@ -1228,6 +1228,8 @@ LOW_I18N.registrar("en", "English", {
   "Relleno: textura…": "Fill: texture…",
   "Mover varios cuadros…": "Move multiple frames…",
   "Cuadro de barrido (smear)…": "Smear frame…",
+  "Importar capas (PSD, ORA)…": "Import layers (PSD, ORA)…",
+  "Sólo líneas (Line Art)": "Lines only (Line Art)",
   "Storyboard y generador de tomas": "Storyboard and shot generator",
   "Suave": "Soft",
   "Suavizado": "Smoothing",

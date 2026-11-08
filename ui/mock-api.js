@@ -34,6 +34,9 @@
 
   const impl = {
     log_js: m => console.log("[js→py]", m),
+    // Importar capas (PSD/ORA): una prueba pone en window.__importCapas lo que
+    // devolvería el backend (capas_archivo.py); sin eso, «cancelado».
+    import_capas: async () => (window.__importCapas ? window.__importCapas() : { cancel: true }),
     // Dónde guardar lo exportado: el mock no tiene diálogo nativo. Una prueba
     // lo decide con window.__destinoExport; sin eso, {} = export/ como siempre.
     pick_export_target: async (path, kind, nombre) =>
