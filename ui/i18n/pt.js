@@ -1210,6 +1210,8 @@ LOW_I18N.registrar("pt", "Português", {
   "Desbloquear el grupo": "Desbloquear grupo",
   "Movimiento de la capa…": "Movimento da camada…",
   "Movimiento de la capa": "Movimento da camada",
+  "Modificadores y efectos…": "Modificadores e efeitos…",
+  "Modificadores y efectos": "Modificadores e efeitos",
   "Storyboard y generador de tomas": "Storyboard e gerador de planos",
   "Suavizado": "Suavização",
   "Suavizado del lápiz y el pincel al soltar el trazo (0 = crudo, 100 = máximo)": "Suavização do lápis e do pincel ao soltar o traço (0 = cru, 100 = máximo)",

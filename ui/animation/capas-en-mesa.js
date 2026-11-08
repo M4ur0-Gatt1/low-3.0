@@ -75,7 +75,13 @@
     return "<mask " + Object.keys(a).map((k) => k + '="' + a[k] + '"').join(" ") + ">" + contenido + "</mask>";
   }
   // una capa con MOVIMIENTO (Layer.mov) también: se envuelve en un <g transform>
-  const especial = (l) => (l.opacity != null && l.opacity < 1) || (l.blend && l.blend !== "normal") || l.clip || l.tone || !!l.mov;
+  const especial = (l) => (l.opacity != null && l.opacity < 1) || (l.blend && l.blend !== "normal") || l.clip || l.tone || !!l.mov
+    || !!(animation.modificadores && animation.modificadores.tieneMods(l));
+  /** MODIFICADORES (animation/modificadores.js): el cuadro de la capa que se
+   *  muestra (tiempo) y su filtro (temblor y efectos) en ese cuadro. */
+  const MODS = () => animation.modificadores || null;
+  const cuadroDe = (ly, frame) => (MODS() && ly.mods ? MODS().cuadroFuente(ly.mods, frame) : frame);
+  const filtroDe = (id, ly, frame) => (MODS() && ly.mods ? MODS().filtroCapa(id, ly.mods, frame) : null);
   /** El movimiento de la capa en ese cuadro, como atributo transform ("" si no se mueve). */
   const movimiento = (sc, ly, frame) => {
     const m = sc && typeof sc.matrizCapa === "function" ? sc.matrizCapa(ly.id, frame) : null;
@@ -155,6 +161,10 @@
       const m = doc.scene.matrizCapa(ly.id, doc.frame);
       reglas.push("#dzCanvas > svg > g[data-low-art] { transform: matrix(" + m.map((x) => +x.toFixed(6)).join(",") + "); transform-origin: 0 0; }");
     }
+    // temblor y efectos de la capa activa: también sólo al reproducir (el
+    // <filter> lo pone pintarCapas en g.dz-capa-fx)
+    if (ly && reproduciendo && filtroDe("x", ly, doc.frame))
+      reglas.push("#dzCanvas > svg > g[data-low-art] { filter: url(#dzFx_" + ly.id + "); }");
     if (cv) {
       const movida = !!tr && !reproduciendo;
       cv.classList.toggle("dz-capa-movida", movida);
@@ -270,19 +280,31 @@
   function pintarCapas() {
     const a = app(), svg = hoja();
     if (!svg) return 0;
-    svg.querySelectorAll(":scope > g.dz-capa, :scope > g.dz-capa-defs").forEach((n) => n.remove());
+    svg.querySelectorAll(":scope > g.dz-capa, :scope > g.dz-capa-defs, :scope > g.dz-capa-fx").forEach((n) => n.remove());
     if (!a || !a.doc) return 0;
     const doc = a.doc, sc = doc.scene, frame = doc.frame;
     suscribir(doc);
     estiloActivo(doc);
+    // los <filter> de temblor y efectos de este cuadro (de las otras capas, y
+    // el de la activa para cuando se reproduce): en un g.dz-onion, no se guardan
+    const filtros = [];
+    const activaLy = doc.layer;
+    if (activaLy) { const fa = filtroDe("dzFx_" + activaLy.id, activaLy, frame); if (fa) filtros.push(fa); }
+    const ponerFiltros = () => {
+      if (!filtros.length) return;
+      const cont = document.createElementNS(SVGNS, "g");
+      cont.setAttribute("class", "dz-onion dz-capa-fx");
+      cont.innerHTML = "<defs>" + filtros.join("") + "</defs>";
+      svg.appendChild(cont);
+    };
     const capas = sc.layers, activa = capas.findIndex((l) => l.id === doc.layerId);
     const copias = new Map();
-    if (capas.length < 2 || activa < 0) { aplicarRecortes(doc, svg, copias); return 0; }
+    if (capas.length < 2 || activa < 0) { aplicarRecortes(doc, svg, copias); ponerFiltros(); return 0; }
     const vb = svg.getAttribute("viewBox");
     const usados = new Set();
     const prep = (ly) => {
       if (ly.id === doc.layerId || ly.visible === false) return null;
-      const dw = sc.drawingAt(ly.id, frame);
+      const dw = sc.drawingAt(ly.id, cuadroDe(ly, frame));
       if (!dw || !dw.content || (animation.drawingIsEmpty && animation.drawingIsEmpty(dw.content))) return null;
       let item = cache.get(ly.id);
       if (!item || item.content !== dw.content) { item = construir(dw.content, vb); cache.set(ly.id, item); }
@@ -291,6 +313,11 @@
       const tr = movimiento(sc, ly, frame);
       if (tr) item.g.setAttribute("transform", tr); else item.g.removeAttribute("transform");
       posar(doc, item, frame);
+      // se dibuja solo: los trazos que todavía no aparecieron se esconden;
+      // temblor y efectos: el filtro de la capa (atributo: el tono usa style)
+      if (MODS()) MODS().aplicarTrazado(item.g, ly.mods, frame);
+      const fx = filtroDe("dzFx_" + ly.id, ly, frame);
+      if (fx) { filtros.push(fx); item.g.setAttribute("filter", "url(#dzFx_" + ly.id + ")"); } else item.g.removeAttribute("filter");
       copias.set(ly.id, item.g);
       return item.g;
     };
@@ -312,6 +339,7 @@
     }
     for (const id of [...cache.keys()]) if (!sc.layer(id)) cache.delete(id);
     aplicarRecortes(doc, svg, copias);
+    ponerFiltros();
     return puestas;
   }
 
@@ -329,15 +357,26 @@
       const w = sc.width || 1920, h = sc.height || 1080;
       const textos = sc.layers.map((ly) => {
         if (ly.visible === false) return null;
-        const dw = sc.drawingAt(ly.id, frame);
+        const dw = sc.drawingAt(ly.id, cuadroDe(ly, frame));    // tiempo: otro cuadro de la capa
         if (!dw || !dw.content) return null;
-        return typeof global.dzCompositionDrawingTexto === "function"
+        let texto = typeof global.dzCompositionDrawingTexto === "function"
           ? global.dzCompositionDrawingTexto(dw.content, ly.id, frame) : dw.content;
+        // se dibuja solo: los trazos que todavía no aparecieron, escondidos
+        if (MODS() && ly.mods && ly.mods.some((m) => m.tipo === "trazado" && m.activo !== false)) {
+          const g = document.createElementNS(SVGNS, "g");
+          g.innerHTML = texto;
+          MODS().aplicarTrazado(g, ly.mods, frame);
+          texto = g.innerHTML;
+        }
+        return texto;
       });
       const partes = [], defs = [], mascaras = new Set();
       sc.layers.forEach((ly, i) => {
         let t = textos[i];
         if (t == null) return;
+        // temblor y efectos: un <g> propio con su filtro (el tono pone el suyo afuera)
+        const fx = filtroDe("lowFx_" + ly.id, ly, frame);
+        if (fx) { defs.push(fx); t = `<g filter="url(#lowFx_${ly.id})">${t}</g>`; }
         const b = baseDeRecorte(sc.layers, i), tono = ly.tone;
         let extra = "";
         if (b >= 0) {

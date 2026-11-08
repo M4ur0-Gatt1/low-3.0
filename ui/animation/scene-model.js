@@ -1241,6 +1241,10 @@
       // MOVIMIENTO de la capa entera (como la transformación de capa de
       // Grease Pencil o el peg de Harmony): ver movData y Scene.matrizCapa
       this.mov = movData(data.mov);
+      // MODIFICADORES Y EFECTOS (animation/modificadores.js): cambian cómo se
+      // ve la capa sin tocar sus dibujos. Ese archivo se carga antes que éste.
+      const mods = animation.modificadores ? animation.modificadores.modsData(data.mods) : [];
+      this.mods = mods.length ? mods : null;
     }
     /** Celda en un frame (1-based): número de dibujo, o null si está vacía. */
     cellAt(frame) {
@@ -1285,7 +1289,8 @@
                locked: this.locked, opacity: this.opacity, z: this.z, blend: this.blend,
                lightTable: this.lightTable, clip: this.clip, tone: this.tone ? { ...this.tone } : null,
                cells: this.cells.slice(), ...(this.grupo ? { grupo: this.grupo } : {}),
-               ...(this.mov ? { mov: clone(this.mov) } : {}) };
+               ...(this.mov ? { mov: clone(this.mov) } : {}),
+               ...(this.mods && this.mods.length ? { mods: clone(this.mods) } : {}) };
     }
   }
 

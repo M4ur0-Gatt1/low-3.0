@@ -1219,6 +1219,8 @@ LOW_I18N.registrar("en", "English", {
   "Desbloquear el grupo": "Unlock group",
   "Movimiento de la capa…": "Layer motion…",
   "Movimiento de la capa": "Layer motion",
+  "Modificadores y efectos…": "Modifiers and effects…",
+  "Modificadores y efectos": "Modifiers and effects",
   "Storyboard y generador de tomas": "Storyboard and shot generator",
   "Suave": "Soft",
   "Suavizado": "Smoothing",

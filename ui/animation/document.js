@@ -414,6 +414,25 @@
       });
     }
 
+    /** Los modificadores y efectos de una capa (animation/modificadores.js),
+     *  la lista entera de una vez: un paso de Ctrl+Z. */
+    setLayerMods(layerId, lista) {
+      const ly = this.scene.layer(layerId), M = animation.modificadores;
+      if (!ly || !M) return false;
+      const antes = ly.mods ? animation.clone(ly.mods) : null;
+      const n = M.modsData(lista);
+      const despues = n.length ? n : null;
+      if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+      ly.mods = despues;
+      this.touch(); this.emit("layers"); this.emit("frame");
+      if (this.history) {
+        const doc = this;
+        this.history.push({ label: "Modificadores de la capa", domain: "mods", before: antes, after: despues,
+          apply: (_dir, v) => { const l = doc.scene.layer(layerId); if (!l) return; l.mods = v ? animation.clone(v) : null; doc.touch(); doc.emit("layers"); doc.emit("frame"); } });
+      }
+      return true;
+    }
+
     /* ── MOVIMIENTO DE CAPA (scene-model.js, movData / Scene.matrizCapa) ── */
     _cambioMov(layerId, label, fn) {
       const ly = this.scene.layer(layerId);
