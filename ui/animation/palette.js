@@ -197,6 +197,56 @@
    *  `!important` no es pereza: los trazos guardan su color literal como
    *  respaldo para abrirse en cualquier visor, y algunos además llevan estilo
    *  inline. Sin `!important` ganaría el inline y la paleta no haría nada. */
+  /* ── RELLENOS CON DEGRADÉ O TEXTURA (como el Fill Gradient de Grease
+     Pencil 3 y las texturas de relleno) ──────────────────────────────────
+     Un estilo puede rellenar con un DEGRADÉ (lineal o radial, de su color a
+     un segundo color, con ángulo) o una TEXTURA (rayas, puntos, cuadrícula o
+     trama de su color sobre un segundo color). Vive en `style.meta.relleno`
+     y se valida al usarlo: sólo colores #rrggbb y números acotados, así un
+     archivo no puede meter nada en el CSS ni en el SVG. La línea sigue
+     siendo el color liso. Las definiciones (<linearGradient>, <pattern>) las
+     arma `defs()`; la mesa las pone en un g.dz-onion de la hoja (no se
+     guardan) y el export las lleva adentro. */
+  const PATRONES = ["rayas", "puntos", "cuadricula", "trama"];
+  const hex = (c) => (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : null);
+  function relleno(style) {
+    const r = style && style.meta && style.meta.relleno;
+    if (!r || typeof r !== "object") return null;
+    const num = (v, a, b, def) => (Number.isFinite(Number(v)) ? Math.max(a, Math.min(b, Number(v))) : def);
+    const c1 = hex(style.color) || "#000000", c2 = hex(r.color2) || "#ffffff";
+    if (r.tipo === "degrade") return { tipo: "degrade", color: c1, color2: c2, angulo: num(r.angulo, -360, 360, 90), radial: r.radial === true };
+    if (r.tipo === "textura") return { tipo: "textura", color: c1, color2: c2, patron: PATRONES.includes(r.patron) ? r.patron : "rayas", escala: num(r.escala, 2, 200, 16) };
+    return null;
+  }
+  const idRelleno = (palette, s) => "lowPal_" + String(palette.id || "p").replace(/[^a-z0-9_-]/gi, "") + "_" + s.index;
+  /** Las definiciones SVG de los rellenos de la paleta ("" si no hay). */
+  function defs(palette) {
+    if (!palette || !palette.styles) return "";
+    const out = [];
+    for (const s of palette.styles) {
+      const r = relleno(s);
+      if (!r || !s.index) continue;
+      const id = idRelleno(palette, s);
+      if (r.tipo === "degrade") {
+        if (r.radial) out.push(`<radialGradient id="${id}"><stop offset="0" stop-color="${r.color}"/><stop offset="1" stop-color="${r.color2}"/></radialGradient>`);
+        else {
+          const a = (r.angulo * Math.PI) / 180, dx = Math.cos(a) / 2, dy = Math.sin(a) / 2;
+          out.push(`<linearGradient id="${id}" x1="${+(0.5 - dx).toFixed(4)}" y1="${+(0.5 - dy).toFixed(4)}" x2="${+(0.5 + dx).toFixed(4)}" y2="${+(0.5 + dy).toFixed(4)}">` +
+            `<stop offset="0" stop-color="${r.color}"/><stop offset="1" stop-color="${r.color2}"/></linearGradient>`);
+        }
+      } else {
+        const e = r.escala, m = +(e / 2).toFixed(2);
+        const dibujo = r.patron === "rayas" ? `<rect width="${e}" height="${m}" fill="${r.color}"/>`
+          : r.patron === "puntos" ? `<circle cx="${m}" cy="${m}" r="${+(e / 4).toFixed(2)}" fill="${r.color}"/>`
+          : r.patron === "cuadricula" ? `<path d="M0 0H${e}M0 0V${e}" stroke="${r.color}" stroke-width="${+(e / 8).toFixed(2)}" fill="none"/>`
+          : `<path d="M0 ${e}L${e} 0M${-m} ${m}L${m} ${-m}M${m} ${e + m}L${e + m} ${m}" stroke="${r.color}" stroke-width="${+(e / 6).toFixed(2)}"/>`;
+        out.push(`<pattern id="${id}" width="${e}" height="${e}" patternUnits="userSpaceOnUse"${r.patron === "rayas" ? ' patternTransform="rotate(45)"' : ""}>` +
+          `<rect width="${e}" height="${e}" fill="${r.color2}"/>${dibujo}</pattern>`);
+      }
+    }
+    return out.length ? "<defs>" + out.join("") + "</defs>" : "";
+  }
+
   function css(palette, scope) {
     if (!palette || !palette.styles.length) return "";
     const pre = scope ? scope + " " : "";
@@ -204,7 +254,7 @@
     for (const s of palette.styles) {
       if (!s.index) continue;
       reglas.push(`${pre}[${ATTR.ink}="${s.index}"]{stroke:${s.color} !important}`);
-      reglas.push(`${pre}[${ATTR.paint}="${s.index}"]{fill:${s.color} !important}`);
+      reglas.push(`${pre}[${ATTR.paint}="${s.index}"]{fill:${relleno(s) ? "url(#" + idRelleno(palette, s) + ")" : s.color} !important}`);
       if (s.opacity < 1) {
         reglas.push(`${pre}[${ATTR.ink}="${s.index}"],${pre}[${ATTR.paint}="${s.index}"]` +
                     `{opacity:${s.opacity}}`);
@@ -356,5 +406,5 @@
 
   animation.palette = { ATTR, SEMILLA, seed, css, usage, orphans, reassign, adopt, tag, normColor,
     hexToRgb, rgbToHex, rgbToHsv, hexToHsv, hsvToHex, harmonies,
-    parseASE, parseACO, parseGPL, parsePaletteFile, exportGPL };
+    parseASE, parseACO, parseGPL, parsePaletteFile, exportGPL, relleno, defs, PATRONES };
 })(window);

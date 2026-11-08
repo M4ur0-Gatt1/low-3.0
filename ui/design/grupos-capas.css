@@ -15,3 +15,6 @@
 /* la capa activa tiene MOVIMIENTO (animation/movimiento-capa.js): se dibuja en su lugar
    propio y la mesa lo marca, para que no sorprenda que no esté donde se ve al reproducir */
 #dzCanvas.dz-capa-movida > svg { outline: 2px dashed rgba(240, 69, 14, .55); outline-offset: -2px; }
+
+/* el pincel de tinte (animation/rellenos.js) */
+#dzCanvas.dz-pincel-tinte, #dzCanvas.dz-pincel-tinte * { cursor: crosshair !important; }

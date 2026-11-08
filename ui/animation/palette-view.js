@@ -164,6 +164,10 @@
     _menu(e, st, usage, pal) {
       document.querySelectorAll(".ls2-menu").forEach((n)=>n.remove()); const menu=el("div","ls2-menu"); menu.style.left=e.clientX+"px"; menu.style.top=e.clientY+"px";
       const action=(label,fn,disabled=false)=>{const b=el("button","",label);b.disabled=disabled;b.onclick=()=>{menu.remove();fn();};menu.appendChild(b);}; action("Usar este estilo",()=>this.setCurrent(st.index)); action("Duplicar",()=>{let name=st.name+" copia",i=2;while(pal.styleByName(name))name=st.name+` copia ${i++}`;const h=this.doc.history,tx=!!h&&!h.transaction;if(tx)h.begin("Duplicar estilo");const n=this.doc.addStyle(st.color,name);if(n&&st.meta?.group)this.doc.setStyleGroup(n.index,st.meta.group);if(tx)h.commit();if(n)this.setCurrent(n.index);},pal.locked);
+      // RELLENOS con degradé o textura (animation/rellenos.js): todo lo que use este estilo como relleno
+      const rl = global.LOW?.animation?.rellenos, conRelleno = !!(st.meta && st.meta.relleno);
+      if (rl) { action("Relleno: degradé…", () => rl.dialogoRelleno(st.index, "degrade"), pal.locked); action("Relleno: textura…", () => rl.dialogoRelleno(st.index, "textura"), pal.locked);
+        if (conRelleno) action("Relleno liso (sin degradé ni textura)", () => rl.dialogoRelleno(st.index, "liso"), pal.locked); }
       action(st.meta?.group?`Grupo: ${st.meta.group}…`:"Asignar a grupo…",async ()=>{const group=await dzPromptModal("Grupo del estilo","vacío para quitar",st.meta?.group||"");if(group!=null)this.doc.setStyleGroup(st.index,group);},pal.locked);
       const others=pal.styles.filter((s)=>s.index!==st.index); action(`Reasignar ${usage.total||0} usos…`,async ()=>{const n=await dzPromptModal("Reasignar usos","número del estilo de destino",String(others[0]?.index||""));if(n!=null)this._notice(`${this.doc.reassignStyle(st.index,parseInt(n,10))||0} elementos reasignados`);},!usage.total||!others.length||pal.locked); action("Borrar estilo",()=>this.doc.removeStyle(st.index)||this._notice("No puede borrarse mientras esté en uso"),usage.total||pal.locked);
       // STYLE-02: para un estilo EN USO, reasignar y borrar es una sola acción

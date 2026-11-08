@@ -873,6 +873,24 @@
       if(this.history){const doc=this,palId=pal.id,stId=st.id;this.history.push({label:"Cambiar grupo de estilo",domain:"anim",before,after,apply:(_dir,value)=>{const p=doc.scene.palette(palId),s=p&&p.style(stId);if(s){s.meta=s.meta||{};if(value)s.meta.group=value;else delete s.meta.group;doc.emit("palette");}}});}
       return true;
     }
+    /** El RELLENO de un estilo: liso (null), degradé o textura
+     *  (animation/palette.js, relleno). Un paso de Ctrl+Z. */
+    setStyleRelleno(index, relleno) {
+      const pal = this.palette, st = pal && pal.byIndex(index);
+      if (!st || pal.locked) return false;
+      const antes = st.meta && st.meta.relleno ? animation.clone(st.meta.relleno) : null;
+      const despues = relleno && typeof relleno === "object" ? animation.clone(relleno) : null;
+      if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+      const poner = (s, v) => { s.meta = s.meta || {}; if (v) s.meta.relleno = animation.clone(v); else delete s.meta.relleno; };
+      poner(st, despues);
+      this.touch(); this.emit("palette");
+      if (this.history) {
+        const doc = this, palId = pal.id, stId = st.id;
+        this.history.push({ label: despues ? "Relleno del estilo" : "Relleno liso", domain: "anim", before: antes, after: despues,
+          apply: (_dir, v) => { const p = doc.scene.palette(palId), s = p && p.style(stId); if (s) { poner(s, v); doc.touch(); doc.emit("palette"); } } });
+      }
+      return true;
+    }
     /** Saca un estilo únicamente cuando ya no tiene referencias. Un estilo
      *  usado primero debe reasignarse: así ningún dibujo queda apuntando a una
      *  identidad inexistente ni aparece misteriosamente con otro color. */
