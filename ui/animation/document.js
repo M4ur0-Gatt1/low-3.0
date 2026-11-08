@@ -414,6 +414,56 @@
       });
     }
 
+    /* ── MOVIMIENTO DE CAPA (scene-model.js, movData / Scene.matrizCapa) ── */
+    _cambioMov(layerId, label, fn) {
+      const ly = this.scene.layer(layerId);
+      if (!ly) return false;
+      const antes = ly.mov ? animation.clone(ly.mov) : null;
+      const borrador = ly.mov ? animation.clone(ly.mov) : { claves: {}, pivote: { x: 0, y: 0 }, padre: null };
+      if (fn(borrador) === false) return false;
+      const despues = animation.movData(borrador);
+      if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+      ly.mov = despues;
+      this.touch(); this.emit("layers"); this.emit("frame");
+      if (this.history) {
+        const doc = this;
+        this.history.push({ label, domain: "mov", before: antes, after: despues,
+          apply: (_dir, v) => { const l = doc.scene.layer(layerId); if (!l) return; l.mov = animation.movData(v); doc.touch(); doc.emit("layers"); doc.emit("frame"); } });
+      }
+      return true;
+    }
+    /** Clave del movimiento de la capa en un cuadro: { x, y, rot, esc }. */
+    ponerClaveMov(layerId, frame, valores) {
+      const f = Math.max(1, Math.round(Number(frame) || 1));
+      return this._cambioMov(layerId, "Clave de movimiento de la capa", (m) => {
+        const v = valores || {};
+        m.claves[f] = { x: Number(v.x) || 0, y: Number(v.y) || 0, rot: Number(v.rot) || 0, esc: v.esc == null ? 1 : Number(v.esc) };
+      });
+    }
+    quitarClaveMov(layerId, frame) {
+      const f = Math.round(Number(frame));
+      return this._cambioMov(layerId, "Quitar clave de movimiento", (m) => { if (!m.claves[f]) return false; delete m.claves[f]; });
+    }
+    setPivoteMov(layerId, x, y) {
+      return this._cambioMov(layerId, "Pivote de la capa", (m) => { m.pivote = { x: Number(x) || 0, y: Number(y) || 0 }; });
+    }
+    /** La capa sigue el movimiento de otra (null: deja de seguirla). Un ciclo
+     *  —emparentar con una capa que ya la sigue— se rechaza. */
+    setPadreMov(layerId, padreId) {
+      if (padreId) {
+        if (padreId === layerId || !this.scene.layer(padreId)) return false;
+        for (let p = padreId, n = 0; p && n < 200; n++) {
+          if (p === layerId) return false;
+          const l = this.scene.layer(p); p = l && l.mov ? l.mov.padre : null;
+        }
+      }
+      return this._cambioMov(layerId, padreId ? "Emparentar la capa" : "Soltar la capa de su padre", (m) => { m.padre = padreId || null; });
+    }
+    /** Sin claves ni padre: la capa vuelve a su lugar. */
+    quitarMov(layerId) {
+      return this._cambioMov(layerId, "Quitar el movimiento de la capa", (m) => { m.claves = {}; m.padre = null; });
+    }
+
     /** Una capa de SOMBRA o de LUZ encima de `baseId`, ya recortada con ella:
      *  se dibujan las formas de la sombra y oscurecen sólo al personaje. Un
      *  solo paso de historial (crear, ubicar, recortar y darle el tono). */

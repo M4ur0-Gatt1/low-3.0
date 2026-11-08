@@ -74,7 +74,13 @@
     const a = atributosMascara(id, w, h);
     return "<mask " + Object.keys(a).map((k) => k + '="' + a[k] + '"').join(" ") + ">" + contenido + "</mask>";
   }
-  const especial = (l) => (l.opacity != null && l.opacity < 1) || (l.blend && l.blend !== "normal") || l.clip || l.tone;
+  // una capa con MOVIMIENTO (Layer.mov) también: se envuelve en un <g transform>
+  const especial = (l) => (l.opacity != null && l.opacity < 1) || (l.blend && l.blend !== "normal") || l.clip || l.tone || !!l.mov;
+  /** El movimiento de la capa en ese cuadro, como atributo transform ("" si no se mueve). */
+  const movimiento = (sc, ly, frame) => {
+    const m = sc && typeof sc.matrizCapa === "function" ? sc.matrizCapa(ly.id, frame) : null;
+    return m && animation.matrizASvg ? animation.matrizASvg(m) : "";
+  };
 
   /** capaId → { content, g, piezas: Map(idOriginal → elemento) } */
   const cache = new Map();
@@ -137,9 +143,29 @@
         (conMascara ? "mask: url(#dzRecorte_" + capas[b].id + "); " : "") +
         (tono && !ly.lightTable ? "filter: url(#dzTono_" + ly.id + "); " : "") + "}");
     }
+    // LA CAPA ACTIVA CON MOVIMIENTO. Mientras se reproduce se ve en su lugar
+    // (CSS sobre sus grupos, no se escribe en el dibujo). Mientras se dibuja se
+    // ve en su lugar PROPIO, sin el movimiento: las herramientas convierten el
+    // puntero con la hoja (getScreenCTM, en 56 lugares) y moverla les haría
+    // dibujar corrido. La mesa lo avisa con un borde y un cartel.
+    const cv = document.querySelector("#dzCanvas");
+    const tr = ly ? movimiento(doc.scene, ly, doc.frame) : "";
+    const reproduciendo = !!(app() && app().playback && app().playback.playing);
+    if (tr && reproduciendo) {
+      const m = doc.scene.matrizCapa(ly.id, doc.frame);
+      reglas.push("#dzCanvas > svg > g[data-low-art] { transform: matrix(" + m.map((x) => +x.toFixed(6)).join(",") + "); transform-origin: 0 0; }");
+    }
+    if (cv) {
+      const movida = !!tr && !reproduciendo;
+      cv.classList.toggle("dz-capa-movida", movida);
+      if (movida && avisoMovida !== ly.id && typeof global.dzSetStatus === "function")
+        global.dzSetStatus("«" + ly.name + "» tiene movimiento: mientras la dibujás se ve en su lugar propio; las otras capas, la reproducción y la exportación la muestran movida");
+      avisoMovida = movida ? ly.id : null;
+    }
     const css = reglas.join("\n");
     if (st.textContent !== css) st.textContent = css;
   }
+  let avisoMovida = null;
 
   function baseConDibujo(doc, base) {
     if (!base || base.visible === false) return false;
@@ -262,6 +288,8 @@
       if (!item || item.content !== dw.content) { item = construir(dw.content, vb); cache.set(ly.id, item); }
       usados.add(ly.id);
       estiloDeCapa(item.g, ly);
+      const tr = movimiento(sc, ly, frame);
+      if (tr) item.g.setAttribute("transform", tr); else item.g.removeAttribute("transform");
       posar(doc, item, frame);
       copias.set(ly.id, item.g);
       return item.g;
@@ -325,6 +353,8 @@
           extra += ` filter="url(#lowTono_${ly.id})"`;
           op *= tono.amount; bl = fusionDeTono(tono);
         }
+        const tr = movimiento(sc, ly, frame);
+        if (tr) extra += ` transform="${tr}"`;
         if (op < 1 || bl || extra) t = `<g data-low-capa="${ly.id}"` + (op < 1 ? ` opacity="${op.toFixed(3)}"` : "") +
           (bl ? ` style="mix-blend-mode:${bl}"` : "") + extra + `>${t}</g>`;
         partes.push(t);

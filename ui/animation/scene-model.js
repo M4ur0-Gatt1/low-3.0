@@ -1050,6 +1050,54 @@
         plegado: !!g.plegado, oculto: !!g.oculto, ocultasAntes: lista(g.ocultasAntes),
         bloqueado: !!g.bloqueado, bloqueadasAntes: lista(g.bloqueadasAntes) }));
   }
+  /** EL MOVIMIENTO DE UNA CAPA ENTERA: claves por cuadro de posición (x, y),
+   *  giro (grados) y escala, alrededor de un pivote, y opcionalmente una capa
+   *  PADRE cuyo movimiento hereda (el objeto que sigue a la mano). Entre claves
+   *  se interpola lineal; antes de la primera y después de la última se
+   *  sostiene. null si la capa no se mueve. El dibujo nunca se toca: el
+   *  movimiento se aplica al mostrar y al exportar. */
+  function movData(d) {
+    if (!d || typeof d !== "object") return null;
+    const num = (v, def) => (Number.isFinite(Number(v)) ? Number(v) : def);
+    const claves = {};
+    if (d.claves && typeof d.claves === "object") for (const [k, v] of Object.entries(d.claves)) {
+      const f = Math.round(Number(k));
+      if (!(f >= 1 && f <= 100000) || !v || typeof v !== "object") continue;
+      claves[f] = { x: num(v.x, 0), y: num(v.y, 0), rot: num(v.rot, 0), esc: Math.max(0.01, Math.min(100, num(v.esc, 1))) };
+    }
+    const padre = typeof d.padre === "string" && /^[a-z0-9_-]{1,40}$/i.test(d.padre) ? d.padre : null;
+    if (!Object.keys(claves).length && !padre) return null;
+    const p = d.pivote && typeof d.pivote === "object" ? d.pivote : {};
+    return { claves, pivote: { x: num(p.x, 0), y: num(p.y, 0) }, padre };
+  }
+  /** Los valores del movimiento propio de la capa en ese cuadro. */
+  function movEn(mov, frame) {
+    const nada = { x: 0, y: 0, rot: 0, esc: 1 };
+    const fs = mov ? Object.keys(mov.claves).map(Number).sort((a, b) => a - b) : [];
+    if (!fs.length) return nada;
+    const f = Number(frame) || 1;
+    if (f <= fs[0]) return { ...mov.claves[fs[0]] };
+    if (f >= fs[fs.length - 1]) return { ...mov.claves[fs[fs.length - 1]] };
+    let i = 0; while (fs[i + 1] < f) i++;
+    const a = mov.claves[fs[i]], b = mov.claves[fs[i + 1]], t = (f - fs[i]) / (fs[i + 1] - fs[i]);
+    const l = (k) => a[k] + (b[k] - a[k]) * t;
+    return { x: l("x"), y: l("y"), rot: l("rot"), esc: l("esc") };
+  }
+  /** Matrices afines [a, b, c, d, e, f] (las de SVG). */
+  const movMul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+  function matMov(v, pivote) {
+    const r = (v.rot * Math.PI) / 180, c = Math.cos(r) * v.esc, s = Math.sin(r) * v.esc;
+    const px = pivote ? pivote.x : 0, py = pivote ? pivote.y : 0;
+    // trasladar · (pivote · girar · escalar · −pivote)
+    return [c, s, -s, c, v.x + px - (c * px - s * py), v.y + py - (s * px + c * py)];
+  }
+  const esIdentidad = (m) => !m || (Math.abs(m[0] - 1) < 1e-9 && Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9
+    && Math.abs(m[3] - 1) < 1e-9 && Math.abs(m[4]) < 1e-9 && Math.abs(m[5]) < 1e-9);
+  /** «matrix(…)» para un atributo transform, o "" si no mueve nada. */
+  function matrizASvg(m) {
+    return esIdentidad(m) ? "" : "matrix(" + m.map((x) => +x.toFixed(6)).join(" ") + ")";
+  }
   function proyectos3dData(d) {
     const out = {};
     if (d && typeof d === "object") for (const [k, v] of Object.entries(d))
@@ -1190,6 +1238,9 @@
       // GRUPO de capas (Scene.grupos, como las carpetas de Grease Pencil 3):
       // sólo el id; la Escena descarta el que apunta a un grupo que no existe
       this.grupo = typeof data.grupo === "string" && /^[a-z0-9_-]{1,40}$/i.test(data.grupo) ? data.grupo : null;
+      // MOVIMIENTO de la capa entera (como la transformación de capa de
+      // Grease Pencil o el peg de Harmony): ver movData y Scene.matrizCapa
+      this.mov = movData(data.mov);
     }
     /** Celda en un frame (1-based): número de dibujo, o null si está vacía. */
     cellAt(frame) {
@@ -1233,7 +1284,8 @@
       return { id: this.id, name: this.name, levelId: this.levelId, visible: this.visible,
                locked: this.locked, opacity: this.opacity, z: this.z, blend: this.blend,
                lightTable: this.lightTable, clip: this.clip, tone: this.tone ? { ...this.tone } : null,
-               cells: this.cells.slice(), ...(this.grupo ? { grupo: this.grupo } : {}) };
+               cells: this.cells.slice(), ...(this.grupo ? { grupo: this.grupo } : {}),
+               ...(this.mov ? { mov: clone(this.mov) } : {}) };
     }
   }
 
@@ -1374,6 +1426,21 @@
         const vivos = new Set(this.grupos.map((g) => g.id));
         for (const l of this.layers) if (l.grupo && !vivos.has(l.grupo)) l.grupo = null; }
       this.revision = Number(data.revision) || 0;
+    }
+
+    /** La matriz con que se ve la capa en ese cuadro: la de su padre (y la del
+     *  padre de su padre…) por la propia. null si no se mueve. Un ciclo de
+     *  padres (A sigue a B que sigue a A) se corta: no cuelga la app. */
+    matrizCapa(layerId, frame, _vistos) {
+      const ly = this.layer(layerId);
+      if (!ly || !ly.mov) return null;
+      const vistos = _vistos || new Set();
+      if (vistos.has(layerId)) return null;
+      vistos.add(layerId);
+      const propia = matMov(movEn(ly.mov, frame), ly.mov.pivote);
+      const delPadre = ly.mov.padre && ly.mov.padre !== layerId ? this.matrizCapa(ly.mov.padre, frame, vistos) : null;
+      const m = delPadre ? movMul(delPadre, propia) : propia;
+      return esIdentidad(m) ? null : m;
     }
 
     /** Guarda un proyecto del estudio 3D (su JSON) y devuelve su clave. No pasa
@@ -2101,6 +2168,9 @@
   animation.fuente3dData = fuente3dData;
   animation.claveProyecto3D = claveProyecto3D;
   animation.gruposData = gruposData;
+  animation.movData = movData;
+  animation.movEn = movEn;
+  animation.matrizASvg = matrizASvg;
   animation.GRUPO_COLORES = GRUPO_COLORES;
   animation.rigToJSON = rigToJSON;
   animation.rigChannelPath = rigChannelPath;

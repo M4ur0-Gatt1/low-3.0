@@ -117,6 +117,8 @@
       ...(de3d ? [{ icon: "⬡", label: "Editar en el estudio 3D…", action: () => l3d.editar(ly.id) }] : []),
       "separator",
       ...itemsDeGrupo(doc, ly),
+      ...(global.LOW.animation && global.LOW.animation.movimientoCapa
+        ? [{ icon: "✥", label: ly.mov ? "Movimiento de la capa… (tiene)" : "Movimiento de la capa…", action: () => global.LOW.animation.movimientoCapa.abrir(ly.id) }] : []),
       "separator",
       { icon: "⤒", label: "Traer al frente", disabled: arriba, action: () => mover(doc, ly, n - 1, "quedó al frente de todo") },
       { icon: "↑", label: "Subir una posición", disabled: arriba, action: () => mover(doc, ly, i + 1, "subió una posición") },

@@ -1217,6 +1217,8 @@ LOW_I18N.registrar("en", "English", {
   "Mostrar el grupo": "Show group",
   "Bloquear el grupo": "Lock group",
   "Desbloquear el grupo": "Unlock group",
+  "Movimiento de la capa…": "Layer motion…",
+  "Movimiento de la capa": "Layer motion",
   "Storyboard y generador de tomas": "Storyboard and shot generator",
   "Suave": "Soft",
   "Suavizado": "Smoothing",

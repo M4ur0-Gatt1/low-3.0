@@ -11,3 +11,7 @@
 /* las capas del grupo: sangría y la franja de su color */
 .tl2-row.tl2-engrupo .tl2-name { padding-left: 10px; box-shadow: inset 3px 0 0 var(--grupo, #888); }
 .tl2-row.tl2-engrupo.sel .tl2-name { box-shadow: inset 3px 0 0 var(--grupo, #888), inset 5px 0 0 var(--accent, #F0450E); }
+
+/* la capa activa tiene MOVIMIENTO (animation/movimiento-capa.js): se dibuja en su lugar
+   propio y la mesa lo marca, para que no sorprenda que no esté donde se ve al reproducir */
+#dzCanvas.dz-capa-movida > svg { outline: 2px dashed rgba(240, 69, 14, .55); outline-offset: -2px; }
