@@ -78,6 +78,53 @@
       return timeline.nameWidth ? timeline.nameWidth(this.view && this.view.compact) : 128;
     }
     _isCollapsed(id) { return !!(this.view && this.view.collapsed && this.view.collapsed[id]); }
+
+    /** El encabezado de un GRUPO de capas: plegar, color, nombre, ojo y
+     *  candado del grupo entero. Soltar una capa encima la mete en el grupo;
+     *  clic derecho, el menú del grupo (animation/capa-menu.js). */
+    _filaGrupo(g, doc) {
+      const fila = document.createElement("div");
+      fila.className = "tl2-row tl2-grupo" + (g.plegado ? " plegado" : "") + (g.bloqueado ? " bloqueada" : "");
+      fila.dataset.grupoRow = g.id;
+      fila.style.setProperty("--grupo", g.color);
+      const cab = document.createElement("div");
+      cab.className = "tl2-name";
+      const boton = (cls, html, titulo, fn) => {
+        const b = document.createElement("button");
+        b.className = cls; b.innerHTML = html; b.title = titulo; b.setAttribute("aria-label", titulo);
+        b.onclick = (e) => { e.stopPropagation(); fn(); };
+        return b;
+      };
+      const miembros = doc.capasDeGrupo(g.id);
+      const plegar = boton("tl2-fold", g.plegado ? "▸" : "▾", g.plegado ? "Desplegar el grupo" : "Plegar el grupo", () => doc.setGrupo(g.id, "plegado", !g.plegado));
+      const ojo = boton("tl2-eye", icon(g.oculto ? "i-eye-off" : "i-eye"), g.oculto ? "Mostrar el grupo" : "Ocultar el grupo", () => doc.setGrupo(g.id, "oculto", !g.oculto));
+      const lock = boton("tl2-eye", icon(g.bloqueado ? "i-lock" : "i-unlock"), g.bloqueado ? "Desbloquear el grupo" : "Bloquear el grupo", () => doc.setGrupo(g.id, "bloqueado", !g.bloqueado));
+      const chip = document.createElement("span"); chip.className = "tl2-grupo-color";
+      const txt = document.createElement("span"); txt.className = "tl2-grupo-nombre";
+      txt.textContent = g.nombre + " (" + miembros.length + ")";
+      cab.title = "Grupo «" + g.nombre + "» · doble clic: renombrar · clic derecho: más opciones";
+      cab.append(plegar, ojo, lock, chip, txt);
+      cab.ondblclick = async (e) => {
+        if (e.target.closest("button") || typeof global.dzPromptModal !== "function") return;
+        const n = await global.dzPromptModal("Nombre del grupo", "nombre", g.nombre);
+        if (n) doc.setGrupo(g.id, "nombre", n);
+      };
+      // soltar una capa (arrastrada por su nombre) sobre el grupo la mete en él
+      cab.ondragover = (e) => { if ([...e.dataTransfer.types].includes("application/x-low-capa")) { e.preventDefault(); fila.classList.add("soltar"); } };
+      cab.ondragleave = () => fila.classList.remove("soltar");
+      cab.ondrop = (e) => {
+        fila.classList.remove("soltar");
+        const capa = e.dataTransfer.getData("application/x-low-capa");
+        if (!capa) return;
+        e.preventDefault();
+        doc.moverAGrupo(capa, g.id);
+      };
+      fila.appendChild(cab);
+      const track = document.createElement("div");
+      track.className = "tl2-track tl2-grupo-track";
+      fila.appendChild(track);
+      return fila;
+    }
     _toggleCollapsed(id) {
       const collapsed = Object.assign({}, this.view.collapsed || {});
       if (collapsed[id]) delete collapsed[id]; else collapsed[id] = true;
@@ -504,11 +551,19 @@
          el modelo el índice 0 es la de más atrás (así compone el export), así
          que las filas se recorren al revés. La X-sheet sigue como OpenToonz:
          la columna de más a la derecha es la de adelante. */
+      // GRUPOS DE CAPAS: un encabezado antes de la primera capa de cada grupo
+      // (la de más adelante); plegado, sus capas no se muestran acá
+      let grupoAnterior = null;
       for (const ly of visibleLayers.slice().reverse()) {
+        const grupo = ly.grupo && typeof doc.grupo === "function" ? doc.grupo(ly.grupo) : null;
+        if (grupo && grupo.id !== grupoAnterior) cont.appendChild(this._filaGrupo(grupo, doc));
+        grupoAnterior = grupo ? grupo.id : null;
+        if (grupo && grupo.plegado) continue;
         const fila = document.createElement("div");
         fila.className = "tl2-row" + (ly.id === doc.layerId ? " sel" : "")
           + (this._isCollapsed(ly.id) ? " collapsed" : "")
-          + (ly.locked ? " bloqueada" : "") + (ly.lightTable ? " luz" : "");
+          + (ly.locked ? " bloqueada" : "") + (ly.lightTable ? " luz" : "") + (grupo ? " tl2-engrupo" : "");
+        if (grupo) fila.style.setProperty("--grupo", grupo.color);
         fila.dataset.layerRow = ly.id;
 
         const cab = document.createElement("div");

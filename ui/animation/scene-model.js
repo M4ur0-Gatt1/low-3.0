@@ -1033,6 +1033,23 @@
     for (let i = 0; i < json.length; i++) { h ^= json.charCodeAt(i); h = Math.imul(h, 0x01000193); }
     return "p" + (h >>> 0).toString(16).padStart(8, "0") + "-" + json.length.toString(36);
   }
+  /** LOS GRUPOS DE CAPAS (carpetas, como en Grease Pencil 3, Photoshop o
+   *  Harmony). Un grupo tiene nombre y color, se pliega en la línea de tiempo,
+   *  y se oculta o se bloquea entero. Ocultar o bloquear el grupo oculta o
+   *  bloquea sus capas DE VERDAD (así lo respeta todo LOW sin excepción), y el
+   *  grupo recuerda cuáles ya estaban ocultas o bloqueadas por su cuenta
+   *  (`ocultasAntes`, `bloqueadasAntes`) para dejarlas así al volver. */
+  const GRUPO_COLORES = ["#e8833a", "#4aa3df", "#7bc47f", "#c77dd1", "#e0b341", "#df5d57"];
+  function gruposData(d) {
+    const ids = new Set();
+    const lista = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 500) : []);
+    return (Array.isArray(d) ? d : []).slice(0, 100).filter((g) => g && typeof g === "object"
+      && typeof g.id === "string" && /^[a-z0-9_-]{1,40}$/i.test(g.id) && !ids.has(g.id) && ids.add(g.id))
+      .map((g, i) => ({ id: g.id, nombre: String(g.nombre || "Grupo " + (i + 1)).slice(0, 60),
+        color: typeof g.color === "string" && /^#[0-9a-f]{6}$/i.test(g.color) ? g.color : GRUPO_COLORES[i % GRUPO_COLORES.length],
+        plegado: !!g.plegado, oculto: !!g.oculto, ocultasAntes: lista(g.ocultasAntes),
+        bloqueado: !!g.bloqueado, bloqueadasAntes: lista(g.bloqueadasAntes) }));
+  }
   function proyectos3dData(d) {
     const out = {};
     if (d && typeof d === "object") for (const [k, v] of Object.entries(d))
@@ -1170,6 +1187,9 @@
       this.clip = !!data.clip;
       this.tone = normalizeTone(data.tone);
       this.cells = Array.isArray(data.cells) ? data.cells.slice() : [];
+      // GRUPO de capas (Scene.grupos, como las carpetas de Grease Pencil 3):
+      // sólo el id; la Escena descarta el que apunta a un grupo que no existe
+      this.grupo = typeof data.grupo === "string" && /^[a-z0-9_-]{1,40}$/i.test(data.grupo) ? data.grupo : null;
     }
     /** Celda en un frame (1-based): número de dibujo, o null si está vacía. */
     cellAt(frame) {
@@ -1213,7 +1233,7 @@
       return { id: this.id, name: this.name, levelId: this.levelId, visible: this.visible,
                locked: this.locked, opacity: this.opacity, z: this.z, blend: this.blend,
                lightTable: this.lightTable, clip: this.clip, tone: this.tone ? { ...this.tone } : null,
-               cells: this.cells.slice() };
+               cells: this.cells.slice(), ...(this.grupo ? { grupo: this.grupo } : {}) };
     }
   }
 
@@ -1346,6 +1366,13 @@
       this.perspective = perspectiveData(data.perspective);
       // los proyectos del estudio 3D de donde salieron niveles (ver fuente3dData)
       this.proyectos3d = proyectos3dData(data.proyectos3d);
+      // los grupos sin capas no se guardan; una capa que apunta a un grupo que
+      // no existe queda suelta
+      this.grupos = gruposData(data.grupos);
+      { const usados = new Set(this.layers.map((l) => l.grupo).filter(Boolean));
+        this.grupos = this.grupos.filter((g) => usados.has(g.id));
+        const vivos = new Set(this.grupos.map((g) => g.id));
+        for (const l of this.layers) if (l.grupo && !vivos.has(l.grupo)) l.grupo = null; }
       this.revision = Number(data.revision) || 0;
     }
 
@@ -2029,7 +2056,8 @@
                storyboard: clone(this.storyboard), audio: this.audio,
                rig: rigToJSON(this.rig), perspective: clone(this.perspective), revision: this.revision,
                guias: (this.guias || []).map((g) => ({ axis: g.axis, u: g.u })),
-               ...this.proyectos3dUsados() };
+               ...this.proyectos3dUsados(),
+               ...(this.grupos && this.grupos.length ? { grupos: clone(this.grupos) } : {}) };
     }
     /** { proyectos3d } con sólo los proyectos que algún nivel usa ({} si ninguno). */
     proyectos3dUsados() {
@@ -2072,6 +2100,8 @@
   animation.perspectiveData = perspectiveData;
   animation.fuente3dData = fuente3dData;
   animation.claveProyecto3D = claveProyecto3D;
+  animation.gruposData = gruposData;
+  animation.GRUPO_COLORES = GRUPO_COLORES;
   animation.rigToJSON = rigToJSON;
   animation.rigChannelPath = rigChannelPath;
   animation.rigEaseData = rigEaseData;

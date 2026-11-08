@@ -1,0 +1,13 @@
+/* Grupos de capas en la línea de tiempo (ui/animation/timeline-view.js,
+   _filaGrupo). Archivo aparte: no se edita ui/app.css. */
+
+.tl2-row.tl2-grupo { background: color-mix(in srgb, var(--grupo, #888) 14%, transparent); }
+.tl2-row.tl2-grupo .tl2-name { font-weight: 600; color: var(--fg, #fff); box-shadow: inset 3px 0 0 var(--grupo, #888); cursor: default; }
+.tl2-row.tl2-grupo.soltar .tl2-name { outline: 1px dashed var(--grupo, #888); outline-offset: -2px; }
+.tl2-row.tl2-grupo .tl2-fold { flex: none; width: 16px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 11px; }
+.tl2-grupo-color { flex: none; width: 9px; height: 9px; border-radius: 3px; background: var(--grupo, #888); }
+.tl2-grupo-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl2-grupo-track { flex: 1 1 auto; }
+/* las capas del grupo: sangría y la franja de su color */
+.tl2-row.tl2-engrupo .tl2-name { padding-left: 10px; box-shadow: inset 3px 0 0 var(--grupo, #888); }
+.tl2-row.tl2-engrupo.sel .tl2-name { box-shadow: inset 3px 0 0 var(--grupo, #888), inset 5px 0 0 var(--accent, #F0450E); }
