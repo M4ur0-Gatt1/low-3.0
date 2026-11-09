@@ -1022,6 +1022,7 @@
       params.cada = entero(p.cada, 1, 4, 2);
       params.formato = p.formato === "png" ? "png" : "jpg";
       params.calidad = entero(p.calidad, 50, 100, 90);
+      if (p.lineArt === true) params.lineArt = true;     // la toma se mandó sólo con líneas (Line Art)
     }
     return { tipo: d.tipo, proyecto: d.proyecto, nombre: String(d.nombre || "").slice(0, 60), params,
              fecha: typeof d.fecha === "string" ? d.fecha.slice(0, 40) : "" };
@@ -1032,6 +1033,85 @@
     let h = 0x811c9dc5;
     for (let i = 0; i < json.length; i++) { h ^= json.charCodeAt(i); h = Math.imul(h, 0x01000193); }
     return "p" + (h >>> 0).toString(16).padStart(8, "0") + "-" + json.length.toString(36);
+  }
+  /** LOS GRUPOS DE CAPAS (carpetas, como en Grease Pencil 3, Photoshop o
+   *  Harmony). Un grupo tiene nombre y color, se pliega en la línea de tiempo,
+   *  y se oculta o se bloquea entero. Ocultar o bloquear el grupo oculta o
+   *  bloquea sus capas DE VERDAD (así lo respeta todo LOW sin excepción), y el
+   *  grupo recuerda cuáles ya estaban ocultas o bloqueadas por su cuenta
+   *  (`ocultasAntes`, `bloqueadasAntes`) para dejarlas así al volver. */
+  const GRUPO_COLORES = ["#e8833a", "#4aa3df", "#7bc47f", "#c77dd1", "#e0b341", "#df5d57"];
+  function gruposData(d) {
+    const ids = new Set();
+    const lista = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 500) : []);
+    return (Array.isArray(d) ? d : []).slice(0, 100).filter((g) => g && typeof g === "object"
+      && typeof g.id === "string" && /^[a-z0-9_-]{1,40}$/i.test(g.id) && !ids.has(g.id) && ids.add(g.id))
+      .map((g, i) => ({ id: g.id, nombre: String(g.nombre || "Grupo " + (i + 1)).slice(0, 60),
+        color: typeof g.color === "string" && /^#[0-9a-f]{6}$/i.test(g.color) ? g.color : GRUPO_COLORES[i % GRUPO_COLORES.length],
+        plegado: !!g.plegado, oculto: !!g.oculto, ocultasAntes: lista(g.ocultasAntes),
+        bloqueado: !!g.bloqueado, bloqueadasAntes: lista(g.bloqueadasAntes) }));
+  }
+  /** EL MOVIMIENTO DE UNA CAPA ENTERA: claves por cuadro de posición (x, y),
+   *  giro (grados) y escala, alrededor de un pivote, y opcionalmente una capa
+   *  PADRE cuyo movimiento hereda (el objeto que sigue a la mano). Entre claves
+   *  se interpola lineal; antes de la primera y después de la última se
+   *  sostiene. null si la capa no se mueve. El dibujo nunca se toca: el
+   *  movimiento se aplica al mostrar y al exportar. */
+  function movData(d) {
+    if (!d || typeof d !== "object") return null;
+    const num = (v, def) => (Number.isFinite(Number(v)) ? Number(v) : def);
+    const claves = {};
+    if (d.claves && typeof d.claves === "object") for (const [k, v] of Object.entries(d.claves)) {
+      const f = Math.round(Number(k));
+      if (!(f >= 1 && f <= 100000) || !v || typeof v !== "object") continue;
+      claves[f] = { x: num(v.x, 0), y: num(v.y, 0), rot: num(v.rot, 0), esc: Math.max(0.01, Math.min(100, num(v.esc, 1))) };
+    }
+    // el PADRE es otra capa o un HUESO del rig («hueso:<id>»); con un hueso,
+    // `bind` es la inversa de su matriz al pegarla (así no salta de lugar).
+    // MIRA A: la capa gira alrededor de su pivote apuntando al de otra capa.
+    const padre = typeof d.padre === "string" && /^(hueso:[a-z0-9_-]{1,60}|[a-z0-9_-]{1,40})$/i.test(d.padre) ? d.padre : null;
+    const mirarA = typeof d.mirarA === "string" && /^[a-z0-9_-]{1,40}$/i.test(d.mirarA) ? d.mirarA : null;
+    if (!Object.keys(claves).length && !padre && !mirarA) return null;
+    const p = d.pivote && typeof d.pivote === "object" ? d.pivote : {};
+    const out = { claves, pivote: { x: num(p.x, 0), y: num(p.y, 0) }, padre };
+    if (padre && padre.startsWith("hueso:") && Array.isArray(d.bind) && d.bind.length === 6 && d.bind.every((v) => Number.isFinite(Number(v))))
+      out.bind = d.bind.map(Number);
+    if (mirarA) out.mirarA = mirarA;
+    return out;
+  }
+  /** Inversa de una matriz afín (null si no se puede invertir). */
+  function movInv(m) {
+    const det = m[0] * m[3] - m[1] * m[2];
+    if (Math.abs(det) < 1e-12) return null;
+    return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det];
+  }
+  /** Los valores del movimiento propio de la capa en ese cuadro. */
+  function movEn(mov, frame) {
+    const nada = { x: 0, y: 0, rot: 0, esc: 1 };
+    const fs = mov ? Object.keys(mov.claves).map(Number).sort((a, b) => a - b) : [];
+    if (!fs.length) return nada;
+    const f = Number(frame) || 1;
+    if (f <= fs[0]) return { ...mov.claves[fs[0]] };
+    if (f >= fs[fs.length - 1]) return { ...mov.claves[fs[fs.length - 1]] };
+    let i = 0; while (fs[i + 1] < f) i++;
+    const a = mov.claves[fs[i]], b = mov.claves[fs[i + 1]], t = (f - fs[i]) / (fs[i + 1] - fs[i]);
+    const l = (k) => a[k] + (b[k] - a[k]) * t;
+    return { x: l("x"), y: l("y"), rot: l("rot"), esc: l("esc") };
+  }
+  /** Matrices afines [a, b, c, d, e, f] (las de SVG). */
+  const movMul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+  function matMov(v, pivote) {
+    const r = (v.rot * Math.PI) / 180, c = Math.cos(r) * v.esc, s = Math.sin(r) * v.esc;
+    const px = pivote ? pivote.x : 0, py = pivote ? pivote.y : 0;
+    // trasladar · (pivote · girar · escalar · −pivote)
+    return [c, s, -s, c, v.x + px - (c * px - s * py), v.y + py - (s * px + c * py)];
+  }
+  const esIdentidad = (m) => !m || (Math.abs(m[0] - 1) < 1e-9 && Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9
+    && Math.abs(m[3] - 1) < 1e-9 && Math.abs(m[4]) < 1e-9 && Math.abs(m[5]) < 1e-9);
+  /** «matrix(…)» para un atributo transform, o "" si no mueve nada. */
+  function matrizASvg(m) {
+    return esIdentidad(m) ? "" : "matrix(" + m.map((x) => +x.toFixed(6)).join(" ") + ")";
   }
   function proyectos3dData(d) {
     const out = {};
@@ -1170,6 +1250,16 @@
       this.clip = !!data.clip;
       this.tone = normalizeTone(data.tone);
       this.cells = Array.isArray(data.cells) ? data.cells.slice() : [];
+      // GRUPO de capas (Scene.grupos, como las carpetas de Grease Pencil 3):
+      // sólo el id; la Escena descarta el que apunta a un grupo que no existe
+      this.grupo = typeof data.grupo === "string" && /^[a-z0-9_-]{1,40}$/i.test(data.grupo) ? data.grupo : null;
+      // MOVIMIENTO de la capa entera (como la transformación de capa de
+      // Grease Pencil o el peg de Harmony): ver movData y Scene.matrizCapa
+      this.mov = movData(data.mov);
+      // MODIFICADORES Y EFECTOS (animation/modificadores.js): cambian cómo se
+      // ve la capa sin tocar sus dibujos. Ese archivo se carga antes que éste.
+      const mods = animation.modificadores ? animation.modificadores.modsData(data.mods) : [];
+      this.mods = mods.length ? mods : null;
     }
     /** Celda en un frame (1-based): número de dibujo, o null si está vacía. */
     cellAt(frame) {
@@ -1213,7 +1303,9 @@
       return { id: this.id, name: this.name, levelId: this.levelId, visible: this.visible,
                locked: this.locked, opacity: this.opacity, z: this.z, blend: this.blend,
                lightTable: this.lightTable, clip: this.clip, tone: this.tone ? { ...this.tone } : null,
-               cells: this.cells.slice() };
+               cells: this.cells.slice(), ...(this.grupo ? { grupo: this.grupo } : {}),
+               ...(this.mov ? { mov: clone(this.mov) } : {}),
+               ...(this.mods && this.mods.length ? { mods: clone(this.mods) } : {}) };
     }
   }
 
@@ -1346,7 +1438,49 @@
       this.perspective = perspectiveData(data.perspective);
       // los proyectos del estudio 3D de donde salieron niveles (ver fuente3dData)
       this.proyectos3d = proyectos3dData(data.proyectos3d);
+      // los grupos sin capas no se guardan; una capa que apunta a un grupo que
+      // no existe queda suelta
+      this.grupos = gruposData(data.grupos);
+      { const usados = new Set(this.layers.map((l) => l.grupo).filter(Boolean));
+        this.grupos = this.grupos.filter((g) => usados.has(g.id));
+        const vivos = new Set(this.grupos.map((g) => g.id));
+        for (const l of this.layers) if (l.grupo && !vivos.has(l.grupo)) l.grupo = null; }
       this.revision = Number(data.revision) || 0;
+    }
+
+    /** La matriz con que se ve la capa en ese cuadro: la de su padre (y la del
+     *  padre de su padre…) por la propia. null si no se mueve. Un ciclo de
+     *  padres (A sigue a B que sigue a A) se corta: no cuelga la app. */
+    matrizCapa(layerId, frame, _vistos) {
+      const ly = this.layer(layerId);
+      if (!ly || !ly.mov) return null;
+      const vistos = _vistos || new Set();
+      if (vistos.has(layerId)) return null;
+      vistos.add(layerId);
+      const propia = matMov(movEn(ly.mov, frame), ly.mov.pivote);
+      let delPadre = null;
+      if (ly.mov.padre && ly.mov.padre.startsWith("hueso:")) {
+        // un HUESO del rig: su matriz en ese cuadro por la inversa de la del momento de pegarla
+        let b = null;
+        try { b = typeof this.rigWorldMatrix === "function" ? this.rigWorldMatrix(ly.mov.padre.slice(6), frame) : null; } catch (_) { b = null; }
+        if (b) delPadre = ly.mov.bind ? movMul(b, ly.mov.bind) : b;
+      } else if (ly.mov.padre && ly.mov.padre !== layerId) delPadre = this.matrizCapa(ly.mov.padre, frame, vistos);
+      let m = delPadre ? movMul(delPadre, propia) : propia;
+      // MIRA A: girar alrededor del propio pivote (ya movido) hacia el de la otra capa
+      if (ly.mov.mirarA && ly.mov.mirarA !== layerId) {
+        const otra = this.layer(ly.mov.mirarA);
+        if (otra) {
+          const mo = this.matrizCapa(otra.id, frame, vistos) || [1, 0, 0, 1, 0, 0];
+          const po = otra.mov ? otra.mov.pivote : { x: 0, y: 0 }, pp = ly.mov.pivote;
+          const a = [m[0] * pp.x + m[2] * pp.y + m[4], m[1] * pp.x + m[3] * pp.y + m[5]];
+          const b = [mo[0] * po.x + mo[2] * po.y + mo[4], mo[1] * po.x + mo[3] * po.y + mo[5]];
+          if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-6) {
+            const ang = Math.atan2(b[1] - a[1], b[0] - a[0]), c = Math.cos(ang), s = Math.sin(ang);
+            m = movMul([c, s, -s, c, a[0] - (c * a[0] - s * a[1]), a[1] - (s * a[0] + c * a[1])], m);
+          }
+        }
+      }
+      return esIdentidad(m) ? null : m;
     }
 
     /** Guarda un proyecto del estudio 3D (su JSON) y devuelve su clave. No pasa
@@ -2029,7 +2163,8 @@
                storyboard: clone(this.storyboard), audio: this.audio,
                rig: rigToJSON(this.rig), perspective: clone(this.perspective), revision: this.revision,
                guias: (this.guias || []).map((g) => ({ axis: g.axis, u: g.u })),
-               ...this.proyectos3dUsados() };
+               ...this.proyectos3dUsados(),
+               ...(this.grupos && this.grupos.length ? { grupos: clone(this.grupos) } : {}) };
     }
     /** { proyectos3d } con sólo los proyectos que algún nivel usa ({} si ninguno). */
     proyectos3dUsados() {
@@ -2072,6 +2207,12 @@
   animation.perspectiveData = perspectiveData;
   animation.fuente3dData = fuente3dData;
   animation.claveProyecto3D = claveProyecto3D;
+  animation.gruposData = gruposData;
+  animation.movData = movData;
+  animation.movEn = movEn;
+  animation.matrizASvg = matrizASvg;
+  animation.movInv = movInv;
+  animation.GRUPO_COLORES = GRUPO_COLORES;
   animation.rigToJSON = rigToJSON;
   animation.rigChannelPath = rigChannelPath;
   animation.rigEaseData = rigEaseData;

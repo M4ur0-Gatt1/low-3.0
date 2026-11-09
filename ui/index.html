@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="ai/chat-flow.css?v=3.56.0">
 <link rel="stylesheet" href="design/studio-polish.css?v=3.56.0">
 <link rel="stylesheet" href="design/session-recorder.css?v=3.56.0">
+  <link rel="stylesheet" href="design/grupos-capas.css?v=3.56.0">
 <link rel="stylesheet" href="design/mesa-de-luz.css?v=3.56.0">
 <link rel="stylesheet" href="design/camara-2d.css?v=3.56.0">
 <link rel="stylesheet" href="design/ae-camera.css?v=3.56.0">
@@ -385,6 +386,7 @@
       <span data-act="guardar">Guardar documento <kbd>Ctrl+S</kbd></span>
       <span data-act="escena-guardar-como">Guardar documento como… <kbd>Ctrl+Shift+S</kbd></span>
       <span data-act="importar">Importar imagen de referencia…</span>
+      <span data-act="importar-capas" title="Cada capa de un PSD (Photoshop) o un ORA (Krita, GIMP) entra como una capa de LOW, en su lugar y en un grupo">Importar capas (PSD, ORA)…</span>
       <span data-act="exportar">Exportar animación… <kbd>MP4 · PNG · XML</kbd></span>
       <span data-act="vistaprevia">Vista previa de la exportación…</span>
       <span data-act="navegador">Abrir en el navegador</span>
@@ -404,6 +406,9 @@
       <span data-act="espejar-v">Espejar vertical <kbd>Shift+V</kbd></span>
       <hr><span data-act="elegir-todo">Elegir todo <kbd>Ctrl+A</kbd></span>
       <span data-act="elegir-capa">Elegir toda la capa (todos los cuadros) <kbd>Ctrl+Shift+A</kbd></span>
+      <span data-act="tenir" title="Lleva lo elegido hacia un color sin cambiar la paleta (como el pincel de Tinte de Blender)">Teñir lo elegido…</span>
+      <span data-act="pincel-tinte">Pincel de tinte <kbd>clic: teñir · Esc</kbd></span>
+      <span data-act="quitar-tinte">Quitar el tinte</span>
       <span data-act="agrupar">Agrupar <kbd>Ctrl+G</kbd></span>
       <span data-act="desagrupar">Desagrupar <kbd>Ctrl+Shift+G</kbd></span>
       <hr><span data-act="preferencias">Preferencias y atajos…</span>
@@ -475,6 +480,9 @@
       <span data-act="insertar">Insertar cuadro <kbd>Shift: en blanco</kbd></span>
       <hr><span data-act="clave">Marcar fotograma clave</span>
       <span data-act="intercalar">Intercalar…</span>
+      <span data-act="intercalar-secuencia" title="Rellena los sostenidos entre cada clave y la siguiente, sin mover el timing (como Interpolate Sequence de Blender)">Intercalar toda la secuencia… <kbd>como Blender</kbd></span>
+      <span data-act="mover-varios" title="Corre, gira o escala el dibujo de la capa en un tramo de cuadros a la vez, con atenuación (multiframe de Blender)">Mover varios cuadros…</span>
+      <span data-act="barrido" title="Copias detrás del dibujo en la dirección del movimiento (smear frames)">Cuadro de barrido (smear)…</span>
       <span data-act="interpolar">Interpolación de movimiento</span>
       <span data-act="recorrido">Seguir un recorrido…</span>
       <span data-act="acompanar">Acompañar el movimiento <kbd>Alt+P</kbd></span>
@@ -1285,6 +1293,7 @@
 <script src="animation/toma-al-documento.js?v=3.56.0"></script>
 <script src="animation/palette.js?v=3.56.0"></script>
 <script src="animation/coloring.js?v=3.56.0"></script>
+<script src="animation/modificadores.js?v=3.56.0"></script>
 <script src="animation/scene-model.js?v=3.56.0"></script>
 <script src="animation/rig-policy.js?v=3.56.0"></script>
 <script src="rigging/binding.js?v=3.56.0"></script>
@@ -1433,6 +1442,8 @@
 <script src="animation/nueva-capa.js?v=3.56.0"></script>
 <script src="animation/cambiar-capa.js?v=3.56.0"></script>
 <script src="animation/capas-en-mesa.js?v=3.56.0"></script>
+<script src="animation/rellenos.js?v=3.56.0"></script>
+<script src="animation/importar-capas.js?v=3.56.0"></script>
 <script src="animation/capas-propiedades.js?v=3.56.0"></script>
 <script src="animation/reproduccion-fluida.js?v=3.56.0"></script>
 <script src="panels/capas-tope.js?v=3.56.0"></script>
@@ -1442,6 +1453,10 @@
 <script src="animation/color-elegido.js?v=3.56.0"></script>
 <script src="workspace/mesa-sola.js?v=3.56.0"></script>
 <script src="animation/capa-menu.js?v=3.56.0"></script>
+<script src="animation/movimiento-capa.js?v=3.56.0"></script>
+<script src="animation/modificadores-ui.js?v=3.56.0"></script>
+<script src="animation/intercalar-secuencia.js?v=3.56.0"></script>
+<script src="animation/varios-cuadros.js?v=3.56.0"></script>
 <script src="drawing/cortar-pegar.js?v=3.56.0"></script>
 <script src="drawing/espejar.js?v=3.56.0"></script>
 <script src="drawing/paralelas.js?v=3.56.0"></script>

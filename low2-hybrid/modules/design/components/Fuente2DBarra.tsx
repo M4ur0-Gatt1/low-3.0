@@ -11,7 +11,7 @@ import { cuadrosARender } from '../engine/toma3d';
    escena vuelve. «Cancelar» vuelve sin mandar nada. */
 
 type Tipo = 'encuadre' | 'planos' | 'toma';
-type Params = { cajas?: boolean; planos?: number; cada?: number; formato?: 'jpg' | 'png'; calidad?: number };
+type Params = { cajas?: boolean; planos?: number; cada?: number; formato?: 'jpg' | 'png'; calidad?: number; lineArt?: boolean };
 type Pedido = { tipo: Tipo; nombre: string; params: Params; capa: string };
 
 const RESPUESTAS = ['low:sent-to-2d', 'low:planos-recibidos', 'low:toma-recibida'];
@@ -74,7 +74,7 @@ export function Fuente2DBarra({ engine }: { engine: React.MutableRefObject<WebGL
       if (!toma.claves.length) { setAviso('La toma no tiene claves de cámara'); return; }
       setOcupado(true);
       const fotos = await e.tomaRender(cuadrosARender(toma, op.cada || 2), w, h,
-        { formato: op.formato || 'jpg', calidad: (op.calidad || 90) / 100, cajas: op.cajas }, (k, n) => setAviso(`Renderizando ${k} de ${n}…`));
+        { formato: op.formato || 'jpg', calidad: (op.calidad || 90) / 100, cajas: op.cajas, lineArt: op.lineArt }, (k, n) => setAviso(`Renderizando ${k} de ${n}…`));
       if (!fotos.length) { setOcupado(false); setAviso('No se pudo renderizar la toma'); return; }
       // el MISMO nombre que la capa del 2D, aunque la toma se haya renombrado acá
       window.parent.postMessage({ type: 'low:send-toma', nombre: pedido.nombre || toma.nombre, width: w, height: h, cuadros: toma.cuadros,

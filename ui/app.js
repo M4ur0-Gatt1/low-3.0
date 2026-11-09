@@ -4374,7 +4374,7 @@ function dzRasterize(svgText, maxPx) {
 function dzPromptModal(title, ph, def) {
   return new Promise(resolve => {
     openModal(`<h2>${title}</h2>
-      <textarea id="dzPrIn" class="cmp-field" rows="3" spellcheck="false" placeholder="${(ph || "").replace(/"/g, "&quot;")}">${def || ""}</textarea>
+      <textarea id="dzPrIn" class="cmp-field" rows="3" spellcheck="false" placeholder="${(ph || "").replace(/"/g, "&quot;")}">${String(def || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</textarea>
       <div class="m-actions"><button class="ghost" id="dzPrX">Cancelar</button>
       <button class="primary" id="dzPrOk">Aceptar</button></div>`);
     setTimeout(() => { const i = $("#dzPrIn"); if (i) i.focus(); }, 30);

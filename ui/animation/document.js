@@ -276,6 +276,235 @@
         apply: (_dir, value) => doc._setLayersState(value) });
     }
 
+    /* ── GRUPOS DE CAPAS (scene-model.js, gruposData) ─────────────────────
+       Un grupo es un BLOQUE contiguo del apilado: agrupar junta las capas
+       donde está la de más adelante. Ocultar o bloquear el grupo oculta o
+       bloquea sus capas de verdad y recuerda cuáles ya lo estaban. Cada
+       cambio es un paso de Ctrl+Z que vuelve el orden, el grupo, la
+       visibilidad y el bloqueo de cada capa (_setLayersState sólo vuelve el
+       orden: reusa las capas vivas). */
+    _gruposFoto() {
+      return { grupos: animation.clone(this.scene.grupos || []), layerId: this.layerId,
+        capas: this.scene.layers.map((l) => ({ id: l.id, grupo: l.grupo || null, visible: l.visible, locked: l.locked })) };
+    }
+    _gruposAplicar(f) {
+      const porId = new Map(this.scene.layers.map((l) => [l.id, l]));
+      const orden = f.capas.map((c) => porId.get(c.id)).filter(Boolean);
+      this.scene.layers = orden.concat(this.scene.layers.filter((l) => !orden.includes(l)));
+      for (const c of f.capas) { const l = porId.get(c.id); if (l) { l.grupo = c.grupo; l.visible = c.visible; l.locked = c.locked; } }
+      this.scene.grupos = animation.gruposData(f.grupos);
+      if (this.scene.layer(f.layerId)) this.layerId = f.layerId;
+      this.touch(); this.emit("layers"); this.emit("frame");
+    }
+    _cambioGrupos(label, fn) {
+      if (!this.scene.grupos) this.scene.grupos = [];
+      const antes = this._gruposFoto();
+      const r = fn();
+      if (r === false || r == null) { this._gruposAplicar(antes); return r == null ? null : false; }
+      const despues = this._gruposFoto();
+      if (JSON.stringify(antes) === JSON.stringify(despues)) return r;
+      this.touch(); this.emit("layers"); this.emit("frame");
+      if (this.history) {
+        const doc = this;
+        this.history.push({ label, domain: "grupos", before: antes, after: despues, apply: (_dir, v) => doc._gruposAplicar(v) });
+      }
+      return r;
+    }
+    grupo(id) { return (this.scene.grupos || []).find((g) => g.id === id) || null; }
+    capasDeGrupo(id) { return this.scene.layers.filter((l) => l.grupo === id); }
+    /** Junta las capas de `ids` como bloque, encima de donde está la de más
+     *  adelante de ellas, conservando su orden. */
+    _juntar(ids, encimaDe) {
+      const capas = this.scene.layers;
+      const miembros = capas.filter((l) => ids.includes(l.id));
+      const resto = capas.filter((l) => !ids.includes(l.id));
+      let donde = encimaDe ? resto.indexOf(encimaDe) + 1 : resto.length;
+      if (!encimaDe) {
+        const tope = Math.max(...miembros.map((m) => capas.indexOf(m)));
+        donde = resto.filter((l) => capas.indexOf(l) < tope).length;
+      }
+      resto.splice(donde, 0, ...miembros);
+      this.scene.layers = resto;
+    }
+    /** Grupo nuevo con esas capas. Devuelve su id. */
+    crearGrupo(nombre, ids) {
+      const validas = (ids || []).filter((id) => this.scene.layer(id));
+      if (!validas.length) return null;
+      return this._cambioGrupos("Agrupar capas", () => {
+        const g = animation.gruposData([{ id: "grp_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          nombre: String(nombre || "").trim() || "Grupo " + ((this.scene.grupos || []).length + 1),
+          color: animation.GRUPO_COLORES[(this.scene.grupos || []).length % animation.GRUPO_COLORES.length] }])[0];
+        for (const id of validas) this._sacarDeGrupo(this.scene.layer(id));
+        this.scene.grupos.push(g);
+        for (const id of validas) this.scene.layer(id).grupo = g.id;
+        this._juntar(validas);
+        this._limpiarGruposVacios();
+        return g.id;
+      });
+    }
+    /** Saca una capa de su grupo devolviéndole lo que el grupo le había cambiado. */
+    _sacarDeGrupo(ly) {
+      const g = ly && ly.grupo && this.grupo(ly.grupo);
+      if (!g) { if (ly) ly.grupo = null; return; }
+      if (g.oculto && !g.ocultasAntes.includes(ly.id)) ly.visible = true;
+      if (g.bloqueado && !g.bloqueadasAntes.includes(ly.id)) ly.locked = false;
+      g.ocultasAntes = g.ocultasAntes.filter((x) => x !== ly.id);
+      g.bloqueadasAntes = g.bloqueadasAntes.filter((x) => x !== ly.id);
+      ly.grupo = null;
+    }
+    _limpiarGruposVacios() {
+      const usados = new Set(this.scene.layers.map((l) => l.grupo).filter(Boolean));
+      this.scene.grupos = this.scene.grupos.filter((g) => usados.has(g.id));
+    }
+    /** Mete una capa en un grupo (arriba de todo del grupo), o la saca si
+     *  `grupoId` es null (queda justo encima del bloque). */
+    moverAGrupo(capaId, grupoId) {
+      const ly = this.scene.layer(capaId);
+      if (!ly || (grupoId && !this.grupo(grupoId)) || (ly.grupo || null) === (grupoId || null)) return false;
+      return this._cambioGrupos(grupoId ? "Mover la capa al grupo" : "Sacar la capa del grupo", () => {
+        const antes = ly.grupo;
+        const bloque = antes ? this.capasDeGrupo(antes).filter((l) => l !== ly) : [];
+        this._sacarDeGrupo(ly);
+        if (grupoId) {
+          const g = this.grupo(grupoId), miembros = this.capasDeGrupo(grupoId);
+          ly.grupo = grupoId;
+          if (g.oculto) { if (!ly.visible) g.ocultasAntes.push(ly.id); ly.visible = false; }
+          if (g.bloqueado) { if (ly.locked) g.bloqueadasAntes.push(ly.id); ly.locked = true; }
+          this._juntar([ly.id], miembros[miembros.length - 1]);
+        } else if (bloque.length) this._juntar([ly.id], bloque[bloque.length - 1]);
+        this._limpiarGruposVacios();
+        return true;
+      });
+    }
+    /** nombre, color, oculto, bloqueado (con historial) o plegado (de la vista:
+     *  se guarda en el archivo pero no entra al Ctrl+Z). */
+    setGrupo(id, prop, valor) {
+      const g = this.grupo(id);
+      if (!g) return false;
+      if (prop === "plegado") { g.plegado = !!valor; this.touch(); this.emit("layers"); return true; }
+      if (!["nombre", "color", "oculto", "bloqueado"].includes(prop)) return false;
+      const labels = { nombre: "Renombrar grupo", color: "Color del grupo", oculto: valor ? "Ocultar grupo" : "Mostrar grupo",
+        bloqueado: valor ? "Bloquear grupo" : "Desbloquear grupo" };
+      return this._cambioGrupos(labels[prop], () => {
+        const miembros = this.capasDeGrupo(id);
+        if (prop === "nombre") { const n = String(valor || "").trim().slice(0, 60); if (!n) return false; g.nombre = n; }
+        else if (prop === "color") { if (!/^#[0-9a-f]{6}$/i.test(String(valor))) return false; g.color = valor; }
+        else if (prop === "oculto") {
+          if (!!valor === g.oculto) return false;
+          if (valor) { g.ocultasAntes = miembros.filter((l) => !l.visible).map((l) => l.id); miembros.forEach((l) => { l.visible = false; }); }
+          else { miembros.forEach((l) => { if (!g.ocultasAntes.includes(l.id)) l.visible = true; }); g.ocultasAntes = []; }
+          g.oculto = !!valor;
+        } else {
+          if (!!valor === g.bloqueado) return false;
+          if (valor) { g.bloqueadasAntes = miembros.filter((l) => l.locked).map((l) => l.id); miembros.forEach((l) => { l.locked = true; }); }
+          else { miembros.forEach((l) => { if (!g.bloqueadasAntes.includes(l.id)) l.locked = false; }); g.bloqueadasAntes = []; }
+          g.bloqueado = !!valor;
+        }
+        return true;
+      });
+    }
+    /** Deshace el grupo: las capas quedan donde están, como estaban antes de
+     *  que el grupo las ocultara o bloqueara. */
+    desagrupar(id) {
+      if (!this.grupo(id)) return false;
+      return this._cambioGrupos("Desagrupar", () => {
+        for (const l of this.capasDeGrupo(id)) this._sacarDeGrupo(l);
+        this.scene.grupos = this.scene.grupos.filter((g) => g.id !== id);
+        return true;
+      });
+    }
+
+    /** Los modificadores y efectos de una capa (animation/modificadores.js),
+     *  la lista entera de una vez: un paso de Ctrl+Z. */
+    setLayerMods(layerId, lista) {
+      const ly = this.scene.layer(layerId), M = animation.modificadores;
+      if (!ly || !M) return false;
+      const antes = ly.mods ? animation.clone(ly.mods) : null;
+      const n = M.modsData(lista);
+      const despues = n.length ? n : null;
+      if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+      ly.mods = despues;
+      this.touch(); this.emit("layers"); this.emit("frame");
+      if (this.history) {
+        const doc = this;
+        this.history.push({ label: "Modificadores de la capa", domain: "mods", before: antes, after: despues,
+          apply: (_dir, v) => { const l = doc.scene.layer(layerId); if (!l) return; l.mods = v ? animation.clone(v) : null; doc.touch(); doc.emit("layers"); doc.emit("frame"); } });
+      }
+      return true;
+    }
+
+    /* ── MOVIMIENTO DE CAPA (scene-model.js, movData / Scene.matrizCapa) ── */
+    _cambioMov(layerId, label, fn) {
+      const ly = this.scene.layer(layerId);
+      if (!ly) return false;
+      const antes = ly.mov ? animation.clone(ly.mov) : null;
+      const borrador = ly.mov ? animation.clone(ly.mov) : { claves: {}, pivote: { x: 0, y: 0 }, padre: null };
+      if (fn(borrador) === false) return false;
+      const despues = animation.movData(borrador);
+      if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+      ly.mov = despues;
+      this.touch(); this.emit("layers"); this.emit("frame");
+      if (this.history) {
+        const doc = this;
+        this.history.push({ label, domain: "mov", before: antes, after: despues,
+          apply: (_dir, v) => { const l = doc.scene.layer(layerId); if (!l) return; l.mov = animation.movData(v); doc.touch(); doc.emit("layers"); doc.emit("frame"); } });
+      }
+      return true;
+    }
+    /** Clave del movimiento de la capa en un cuadro: { x, y, rot, esc }. */
+    ponerClaveMov(layerId, frame, valores) {
+      const f = Math.max(1, Math.round(Number(frame) || 1));
+      return this._cambioMov(layerId, "Clave de movimiento de la capa", (m) => {
+        const v = valores || {};
+        m.claves[f] = { x: Number(v.x) || 0, y: Number(v.y) || 0, rot: Number(v.rot) || 0, esc: v.esc == null ? 1 : Number(v.esc) };
+      });
+    }
+    quitarClaveMov(layerId, frame) {
+      const f = Math.round(Number(frame));
+      return this._cambioMov(layerId, "Quitar clave de movimiento", (m) => { if (!m.claves[f]) return false; delete m.claves[f]; });
+    }
+    setPivoteMov(layerId, x, y) {
+      return this._cambioMov(layerId, "Pivote de la capa", (m) => { m.pivote = { x: Number(x) || 0, y: Number(y) || 0 }; });
+    }
+    /** La capa sigue el movimiento de otra (null: deja de seguirla). Un ciclo
+     *  —emparentar con una capa que ya la sigue— se rechaza. */
+    setPadreMov(layerId, padreId) {
+      // un HUESO del rig («hueso:<id>»): se guarda la inversa de su matriz en el
+      // cuadro actual, así la capa queda donde está y desde ahí sigue al hueso
+      if (padreId && String(padreId).startsWith("hueso:")) {
+        const nodo = padreId.slice(6), nodos = (this.scene.rig && this.scene.rig.nodes) || {};
+        if (!nodos[nodo] || typeof this.scene.rigWorldMatrix !== "function") return false;
+        let b = null;
+        try { b = this.scene.rigWorldMatrix(nodo, this.frame); } catch (_) { b = null; }
+        const bind = b ? animation.movInv(b) : null;
+        return this._cambioMov(layerId, "Pegar la capa a un hueso", (m) => { m.padre = padreId; if (bind) m.bind = bind; else delete m.bind; });
+      }
+      if (padreId) {
+        if (padreId === layerId || !this.scene.layer(padreId)) return false;
+        for (let p = padreId, n = 0; p && n < 200; n++) {
+          if (p === layerId) return false;
+          const l = this.scene.layer(p); p = l && l.mov ? l.mov.padre : null;
+        }
+      }
+      return this._cambioMov(layerId, padreId ? "Emparentar la capa" : "Soltar la capa de su padre", (m) => { m.padre = padreId || null; delete m.bind; });
+    }
+    /** MIRA A: la capa gira hacia el pivote de otra (los ojos que siguen algo).
+     *  null la suelta. Mirar a una capa que la sigue (o se mira a sí misma) se rechaza. */
+    setMirarAMov(layerId, otraId) {
+      if (otraId) {
+        if (otraId === layerId || !this.scene.layer(otraId)) return false;
+        for (let p = otraId, n = 0; p && n < 200; n++) {
+          if (p === layerId) return false;
+          const l = this.scene.layer(p); p = l && l.mov ? (l.mov.padre && !l.mov.padre.startsWith("hueso:") ? l.mov.padre : l.mov.mirarA) : null;
+        }
+      }
+      return this._cambioMov(layerId, otraId ? "La capa mira a otra" : "La capa deja de mirar", (m) => { if (otraId) m.mirarA = otraId; else delete m.mirarA; });
+    }
+    /** Sin claves ni padre: la capa vuelve a su lugar. */
+    quitarMov(layerId) {
+      return this._cambioMov(layerId, "Quitar el movimiento de la capa", (m) => { m.claves = {}; m.padre = null; delete m.bind; delete m.mirarA; });
+    }
+
     /** Una capa de SOMBRA o de LUZ encima de `baseId`, ya recortada con ella:
      *  se dibujan las formas de la sombra y oscurecen sólo al personaje. Un
      *  solo paso de historial (crear, ubicar, recortar y darle el tono). */
@@ -664,6 +893,24 @@
       st.meta=st.meta||{};if(after)st.meta.group=after;else delete st.meta.group;
       this.touch();this.emit("palette");
       if(this.history){const doc=this,palId=pal.id,stId=st.id;this.history.push({label:"Cambiar grupo de estilo",domain:"anim",before,after,apply:(_dir,value)=>{const p=doc.scene.palette(palId),s=p&&p.style(stId);if(s){s.meta=s.meta||{};if(value)s.meta.group=value;else delete s.meta.group;doc.emit("palette");}}});}
+      return true;
+    }
+    /** El RELLENO de un estilo: liso (null), degradé o textura
+     *  (animation/palette.js, relleno). Un paso de Ctrl+Z. */
+    setStyleRelleno(index, relleno) {
+      const pal = this.palette, st = pal && pal.byIndex(index);
+      if (!st || pal.locked) return false;
+      const antes = st.meta && st.meta.relleno ? animation.clone(st.meta.relleno) : null;
+      const despues = relleno && typeof relleno === "object" ? animation.clone(relleno) : null;
+      if (JSON.stringify(antes) === JSON.stringify(despues)) return false;
+      const poner = (s, v) => { s.meta = s.meta || {}; if (v) s.meta.relleno = animation.clone(v); else delete s.meta.relleno; };
+      poner(st, despues);
+      this.touch(); this.emit("palette");
+      if (this.history) {
+        const doc = this, palId = pal.id, stId = st.id;
+        this.history.push({ label: despues ? "Relleno del estilo" : "Relleno liso", domain: "anim", before: antes, after: despues,
+          apply: (_dir, v) => { const p = doc.scene.palette(palId), s = p && p.style(stId); if (s) { poner(s, v); doc.touch(); doc.emit("palette"); } } });
+      }
       return true;
     }
     /** Saca un estilo únicamente cuando ya no tiene referencias. Un estilo

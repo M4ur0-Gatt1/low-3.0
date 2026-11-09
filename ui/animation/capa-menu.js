@@ -54,6 +54,47 @@
     if (doc.moveLayer(ly.id, a)) avisar("«" + ly.name + "» " + que);
   }
 
+  /** GRUPOS: agrupar la capa, meterla en un grupo que ya existe o sacarla. */
+  function itemsDeGrupo(doc, ly) {
+    if (typeof doc.crearGrupo !== "function") return [];
+    const grupos = (doc.scene.grupos || []).filter((g) => g.id !== ly.grupo);
+    const items = [{ icon: "▤", label: "Agrupar esta capa…", action: async () => {
+      const n = typeof global.dzPromptModal === "function" ? await global.dzPromptModal("Nombre del grupo nuevo", "por ejemplo «Personaje» o «Fondo»", "") : "Grupo";
+      if (n == null) return;
+      const g = doc.crearGrupo(n, [ly.id]);
+      if (g) avisar("Grupo «" + doc.grupo(g).nombre + "» con «" + ly.name + "» · arrastrá otras capas a su encabezado para sumarlas");
+    } }];
+    for (const g of grupos.slice(0, 8))
+      items.push({ icon: "→", label: "Mover al grupo «" + g.nombre + "»", action: () => { if (doc.moverAGrupo(ly.id, g.id)) avisar("«" + ly.name + "» está en «" + g.nombre + "»"); } });
+    const actual = ly.grupo && doc.grupo(ly.grupo);
+    if (actual) items.push({ icon: "←", label: "Sacar del grupo «" + actual.nombre + "»", action: () => { if (doc.moverAGrupo(ly.id, null)) avisar("«" + ly.name + "» salió de «" + actual.nombre + "»"); } });
+    return items;
+  }
+
+  /** El menú del ENCABEZADO de un grupo, en la línea de tiempo. */
+  function abrirGrupo(e, id) {
+    const D = dz(), doc = D && D.doc, g = doc && typeof doc.grupo === "function" && doc.grupo(id);
+    if (!g || typeof global.showCtxMenu !== "function") return false;
+    const activa = doc.layer;
+    const colores = (global.LOW.animation && global.LOW.animation.GRUPO_COLORES) || [];
+    const siguiente = colores[(colores.indexOf(g.color) + 1) % Math.max(1, colores.length)] || g.color;
+    global.showCtxMenu(e, [
+      { icon: "✎", label: "Renombrar el grupo…", shortcut: "doble clic", action: async () => {
+        const n = typeof global.dzPromptModal === "function" ? await global.dzPromptModal("Nombre del grupo", "nombre", g.nombre) : null;
+        if (n) doc.setGrupo(g.id, "nombre", n);
+      } },
+      { icon: "●", label: "Cambiar el color", action: () => doc.setGrupo(g.id, "color", siguiente) },
+      { icon: g.plegado ? "▸" : "▾", label: g.plegado ? "Desplegar" : "Plegar", action: () => doc.setGrupo(g.id, "plegado", !g.plegado) },
+      { icon: "◉", label: g.oculto ? "Mostrar el grupo" : "Ocultar el grupo", action: () => doc.setGrupo(g.id, "oculto", !g.oculto) },
+      { icon: "🔒", label: g.bloqueado ? "Desbloquear el grupo" : "Bloquear el grupo", action: () => doc.setGrupo(g.id, "bloqueado", !g.bloqueado) },
+      "separator",
+      { icon: "+", label: activa && activa.grupo !== g.id ? "Sumar la capa activa («" + activa.name + "»)" : "Sumar la capa activa (ya está)",
+        disabled: !activa || activa.grupo === g.id, action: () => doc.moverAGrupo(activa.id, g.id) },
+      { icon: "▢", label: "Desagrupar (las capas quedan)", action: () => { if (doc.desagrupar(g.id)) avisar("Grupo «" + g.nombre + "» deshecho · Ctrl+Z lo vuelve a armar"); } },
+    ]);
+    return true;
+  }
+
   function abrir(e, id) {
     const D = dz(), doc = D && D.doc;
     if (!doc || typeof global.showCtxMenu !== "function") return false;
@@ -75,6 +116,13 @@
         action: () => global.LOW.drawing.seleccionOpciones.elegirCapaEntera(ly.id) },
       ...(de3d ? [{ icon: "⬡", label: "Editar en el estudio 3D…", action: () => l3d.editar(ly.id) }] : []),
       "separator",
+      ...itemsDeGrupo(doc, ly),
+      ...(global.LOW.animation && global.LOW.animation.movimientoCapa
+        ? [{ icon: "✥", label: ly.mov ? "Movimiento de la capa… (tiene)" : "Movimiento de la capa…", action: () => global.LOW.animation.movimientoCapa.abrir(ly.id) }] : []),
+      ...(global.LOW.animation && global.LOW.animation.modificadoresUI
+        ? [{ icon: "≋", label: ly.mods && ly.mods.length ? "Modificadores y efectos… (" + ly.mods.length + ")" : "Modificadores y efectos…",
+            action: () => global.LOW.animation.modificadoresUI.abrir(ly.id) }] : []),
+      "separator",
       { icon: "⤒", label: "Traer al frente", disabled: arriba, action: () => mover(doc, ly, n - 1, "quedó al frente de todo") },
       { icon: "↑", label: "Subir una posición", disabled: arriba, action: () => mover(doc, ly, i + 1, "subió una posición") },
       { icon: "↓", label: "Bajar una posición", disabled: abajo, action: () => mover(doc, ly, i - 1, "bajó una posición") },
@@ -87,10 +135,12 @@
 
   // en captura: las celdas de la línea de tiempo tienen su propio clic derecho, el nombre no
   document.addEventListener("contextmenu", (e) => {
+    const cabGrupo = e.target && e.target.closest && e.target.closest(".tl2-row[data-grupo-row] .tl2-name");
+    if (cabGrupo && abrirGrupo(e, cabGrupo.closest(".tl2-row").dataset.grupoRow)) { e.preventDefault(); e.stopPropagation(); return; }
     const id = capaDe(e.target);
     if (id && abrir(e, id)) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 
   global.LOW = global.LOW || {};
-  LOW.capaMenu = { abrir, capaDe };
+  LOW.capaMenu = { abrir, abrirGrupo, capaDe };
 })(window);
